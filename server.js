@@ -22,14 +22,28 @@ const PORT = process.env.PORT || 5000;
 const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:5173";
 const NODE_ENV = process.env.NODE_ENV || "development";
 
-// MongoDB Connection
-mongoose.connect(process.env.MONGO_URI, {
-  serverSelectionTimeoutMS: 5000,
-  tls: true,
-  tlsAllowInvalidCertificates: false
-})
-  .then(() => console.log('MongoDB connected'))
-  .catch(err => console.error('MongoDB error:', err.message));
+// MongoDB Connection with Retry Logic
+const connectDB = async () => {
+  try {
+    await mongoose.connect(process.env.MONGO_URI, {
+      serverSelectionTimeoutMS: 10000,
+      connectTimeoutMS: 10000,
+      socketTimeoutMS: 45000,
+      family: 4, // Use IPv4
+      tls: true,
+      tlsAllowInvalidCertificates: false,
+      retryWrites: true,
+      w: 'majority'
+    });
+    console.log('✅ MongoDB connected successfully');
+  } catch (err) {
+    console.error('❌ MongoDB connection error:', err.message);
+    console.error('Retrying in 5 seconds...');
+    setTimeout(connectDB, 5000);
+  }
+};
+
+connectDB();
 
 // CORS Configuration
 app.use(cors({
@@ -78,7 +92,7 @@ app.get("/auth/google", passport.authenticate("google", { scope: ["profile", "em
 app.get("/auth/google/callback", 
   passport.authenticate("google", { failureRedirect: "/" }),
   (req, res) => {
-    res.redirect(`${FRONTEND_URL}/dashboard`);
+    res.redirect(`${FRONTEND_URL}/`);
   }
 );
 
