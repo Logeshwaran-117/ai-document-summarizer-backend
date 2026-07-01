@@ -1,0 +1,34 @@
+{
+  "name": "server",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "node --dns-result-order=ipv4first server.js",
+    "dev": "nodemon --exec \"node --dns-result-order=ipv4first\" server.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@google/generative-ai": "^0.24.1",
+    "bcryptjs": "^3.0.3",
+    "canvas": "^3.2.3",
+    "connect-mongo": "^6.0.0",
+    "cors": "^2.8.6",
+    "dotenv": "^16.6.1",
+    "express": "^5.2.1",
+    "express-session": "^1.19.0",
+    "mammoth": "^1.12.0",
+    "mongoose": "^9.7.3",
+    "multer": "^2.2.0",
+    "nodemon": "^3.1.14",
+    "passport": "^0.7.0",
+    "passport-google-oauth20": "^2.0.0",
+    "pdf-parse": "^1.1.1",
+    "pdf-poppler": "^0.2.3",
+    "pdfjs-dist": "^2.16.105",
+    "tesseract.js": "^7.0.0"
+  }
+}
