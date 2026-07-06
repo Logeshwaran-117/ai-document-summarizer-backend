@@ -1,18 +1,8 @@
-const { GoogleGenerativeAI } = require("@google/generative-ai");
+const { callWithRotation } = require("./geminiService");
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-
-function sleep(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
-}
-
-async function answerQuestion(documentText, question, chatHistory = [], retries = 3) {
-  const model = genAI.getGenerativeModel({
-    model: "gemini-2.5-flash",
-  });
-
+async function answerQuestion(documentText, question, chatHistory = []) {
   const historyText = chatHistory
-    .slice(-6) // last 6 messages for context, keeps prompt size reasonable
+    .slice(-6)
     .map(m => `${m.role === "user" ? "User" : "Assistant"}: ${m.text}`)
     .join("\n");
 
@@ -37,26 +27,10 @@ Question: ${question}
 Answer:
 `;
 
-  for (let attempt = 1; attempt <= retries; attempt++) {
-    try {
-      const result = await model.generateContent(prompt);
-      return result.response.text();
-    } catch (error) {
-      const isOverloaded = error.status === 503 || error.message?.includes("overloaded") || error.message?.includes("high demand");
-
-      if (isOverloaded && attempt < retries) {
-        const waitTime = attempt * 2000;
-        console.log(`Gemini overloaded, retrying in ${waitTime / 1000}s (attempt ${attempt}/${retries})...`);
-        await sleep(waitTime);
-        continue;
-      }
-
-      if (isOverloaded) {
-        throw new Error("The AI service is currently experiencing high demand. Please try again in a minute.");
-      }
-      throw error;
-    }
-  }
+  // callWithRotation handles key rotation + retry automatically
+  return callWithRotation(() => [
+    { text: prompt }   // ✅ correct — just plain parts array
+  ], 2048);
 }
 
 module.exports = answerQuestion;

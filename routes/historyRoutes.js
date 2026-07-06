@@ -8,6 +8,9 @@ const EXT_MAP = {
   pdf: /\.pdf$/i,
   docx: /\.docx$/i,
   txt: /\.txt$/i,
+  xlsx: /\.(xlsx|xls|csv)$/i,
+  jpg: /\.(jpg|jpeg)$/i,
+  png: /\.png$/i,
 };
 
 const SORT_MAP = {

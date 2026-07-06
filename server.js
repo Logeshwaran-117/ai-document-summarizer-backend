@@ -14,6 +14,8 @@ const historyRoutes = require("./routes/historyRoutes");
 const dashboardRoutes = require("./routes/dashboardRoutes");
 const authRoutes = require('./routes/authRoutes');
 const settingsRoutes = require('./routes/settingsRoutes');
+const pptRoutes = require("./routes/pptRoutes");
+const tableRoutes = require("./routes/tableRoutes");
 
 require("./config/passport");
 
@@ -29,7 +31,7 @@ const connectDB = async () => {
       serverSelectionTimeoutMS: 10000,
       connectTimeoutMS: 10000,
       socketTimeoutMS: 45000,
-      family: 4, // Use IPv4
+      family: 4,
       tls: true,
       tlsAllowInvalidCertificates: false,
       retryWrites: true,
@@ -50,7 +52,11 @@ app.use(cors({
     origin: NODE_ENV === "production" 
       ? process.env.FRONTEND_URL 
       : ["http://localhost:5173", "http://localhost:5174"],
-    credentials: true
+    credentials: true,
+    // NEW: lets the frontend read these headers off blob/file responses
+    // (needed for the PPT download flow to pick up the saved Presentation id
+    // and the real filename from Content-Disposition)
+    exposedHeaders: ["Content-Disposition", "X-Presentation-Id"],
 }));
 
 app.use(express.json());
@@ -62,7 +68,7 @@ app.use(session({
     store: MongoStore.create({ mongoUrl: process.env.MONGO_URI }),
     cookie: { 
       maxAge: 1000 * 60 * 60 * 24,
-      secure: NODE_ENV === "production", // HTTPS only in production
+      secure: NODE_ENV === "production",
       httpOnly: true,
       sameSite: "lax"
     }
@@ -75,7 +81,10 @@ app.use('/auth', authRoutes);
 app.use("/api/history", historyRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api", summarizeRoutes);
+app.use("/api", pptRoutes);       // PPT generation + Presentations tab routes
 app.use('/auth', settingsRoutes);
+app.use("/api", tableRoutes);   // next to app.use("/api", pptRoutes);
+
 
 app.get("/auth/status", (req, res) => {
     if (req.isAuthenticated()) {
@@ -87,7 +96,7 @@ app.get("/auth/status", (req, res) => {
 
 app.get("/", (req, res) => res.send("Backend is Running!"));
 
-app.get("/auth/google", passport.authenticate("google", { scope: ["profile", "email"] }));
+app.get("/auth/google", passport.authenticate("google", { scope: ["profile", "email"], prompt: "select_account" }));
 
 app.get("/auth/google/callback", 
   passport.authenticate("google", { failureRedirect: "/" }),
@@ -97,11 +106,45 @@ app.get("/auth/google/callback",
 );
 
 app.get("/auth/logout", (req, res) => {
-  req.logout(() => {
-    res.json({ message: "Logged out" });
+  req.logout((err) => {
+    if (err) return res.status(500).json({ message: "Logout failed" });
+
+    req.session.destroy((err) => {       // ← destroys MongoDB session
+      if (err) return res.status(500).json({ message: "Session destroy failed" });
+
+      res.clearCookie("connect.sid");    // ← clears session cookie
+      res.json({ message: "Logged out" });
+    });
   });
 });
 
 app.listen(PORT, () => {
     console.log(`Server is running on http://localhost:${PORT} (${NODE_ENV} mode)`);
+});
+
+// ── Global error handler ────────────────────────────────────────────────────
+// Must be LAST. Catches Multer errors (bad file type, file too large) and any
+// other error passed via next(err), and always returns clean JSON instead of
+// an HTML error page. Without this, a rejected upload (e.g. a file over the
+// 10MB limit) breaks the response format the frontend expects, which is why
+// large-file uploads showed a confusing error and the app looked "stuck".
+app.use((err, req, res, next) => {
+    console.error("Unhandled error:", err);
+
+    if (err && err.name === "MulterError") {
+        const message =
+            err.code === "LIMIT_FILE_SIZE"
+                ? "File is too large. Maximum allowed size is 10 MB."
+                : `Upload error: ${err.message}`;
+        return res.status(400).json({ success: false, message });
+    }
+
+    if (err) {
+        return res.status(err.status || 500).json({
+            success: false,
+            message: err.message || "Something went wrong. Please try again.",
+        });
+    }
+
+    next();
 });
