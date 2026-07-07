@@ -47,6 +47,8 @@ const connectDB = async () => {
 
 connectDB();
 
+app.set('trust proxy', 1);
+
 // CORS Configuration
 app.use(cors({
     origin: NODE_ENV === "production" 
