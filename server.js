@@ -101,9 +101,10 @@ app.get("/", (req, res) => res.send("Backend is Running!"));
 app.get("/auth/google", passport.authenticate("google", { scope: ["profile", "email"], prompt: "select_account" }));
 
 app.get("/auth/google/callback", 
-  passport.authenticate("google", { failureRedirect: "/" }),
+  passport.authenticate("google", { failureRedirect: `${FRONTEND_URL}/login` }),
   (req, res) => {
-    res.redirect(`${FRONTEND_URL}/`);
+    // Pass user id in URL so frontend can fetch user
+    res.redirect(`${FRONTEND_URL}/?googleAuth=success`);
   }
 );
 
