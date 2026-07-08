@@ -5,14 +5,14 @@ const PLANS = {
     name: 'Free',
     price: { monthly: 0, yearly: 0 },
     limits: {
-      summarize: 20,   // per billing period
-      tables: 20,      // per billing period  (both combined = 20+20 = 40 total actions)
+      summarize: 5,    // per day
+      tables: 5,       // per day  (both combined = 5+5 = 10 total actions/day)
       fileSize: 10,    // MB
       historyDays: 30, // days to keep history
     },
     features: [
-      '20 document summaries / month',
-      '20 table extractions / month',
+      '5 document summaries / day',
+      '5 table extractions / day',
       'Up to 10 MB file size',
       'PDF, DOCX, TXT, Images',
       '30-day history',
@@ -26,14 +26,14 @@ const PLANS = {
     name: 'Pro',
     price: { monthly: 499, yearly: 4499 }, // INR paise-free (just ₹)
     limits: {
-      summarize: 500,
-      tables: 500,
+      summarize: 15,   // per day
+      tables: 15,      // per day
       fileSize: 50,
       historyDays: 365,
     },
     features: [
-      '500 document summaries / month',
-      '500 table extractions / month',
+      '15 document summaries / day',
+      '15 table extractions / day',
       'Up to 50 MB file size',
       'All file types incl. Excel',
       'Unlimited history',
@@ -81,16 +81,15 @@ function checkLimit(user, action) {
 
   const sub = user.subscription || {};
 
-  // Reset usage if billing period rolled over
+  // Reset usage daily — limits are per calendar day now, independent of the
+  // billing cycle (which stays monthly/yearly and only affects price).
   const now = new Date();
   const resetAt = sub.usageResetAt ? new Date(sub.usageResetAt) : new Date(0);
-  const periodEnd = sub.currentPeriodEnd ? new Date(sub.currentPeriodEnd) : null;
 
-  // If we have a periodEnd and it's passed, usage should be reset by renewal
-  // For simplicity: reset monthly if no active subscription tracking
-  const monthAgo = new Date(now);
-  monthAgo.setMonth(monthAgo.getMonth() - 1);
-  const needsReset = resetAt < monthAgo;
+  // "Today" is compared by calendar date (server local time), not a rolling
+  // 24h window, so usage resets once at the start of each new day rather
+  // than exactly 24h after the user's last action.
+  const needsReset = resetAt.toDateString() !== now.toDateString();
 
   const used = needsReset ? 0 : (action === 'summarize' ? (sub.summarizeCount || 0) : (sub.tableCount || 0));
   const remaining = limit - used;

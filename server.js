@@ -94,6 +94,9 @@ app.use("/api", tableRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/billing", billingRoutes);
 
+const { router: progressRoutes } = require("./routes/progressRoutes");
+app.use("/api", progressRoutes);
+
 
 app.get("/auth/status", (req, res) => {
     if (req.isAuthenticated()) {
