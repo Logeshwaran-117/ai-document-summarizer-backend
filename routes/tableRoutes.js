@@ -1,3 +1,4 @@
+const { limitAction } = require('../middleware/planLimit');
 const express = require("express");
 const router = express.Router();
 
@@ -7,7 +8,7 @@ const { suggestTableFields, suggestTableFieldsFromImage, callWithRotation } = re
 const extractTable = require("../controllers/tableController");
 const TableExtraction = require("../models/TableExtraction");
 
-router.post("/extract-table", upload.single("document"), extractTable);
+router.post("/extract-table", upload.single("document"), limitAction("tables"), extractTable);
 
 // GET /api/tables — paginated list for the History "Tables" tab
 const TABLE_EXT_MAP = {

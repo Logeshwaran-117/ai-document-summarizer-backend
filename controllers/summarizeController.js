@@ -1,3 +1,4 @@
+const { incrementUsage } = require('../middleware/planLimit');
 const { extractText, isEmptyContent } = require("../services/extractText");
 const { generateSummary, summarizeImage, extractTextFromImage } = require("../services/geminiService");
 const { saveHistory } = require("../services/historyService");

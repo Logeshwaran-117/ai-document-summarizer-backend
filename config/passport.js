@@ -11,20 +11,15 @@ passport.use(new GoogleStrategy({
     try {
       const email = profile.emails[0].value;
 
-      // First try to find by googleId
       let user = await User.findOne({ googleId: profile.id });
       
       if (!user) {
-        // Try to find by email (user may have signed up with email before)
         user = await User.findOne({ email });
-        
         if (user) {
-          // Link Google account to existing user
           user.googleId = profile.id;
           user.name = user.name || profile.displayName;
           await user.save();
         } else {
-          // Create new user
           user = await User.create({
             googleId: profile.id,
             name: profile.displayName,
@@ -32,7 +27,13 @@ passport.use(new GoogleStrategy({
           });
         }
       }
-      
+
+      // Block suspended users from Google OAuth
+      if (user.status === 'suspended') {
+        return done(null, false, { message: 'Account suspended' });
+      }
+
+      await User.findByIdAndUpdate(user._id, { lastLogin: new Date() });
       return done(null, user);
     } catch (err) {
       return done(err, null);

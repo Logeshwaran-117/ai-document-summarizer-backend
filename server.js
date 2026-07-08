@@ -16,6 +16,9 @@ const authRoutes = require('./routes/authRoutes');
 const settingsRoutes = require('./routes/settingsRoutes');
 const pptRoutes = require("./routes/pptRoutes");
 const tableRoutes = require("./routes/tableRoutes");
+const adminRoutes = require("./routes/adminRoutes");
+require('./models/Payment'); // register Payment model
+const billingRoutes = require("./routes/billingRoutes");
 
 require("./config/passport");
 
@@ -61,6 +64,7 @@ app.use(cors({
     exposedHeaders: ["Content-Disposition", "X-Presentation-Id"],
 }));
 
+app.use("/api/billing/webhook", express.raw({ type: "application/json" })); // must be before express.json
 app.use(express.json());
 
 app.use(session({ 
@@ -70,11 +74,12 @@ app.use(session({
     store: MongoStore.create({ mongoUrl: process.env.MONGO_URI }),
     cookie: { 
       maxAge: 1000 * 60 * 60 * 24,
-      secure: true,
+      secure: NODE_ENV === "production",
       httpOnly: true,
-      sameSite: "none"
+      sameSite: NODE_ENV === "production" ? "none" : "lax"
     }
 }));
+
 
 app.use(passport.initialize());
 app.use(passport.session());
@@ -85,7 +90,9 @@ app.use("/api/dashboard", dashboardRoutes);
 app.use("/api", summarizeRoutes);
 app.use("/api", pptRoutes);       // PPT generation + Presentations tab routes
 app.use('/auth', settingsRoutes);
-app.use("/api", tableRoutes);   // next to app.use("/api", pptRoutes);
+app.use("/api", tableRoutes);
+app.use("/api/admin", adminRoutes);
+app.use("/api/billing", billingRoutes);
 
 
 app.get("/auth/status", (req, res) => {

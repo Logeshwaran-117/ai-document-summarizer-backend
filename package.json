@@ -31,6 +31,7 @@
     "pdf-poppler": "^0.2.3",
     "pdfjs-dist": "^2.16.105",
     "pptxgenjs": "^4.0.1",
+    "razorpay": "^2.9.6",
     "tesseract.js": "^7.0.0",
     "xlsx": "^0.18.5"
   }

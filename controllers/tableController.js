@@ -1,3 +1,4 @@
+const { incrementUsage } = require('../middleware/planLimit');
 const { extractText, isEmptyContent } = require("../services/extractText");
 const { extractTableData, extractTableFromImage } = require("../services/geminiService");
 const TableExtraction = require("../models/TableExtraction");
