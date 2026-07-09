@@ -78,10 +78,19 @@ async function callGroqFallback(parts, maxOutputTokens) {
         );
     }
 
+    // ── NEW: Groq free tier TPM cap is ~8000 tokens total (input + output).
+    // Rough heuristic: 1 token ≈ 4 chars. Reserve 1500 tokens for output.
+    // So cap input at (8000 - 1500) * 4 = 26000 chars.
+    const MAX_INPUT_CHARS = 26000;
+    if (promptText.length > MAX_INPUT_CHARS) {
+        console.warn(`⚠️  Groq input too large (${promptText.length} chars) — truncating to ${MAX_INPUT_CHARS} chars`);
+        promptText = promptText.slice(0, MAX_INPUT_CHARS) + "\n\n[... document truncated for fallback model ...]";
+    }
+
     const completion = await client.chat.completions.create({
         model: GROQ_MODEL,
         messages: [{ role: "user", content: promptText }],
-        max_tokens: Math.min(maxOutputTokens, 8000), // Groq's practical per-response ceiling
+        max_tokens: Math.min(maxOutputTokens, 1500), // Groq's practical per-response ceiling
     });
 
     return completion.choices?.[0]?.message?.content ?? "";
@@ -251,6 +260,7 @@ async function callWithRotation(buildParts, maxOutputTokens = 8192, model = "gem
 function isBankingDocument(text) {
     const lower = text.toLowerCase();
     const bankingKeywords = [
+        // Core banking
         "account number", "account balance", "bank statement", "transaction",
         "credit", "debit", "deposit", "withdrawal", "cheque", "check",
         "ifsc", "swift", "iban", "routing number", "sort code",
@@ -259,6 +269,23 @@ function isBankingDocument(text) {
         "atm", "net banking", "bank", "savings account", "current account",
         "beneficiary", "payee", "invoice amount", "due amount",
         "outstanding balance", "minimum payment", "statement date",
+        // Credit card
+        "credit card", "card statement", "billing cycle", "credit limit",
+        "minimum due", "payment due date", "cashback", "reward points",
+        "over limit", "card number", "cvv",
+        // Loan / mortgage
+        "principal", "repayment", "emi amount", "loan account", "disbursement",
+        "foreclosure", "prepayment", "amortization", "tenure", "collateral",
+        // Investment / wealth
+        "portfolio", "nav", "mutual fund", "sip", "nifty", "sensex",
+        "dividend", "unrealized", "realized gain", "units held", "folio",
+        "demat", "broker", "stock", "equity", "bond", "fixed deposit",
+        // Insurance / tax
+        "premium due", "policy number", "sum assured", "tds deducted",
+        "pan number", "gst number", "form 26as", "tds certificate",
+        // Indian banking specific
+        "neft", "rtgs", "imps", "upi", "nach", "ecs", "micr",
+        "cif", "kyc", "nbfc", "rbi",
     ];
     const matches = bankingKeywords.filter(kw => lower.includes(kw));
     return matches.length >= 3;
@@ -306,57 +333,138 @@ ${text}
 `;
 
 const BANKING_PROMPT = (text) => `
-You are a senior banking and financial document analyst with 15+ years of experience reading bank statements, loan documents, credit card statements, transaction ledgers, and invoices for institutional clients. Your summary must prioritize financial accuracy, completeness, and scannability above all else — this document may be turned directly into a presentation, so structure and precision both matter.
+You are a senior banking and financial document analyst with 20+ years of institutional experience analyzing bank statements, credit card bills, loan agreements, trade finance documents, investment account statements, insurance premium notices, tax notices, UPI/NEFT/RTGS remittance slips, GST invoices, and salary account reports. Your output must be exhaustive, financially precise, and structured — it feeds directly into a visual dashboard and slide deck, so every section matters.
 
 CORE PRINCIPLES:
-- Extract every financial figure, date, and account detail exactly as written. Never round, estimate, or approximate.
-- Identify and clearly present: account numbers (masked), balances, transaction amounts, dates, fees, interest rates, due dates, payee/payer names, and account status.
-- Actively look for and surface: fee breakdowns, interest accrual, period-over-period changes, transaction categories, and anything that deviates from a normal statement.
-- Flag discrepancies, unusual transactions, or deadlines prominently — this is the most valuable output for the reader.
-- Do not add financial advice or recommendations. Report and organize only what the document contains.
-- If a figure is unclear, cut off, or only partially visible, say so explicitly rather than guessing.
-- If the document lacks enough content to fill a section meaningfully, write "Not present in this document" for that section instead of fabricating content.
+- Extract EVERY financial figure, date, reference number, and account detail exactly as written. Never round or approximate.
+- Identify and clearly present: masked account numbers, all balance types, transaction amounts, all dates, all fees/taxes, interest rates, IFSC/SWIFT/IBAN, payee/payer names, PAN/GST numbers (if any), and account status.
+- Surface period-over-period changes, transaction category breakdowns, unusual one-offs, and any discrepancy or warning.
+- Do NOT add financial advice. Report and organize only what the document contains.
+- If a field is absent, write "Not present in this document" — never fabricate.
 
 OUTPUT FORMAT:
-Return the summary in clean Markdown, following this EXACT structure and section order. Every "Label: Value" pair must be on its own line, formatted precisely as "**Label:** Value" — this exact punctuation matters, it is used for automated parsing downstream.
+Return clean Markdown following this EXACT section order. Every key-value pair on its own line as "**Label:** Value". This format is parsed programmatically.
 
-# {Document type and account/entity name if present — e.g. "Bank Statement — HDFC Account ****4521"}
+# {Document type and account/entity — e.g. "Bank Statement — HDFC Savings ****4521" or "Credit Card Bill — SBI Card ****8822"}
 
 ## Account Overview
-- **Account Holder:** {name or "Not specified"}
+- **Account Holder Name:** {full name or "Not specified"}
+- **Joint Holder (if any):** {name or "None"}
 - **Bank / Institution:** {name}
-- **Account Type:** {savings / current / credit card / loan / etc.}
-- **Account Number:** {masked, last 4 digits only, e.g. ****4521}
-- **Statement Period:** {date range or document date}
-- **Account Status:** {active / overdrawn / in arrears / good standing / not stated}
+- **Branch:** {branch name and city or "Not stated"}
+- **Account Type:** {Savings / Current / Credit Card / Loan / OD / Fixed Deposit / Demat / etc.}
+- **Account Number:** {****XXXX — last 4 digits only}
+- **Customer ID / CIF:** {value or "Not stated"}
+- **IFSC Code:** {value or "Not stated"}
+- **MICR Code:** {value or "Not stated"}
+- **SWIFT / IBAN (if applicable):** {value or "N/A"}
+- **Currency:** {INR / USD / EUR / etc.}
+- **Nominee Registered:** {Yes / No / Not stated}
+- **Account Status:** {Active / Dormant / Frozen / Overdrawn / In Arrears / Good Standing / Not stated}
+- **Statement Period:** {start date – end date or document date}
+- **Statement Date:** {date or "Not stated"}
 
 ## Key Metrics
-List every headline figure present in the document as its own bullet in "**Label:** Value" format — e.g. opening balance, closing balance, available balance, total credits, total debits, net change, minimum payment due, total amount due, credit limit, credit utilized, interest charged this period, APR. Include only metrics that actually appear in the document. Aim for 4-10 bullets — this section drives the visual summary, so be thorough.
+List every headline financial figure present. Use "**Label:** Value" on its own line. Include all that apply:
+- Opening Balance, Closing Balance, Available Balance, Lien Amount
+- Total Credits (count + amount), Total Debits (count + amount)
+- Net Change this Period, Average Monthly Balance, Minimum Balance Required
+- Credit Limit, Credit Utilized, Available Credit
+- Minimum Payment Due, Total Amount Due, Last Payment Received
+- Outstanding Principal, Interest Accrued, EMI Amount, Loan Tenure Remaining
+- APR / Interest Rate, Compound Frequency
+- Fixed Deposit Amount, FD Maturity Value, FD Tenure, FD Interest Rate
+- Investment Value, Unrealized Gain/Loss, Dividend Received
+- TDS Deducted, GST Amount, Service Tax
+- Salary Credited (if salary account)
+Aim for 6–14 bullets. Only include what genuinely appears in the document.
 
 ## Financial Summary
-2-3 short paragraphs giving context to the numbers above: how the balance moved over the period, what drove the largest inflows/outflows, whether spending or repayment patterns look typical or unusual, and how this period compares to any prior figures mentioned in the document (if available).
+3–4 paragraphs covering: how the balance moved during the period; what drove the largest inflows and outflows; any visible spending pattern, EMI commitments, or recurring credits; comparison to any prior-period figures mentioned in the document; and whether the account is in a healthy, stressed, or at-risk state based solely on the numbers.
+
+## Transaction Breakdown
+If transaction category data is available, list it:
+- **{Category}:** {total amount} ({count} transactions)
+Examples: Groceries, Utilities, EMI/Loan Repayment, Salary Credit, UPI Transfers, ATM Withdrawals, International Transactions, Insurance Premium, Investment, Tax Payment, Refunds.
+If no categorization is present, write "Transaction category breakdown not available in this document."
 
 ## Key Transactions
-List the most significant transactions found — largest amounts, recurring payments, unusual or one-off items, or anything explicitly flagged by the document. For each: **{Date}** — {description}, {amount} ({credit/debit or category}). Aim for 5-10 entries where the document supports it.
+List the 6–12 most significant transactions: largest amounts, recurring items, international transfers, unusual one-offs, reversals, and anything flagged. Format:
+**{DD MMM YYYY}** — {Description / Narration}, {Amount} ({Credit / Debit}) | Ref: {ref no. or "N/A"}
 
-## Fees & Charges
-List every fee or penalty mentioned (late fees, overdraft fees, service charges, ATM fees, foreign transaction fees, annual fees) in "**Label:** Value" format. If none are present, write "No fees or charges noted in this document."
+## Fees, Charges & Taxes
+List every fee, charge, penalty, and tax. "**Label:** Value" format:
+- Annual / Renewal Fee, Late Payment Fee, Over-Limit Fee
+- ATM Usage Fee (own bank / other bank), SMS Alert Charges, Cheque Return Charges
+- NEFT / RTGS / IMPS Transaction Fee, Foreign Currency Markup
+- Minimum Balance Penalty, Demat AMC, Locker Charges
+- GST on charges, TDS deducted, Other levies
+If none: "No fees or charges noted in this document."
+
+## Interest & Loan Details (if applicable)
+- **Loan Type:** {Home / Personal / Auto / Education / Gold / OD / etc.}
+- **Loan Account Number:** {****XXXX}
+- **Disbursement Date:** {date}
+- **Sanctioned Amount:** {value}
+- **Outstanding Principal:** {value}
+- **Interest Rate:** {value} ({Fixed / Floating})
+- **EMI Amount:** {value}
+- **EMI Due Date:** {date}
+- **Loan Maturity Date:** {date}
+- **Prepayment Charges:** {value or "Not stated"}
+- **Overdue Amount (if any):** {value or "None"}
+If not a loan document, write "Not applicable."
+
+## Investment & Wealth Details (if applicable)
+- **Portfolio Value:** {value}
+- **Asset Allocation:** {Equity / Debt / Liquid / Gold / etc. with %}
+- **Unrealized P&L:** {value and %}
+- **Realized Gain/Loss (this period):** {value}
+- **Dividend / Interest Received:** {value}
+- **Units / Shares Held:** {value}
+- **NAV / Share Price (as of):** {value and date}
+If not applicable, write "Not applicable."
+
+## Compliance & Tax Details (if applicable)
+- **PAN:** {masked — last 4 chars only or "Not stated"}
+- **GST Number:** {masked or "Not stated"}
+- **TDS Deducted (this period):** {value or "None"}
+- **Form 16A / 26AS Reference:** {value or "Not stated"}
+- **Tax Regime:** {Old / New / Not stated}
+If not applicable, write "Not applicable."
 
 ## Important Dates & Deadlines
-List every critical date as "**Label:** Date" — statement date, payment due date, grace period end, loan maturity date, interest reset date, autopay date, etc.
+List every critical date as "**Label:** Date":
+- Statement Date, Payment Due Date, Grace Period End Date
+- EMI Due Date, Loan Maturity Date, FD Maturity Date
+- Autopay / ECS Date, Cheque Clearance Date
+- Tax Filing Deadline (if referenced), Insurance Premium Due Date
+- KYC Renewal Date, Account Review Date
 
-## Alerts & Notes
-Flag anything requiring attention: overdue payments, penalty charges, bounced items, minimum balance violations, large or suspicious one-time transactions, account restrictions/holds, or printed warnings. Rank the most urgent item first. If none apply, write "No alerts noted."
+## Risk Flags & Alerts
+Flag everything requiring immediate attention, ranked by urgency:
+1. Overdue payments or missed EMIs
+2. Penalty charges or interest on late payment
+3. Bounced / returned items (ECS / NACH / cheques)
+4. Minimum balance violation
+5. High credit utilization (>80% of limit)
+6. Large or unusual one-time transactions
+7. International / cross-border transactions without prior notice
+8. Account restrictions, lien, or freeze
+9. KYC overdue / account at risk of suspension
+10. Printed warnings or disclaimers
+If none apply, write "No risk flags or alerts noted in this document."
 
 ## Conclusion
-One tight paragraph synthesizing the overall financial picture and what, if anything, the account holder should verify — no advice, just a clear-eyed summary of the account's state based strictly on the document.
+One tight paragraph synthesizing the overall financial health picture of this account as of the statement date — what is happening, what the key numbers reveal, and what the account holder should double-check based strictly on this document. No financial advice; only factual synthesis.
 
 STRICT RULES:
-- Never invent account numbers, balances, dates, or transaction details not in the document.
-- Use "****" to mask all but the last 4 digits of any account number.
+- Never invent numbers, dates, names, or references not in the document.
+- Mask all but the last 4 digits of any account, loan, or card number using ****.
 - Do not wrap the response in a code block.
-- Every figure in "Key Metrics", "Fees & Charges", and "Important Dates & Deadlines" MUST use the exact "**Label:** Value" format on its own line — this is parsed programmatically downstream.
-- Do not skip "Key Metrics" even if brief — extract whatever is genuinely present.
+- Every metric in "Key Metrics", "Fees & Charges", "Interest & Loan Details", "Investment Details", "Compliance Details", and "Important Dates" MUST be on its own line in "**Label:** Value" format — it is parsed automatically.
+- Do not skip "Key Metrics" — extract everything genuinely present even if brief.
+- Do not add headers, sections, or commentary beyond what is listed above.
 
 Document:
 ${text}

@@ -123,7 +123,7 @@ async function summarizeDocument(req, res) {
       });
 
       try {
-        extractedText = extracted;
+        extractedText = (extracted && typeof extracted.rawText === 'string') ? extracted.rawText : extracted;
         summary = await generateSummary(extractedText);
       } finally {
         stopTicker();

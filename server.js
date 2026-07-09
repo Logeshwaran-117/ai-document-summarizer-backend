@@ -97,6 +97,9 @@ app.use("/api/billing", billingRoutes);
 const { router: progressRoutes } = require("./routes/progressRoutes");
 app.use("/api", progressRoutes);
 
+const bankingRoutes = require('./routes/bankingRoutes');
+app.use('/api/banking', bankingRoutes);
+
 
 app.get("/auth/status", (req, res) => {
     if (req.isAuthenticated()) {

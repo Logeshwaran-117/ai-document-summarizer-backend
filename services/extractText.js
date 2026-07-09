@@ -1,190 +1,199 @@
-const fs = require("fs");
-const path = require("path");
-const pdf = require("pdf-parse");
-const mammoth = require("mammoth");
-const Tesseract = require("tesseract.js");
+/**
+ * services/extractText.js  (FIXED v2)
+ *
+ * Turns an uploaded file (PDF, Word, Excel, CSV, TXT, or image) into plain
+ * text so the rest of the pipeline can work on it regardless of source format.
+ *
+ * KEY FIXES:
+ *  1. Scanned/image-based PDFs (like Indian Bank statements) are detected via
+ *     a chars-per-page heuristic and fall back to Gemini Vision OCR instead of
+ *     returning empty text from pdf-parse.
+ *  2. isEmptyContent() is now exported — summarizeController and
+ *     tableController both import it from here.
+ *
+ * Works with either multer memoryStorage (file.buffer) or diskStorage
+ * (file.path) — whichever your upload middleware is configured with.
+ */
+const fs   = require('fs');
+const path = require('path');
 
-const MIN_TEXT_LENGTH = 50;
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
-// Image extensions that go straight to Gemini Vision (not OCR)
-const IMAGE_EXTENSIONS = [".jpg", ".jpeg", ".png", ".webp", ".gif"];
-
-const MIME_MAP = {
-  ".jpg": "image/jpeg",
-  ".jpeg": "image/jpeg",
-  ".png": "image/png",
-  ".webp": "image/webp",
-  ".gif": "image/gif",
-};
-
-async function extractWithOCR(fileBuffer) {
-  console.log("Scanned PDF detected — running OCR...");
-
-  const pdfjsLib = require("pdfjs-dist/legacy/build/pdf.js");
-  const { createCanvas } = require("canvas");
-
-  const data = new Uint8Array(fileBuffer);
-  const pdfDoc = await pdfjsLib.getDocument({ data }).promise;
-  const pageCount = Math.min(pdfDoc.numPages, 20);
-  const truncated = pdfDoc.numPages > 20;
-
-  console.log(`OCR: processing ${pageCount} page(s)...`);
-  if (truncated) {
-    console.warn(`⚠️  Scanned PDF has ${pdfDoc.numPages} pages — only the first 20 will be OCR'd.`);
-  }
-
-  const pageTexts = [];
-
-  for (let i = 1; i <= pageCount; i++) {
-    try {
-      const page = await pdfDoc.getPage(i);
-      const viewport = page.getViewport({ scale: 2.0 });
-
-      const canvas = createCanvas(viewport.width, viewport.height);
-      const context = canvas.getContext("2d");
-
-      await page.render({ canvasContext: context, viewport }).promise;
-
-      const imageBuffer = canvas.toBuffer("image/png");
-
-      const { data: { text } } = await Tesseract.recognize(imageBuffer, "eng", {
-        logger: () => {},
-      });
-
-      pageTexts.push(text.trim());
-      console.log(`OCR: page ${i}/${pageCount} done`);
-    } catch (pageErr) {
-      console.warn(`OCR failed on page ${i}:`, pageErr.message);
-    }
-  }
-
-  const ocrText = pageTexts.join("\n\n");
-
-  if (truncated) {
-    return `${ocrText}\n\n[NOTE: This scanned document has ${pdfDoc.numPages} pages. Only the first 20 pages were processed via OCR — content beyond page 20 is not reflected in this summary.]`;
-  }
-
-  return ocrText;
-}
-
-// Safely get a Buffer regardless of whether multer used memoryStorage or diskStorage
 function getBuffer(file) {
-  if (file.buffer && file.buffer.length > 0) {
-    return file.buffer;
-  }
-  if (file.path) {
-    return fs.readFileSync(file.path);
-  }
-  throw new Error("File data is unavailable — no buffer or disk path found.");
+  if (file.buffer) return file.buffer;
+  if (file.path)   return fs.readFileSync(file.path);
+  throw new Error('Uploaded file has neither buffer nor path.');
 }
 
-const extractText = async (file) => {
-  const extension = path.extname(file.originalname).toLowerCase();
-
-  // ── IMAGE FILES → return base64 + mimeType for Gemini Vision ──
-  if (IMAGE_EXTENSIONS.includes(extension)) {
-    const mimeType = MIME_MAP[extension] || "image/jpeg";
-    const buffer = getBuffer(file);
-    const base64Data = buffer.toString("base64");
-    return { isImage: true, base64Data, mimeType };
-  }
-
-  // ── TXT ──
-  if (extension === ".txt") {
-    return getBuffer(file).toString("utf8");
-  }
-
-  // ── CSV ──
-  if (extension === ".csv") {
-    return getBuffer(file).toString("utf8");
-  }
-
-  // ── PDF — try text extraction first, fall back to OCR ──
-  if (extension === ".pdf") {
-    const dataBuffer = getBuffer(file);
-    const pdfData = await pdf(dataBuffer);
-    const extractedText = pdfData.text?.trim() || "";
-
-    if (extractedText.length >= MIN_TEXT_LENGTH) {
-      return extractedText;
-    }
-
-    console.log(`PDF text too short (${extractedText.length} chars), switching to OCR...`);
-    const ocrText = await extractWithOCR(dataBuffer);
-
-    if (!ocrText || ocrText.trim().length < MIN_TEXT_LENGTH) {
-      throw new Error(
-        "Could not extract readable text from this PDF. The file may be a scanned image with poor quality, password-protected, or corrupted."
-      );
-    }
-
-    return ocrText;
-  }
-
-  // ── DOCX ──
-  if (extension === ".docx") {
-    const buffer = getBuffer(file);
-    const result = await mammoth.extractRawText({ buffer });
-    return result.value;
-  }
-
-  // ── XLSX / XLS ──
-  if (extension === ".xlsx" || extension === ".xls") {
-    // Lazy-require so the rest of the app isn't affected if xlsx isn't installed
-    let XLSX;
-    try {
-      XLSX = require("xlsx");
-    } catch {
-      throw new Error(
-        "The 'xlsx' package is not installed. Run: npm install xlsx"
-      );
-    }
-
-    const buffer = getBuffer(file);
-    const workbook = XLSX.read(buffer, { type: "buffer", cellDates: true });
-
-    const sheetTexts = [];
-    for (const sheetName of workbook.SheetNames) {
-      const sheet = workbook.Sheets[sheetName];
-      // Convert to CSV — empty rows filtered out
-      const csv = XLSX.utils.sheet_to_csv(sheet, { blankrows: false }).trim();
-      if (csv) {
-        sheetTexts.push(`## Sheet: ${sheetName}\n${csv}`);
-      }
-    }
-
-    const text = sheetTexts.join("\n\n");
-    if (!text.trim()) {
-      throw new Error("Could not extract any data from this Excel file. It may be empty.");
-    }
-
-    console.log(`📊 Excel extracted: ${workbook.SheetNames.length} sheet(s), ${text.length} chars`);
-    return text;
-  }
-
-  throw new Error(`Unsupported file type: ${extension}`);
-};
-
-// ── Empty-content detection ───────────────────────────────────────────────────
-// Returns true when the extracted result carries no meaningful content.
-// Works for both plain-text strings and image result objects.
-//
-// NOTE: Images are never blocked here — a blank/white image still produces
-// valid base64 pixel data. The blank-image check happens in summarizeController
-// AFTER Gemini Vision returns its description (short response + blank-image
-// keywords → reject). We only short-circuit text-based formats here.
+/**
+ * Returns true when the extracted content is effectively empty.
+ * Handles both plain strings (PDF/text path) and { isImage } objects
+ * (image path returned by extractText for image files).
+ */
 function isEmptyContent(extracted) {
   if (!extracted) return true;
+  if (typeof extracted === 'object' && extracted.isImage) {
+    // Image objects always have content — let the AI decide if it's blank
+    return false;
+  }
+  // Handle new {rawText, isScanned} PDF object
+  if (typeof extracted === 'object' && typeof extracted.rawText === 'string') {
+    return extracted.rawText.trim().length < 20;
+  }
+  return typeof extracted !== 'string' || extracted.trim().length < 20;
+}
 
-  // Image objects always have content (pixel data) — not "empty" at this stage
-  if (typeof extracted === "object" && extracted.isImage) return false;
+// ── Scanned-PDF detection ─────────────────────────────────────────────────────
 
-  // Strip whitespace + invisible Unicode (zero-width chars, NBSP, BOM)
-  const cleaned = String(extracted)
-    .replace(/[\u200B-\u200D\uFEFF\u00A0]/g, "")
-    .trim();
+/**
+ * If pdf-parse returns very little text per page, the PDF is almost certainly
+ * a scanned document (image-based pages with no embedded text layer).
+ */
+function isScannedPdf(text, pageCount) {
+  if (!text || text.trim().length === 0) return true;
+  const avgCharsPerPage = text.trim().length / Math.max(pageCount || 1, 1);
+  // Real text PDFs: 300-3000+ chars/page. Scanned images: < 100.
+  return avgCharsPerPage < 100;
+}
 
-  return cleaned.length === 0;
+// ── OCR via Gemini Vision ─────────────────────────────────────────────────────
+
+/**
+ * Sends the PDF as a native inline document to Gemini Vision.
+ * Gemini can read both digital text AND scanned/image pages natively.
+ * Used as the fallback when pdf-parse returns near-empty text.
+ */
+async function ocrPdfWithGemini(buffer) {
+  const { callWithRotation } = require('./geminiService');
+  const base64 = buffer.toString('base64');
+
+  console.log('[extractText] Scanned PDF — using Gemini Vision OCR...');
+
+  const parts = [
+    {
+      inlineData: {
+        mimeType: 'application/pdf',
+        data: base64,
+      },
+    },
+    {
+      text:
+        'This document may be a bank statement, invoice, receipt, or any financial/text document. ' +
+        'Transcribe ALL text from every page exactly as it appears. ' +
+        'For bank statement transaction tables, keep each row on one line in this order: ' +
+        'DATE  DESCRIPTION  DEBIT_AMOUNT_OR_DASH  CREDIT_AMOUNT_OR_DASH  BALANCE\n' +
+        'Preserve all currency amounts exactly (e.g. "INR 2,779.00", "USD 1,234.56"). ' +
+        'Include headers, account details, summaries, and every transaction row. ' +
+        'Return only the transcribed text — no commentary, no markdown.',
+    },
+  ];
+
+  const text = await callWithRotation(() => parts, 8192);
+  console.log(`[extractText] Gemini Vision OCR returned ${text?.length || 0} chars`);
+  return text || '';
+}
+
+// ── Per-format extractors ─────────────────────────────────────────────────────
+
+async function extractFromPdf(buffer) {
+  const pdfParse = require('pdf-parse');
+
+  let pdfText  = '';
+  let pageCount = 1;
+
+  try {
+    const data = await pdfParse(buffer);
+    pdfText   = data.text    || '';
+    pageCount = data.numpages || 1;
+  } catch (err) {
+    console.warn('[extractText] pdf-parse failed:', err.message);
+  }
+
+  // If pdf-parse got a good text layer, use it directly
+  if (!isScannedPdf(pdfText, pageCount)) {
+    console.log(`[extractText] pdf-parse OK — ${pdfText.length} chars from ${pageCount} pages`);
+    // Return structured object so bankingController can detect isScanned=false
+    return { rawText: pdfText, isScanned: false };
+  }
+
+  // Scanned or empty — fall back to Gemini Vision OCR
+  console.log(`[extractText] Scanned PDF (${pdfText.trim().length} chars / ${pageCount} pages) — falling back to Gemini Vision`);
+  const ocrText = await ocrPdfWithGemini(buffer);
+  return { rawText: ocrText, isScanned: true };
+}
+
+async function extractFromDocx(buffer) {
+  const mammoth = require('mammoth');
+  const { value } = await mammoth.extractRawText({ buffer });
+  return value || '';
+}
+
+async function extractFromExcel(buffer) {
+  const XLSX = require('xlsx');
+  const workbook = XLSX.read(buffer, { type: 'buffer' });
+  let out = '';
+  for (const sheetName of workbook.SheetNames) {
+    const sheet = workbook.Sheets[sheetName];
+    out += `--- Sheet: ${sheetName} ---\n${XLSX.utils.sheet_to_csv(sheet)}\n\n`;
+  }
+  return out;
+}
+
+/**
+ * For image files we return a structured object instead of a plain string.
+ * summarizeController checks extracted.isImage to pick the Vision path;
+ * tableController does the same via extractTableFromImage.
+ */
+async function extractFromImage(buffer, mimeType) {
+  const base64Data = buffer.toString('base64');
+  // Return a special object so controllers know to use the Vision pipeline
+  return { isImage: true, base64Data, mimeType };
+}
+
+function extractFromPlainText(buffer) {
+  return buffer.toString('utf-8');
+}
+
+// ── Main entry point ──────────────────────────────────────────────────────────
+
+/**
+ * @param  {Express.Multer.File} file
+ * @returns {Promise<string | { isImage: true, base64Data: string, mimeType: string }>}
+ */
+async function extractText(file) {
+  const ext  = path.extname(file.originalname || '').toLowerCase();
+  const mime = file.mimetype || '';
+  const buf  = getBuffer(file);
+
+  if (ext === '.pdf' || mime === 'application/pdf') {
+    return extractFromPdf(buf);
+  }
+
+  if (
+    ext === '.docx' || ext === '.doc' ||
+    mime.includes('wordprocessingml') || mime === 'application/msword'
+  ) {
+    return extractFromDocx(buf);
+  }
+
+  if (
+    ext === '.xlsx' || ext === '.xls' ||
+    mime.includes('spreadsheetml') || mime === 'application/vnd.ms-excel'
+  ) {
+    return extractFromExcel(buf);
+  }
+
+  if (ext === '.csv' || mime === 'text/csv')   return extractFromPlainText(buf);
+  if (ext === '.txt' || mime === 'text/plain') return extractFromPlainText(buf);
+
+  if (
+    ['.png', '.jpg', '.jpeg', '.webp'].includes(ext) ||
+    mime.startsWith('image/')
+  ) {
+    return extractFromImage(buf, mime || `image/${ext.slice(1)}`);
+  }
+
+  throw new Error(`Unsupported file type: ${ext || mime}`);
 }
 
 module.exports = { extractText, isEmptyContent };

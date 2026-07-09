@@ -87,7 +87,8 @@ async function extractTable(req, res) {
       if (isImage) {
         rows = await extractTableFromImage(extracted.base64Data, extracted.mimeType, fields);
       } else {
-        rows = await extractTableData(extracted, fields);
+        const tableText = (extracted && typeof extracted.rawText === 'string') ? extracted.rawText : extracted;
+        rows = await extractTableData(tableText, fields);
       }
     } finally {
       stopTicker();
