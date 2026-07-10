@@ -25,6 +25,9 @@ const userSchema = new mongoose.Schema({
   // keep top-level plan for quick admin queries
   plan: { type: String, enum: ['free', 'pro', 'enterprise'], default: 'free' },
   subscription: { type: subscriptionSchema, default: () => ({}) },
+  tokensUsed: { type: Number, default: 0 },
+  tokenLimit: { type: Number, default: 1000000 }, // e.g., 1 Million free tokens
+  tokenResetDate: { type: Date },
   createdAt: { type: Date, default: Date.now },
   lastLogin: { type: Date },
   suspendedReason: { type: String, default: '' },

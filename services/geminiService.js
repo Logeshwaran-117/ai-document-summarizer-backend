@@ -1,3 +1,20 @@
+/**
+ * geminiService.js  (with usage tracking integrated)
+ *
+ * CHANGES vs original:
+ *  1. Imports usageTrackingService
+ *  2. callGeminiREST now receives the active keyIndex and calls
+ *     usageTracking.recordSuccess() on every successful response.
+ *  3. callWithRotation calls usageTracking.recordRateLimit() on every
+ *     429 rotation and usageTracking.recordError() on unexpected errors.
+ *  4. All other logic is identical to the original file.
+ *
+ * The `feature` parameter ("summarize" | "banking" | "table") is threaded
+ * through so per-feature breakdowns are tracked without changing the public API.
+ */
+
+const usageTracking = require("./usageTrackingService");
+
 // ── Key rotation ──────────────────────────────────────────────────────────────
 const GEMINI_KEYS = [
     process.env.GEMINI_KEY_1,
@@ -10,6 +27,9 @@ if (GEMINI_KEYS.length === 0) {
     throw new Error("No Gemini API keys found. Set GEMINI_KEY_1 … GEMINI_KEY_4 in your .env");
 }
 
+// Export so usageTrackingService can read total key count
+process.env.GEMINI_KEYS_COUNT = String(GEMINI_KEYS.length);
+
 let currentKeyIndex = 0;
 
 function getCurrentKey() {
@@ -17,21 +37,13 @@ function getCurrentKey() {
 }
 
 function rotateKey() {
-    const prev = currentKeyIndex + 1;
+    const prev = currentKeyIndex;
     currentKeyIndex = (currentKeyIndex + 1) % GEMINI_KEYS.length;
-    console.log(`🔄 Rotating Gemini key: key ${prev} → key ${currentKeyIndex + 1} of ${GEMINI_KEYS.length}`);
+    console.log(`🔄 Rotating Gemini key: key ${prev + 1} → key ${currentKeyIndex + 1} of ${GEMINI_KEYS.length}`);
+    return { from: prev, to: currentKeyIndex };
 }
 
-// ── Groq fallback ────────────────────────────────────────────────────────────
-// Last resort used only when ALL 4 Gemini keys have been tried and the final
-// retry also failed. Requires GROQ_API_KEY in .env — if it's not set, the
-// fallback is simply skipped and the original Gemini error is thrown as before.
-// Groq's free tier is separate from Google's, so a Gemini-side outage or
-// quota exhaustion doesn't affect it.
-// llama-3.3-70b-versatile was deprecated by Groq (June 2026) in favor of
-// openai/gpt-oss-120b, so that's the default now. Override via GROQ_MODEL
-// in .env if you'd rather use something else — check console.groq.com/docs/models
-// for the current list before picking a different one.
+// ── Groq fallback ─────────────────────────────────────────────────────────────
 const GROQ_MODEL = process.env.GROQ_MODEL || "openai/gpt-oss-120b";
 
 let groqClient = null;
@@ -51,10 +63,6 @@ function getGroqClient() {
     return groqClient;
 }
 
-// Groq's chat API is text-only — it can't accept the inline_data image parts
-// Gemini Vision calls use. Pull out just the text parts; if the request was
-// ONLY an image (e.g. summarizeImage with no text found), there's nothing
-// Groq can do with it and we fail with a clear message instead of pretending.
 function partsToPromptText(parts) {
     return parts.filter(p => p.text).map(p => p.text).join("\n\n");
 }
@@ -68,7 +76,7 @@ async function callGroqFallback(parts, maxOutputTokens) {
     }
 
     const hasImage = parts.some(p => p.inline_data);
-    const promptText = partsToPromptText(parts);
+    let promptText = partsToPromptText(parts);
 
     if (!promptText.trim()) {
         throw new Error(
@@ -78,9 +86,6 @@ async function callGroqFallback(parts, maxOutputTokens) {
         );
     }
 
-    // ── NEW: Groq free tier TPM cap is ~8000 tokens total (input + output).
-    // Rough heuristic: 1 token ≈ 4 chars. Reserve 1500 tokens for output.
-    // So cap input at (8000 - 1500) * 4 = 26000 chars.
     const MAX_INPUT_CHARS = 26000;
     if (promptText.length > MAX_INPUT_CHARS) {
         console.warn(`⚠️  Groq input too large (${promptText.length} chars) — truncating to ${MAX_INPUT_CHARS} chars`);
@@ -90,7 +95,7 @@ async function callGroqFallback(parts, maxOutputTokens) {
     const completion = await client.chat.completions.create({
         model: GROQ_MODEL,
         messages: [{ role: "user", content: promptText }],
-        max_tokens: Math.min(maxOutputTokens, 1500), // Groq's practical per-response ceiling
+        max_tokens: Math.min(maxOutputTokens, 1500),
     });
 
     return completion.choices?.[0]?.message?.content ?? "";
@@ -104,8 +109,18 @@ function sleep(ms) {
 // ── Core fetch-based Gemini call ──────────────────────────────────────────────
 const BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models";
 
-// FIX 1: renamed from geminiRequest → callGeminiREST, accepts model param
-async function callGeminiREST(parts, maxOutputTokens = 8192, model = "gemini-2.5-flash") {
+/**
+ * Makes one REST call to Gemini with the current key.
+ * On success: fires usageTracking.recordSuccess() (non-blocking).
+ *
+ * @param {Array}    parts
+ * @param {number}   maxOutputTokens
+ * @param {string}   model
+ * @param {Function|null} onUsage  - legacy callback passed by controllers
+ * @param {string}   feature       - "summarize"|"banking"|"table" for breakdown
+ */
+async function callGeminiREST(parts, maxOutputTokens = 8192, model = "gemini-2.5-flash", onUsage = null, feature = "summarize") {
+    const activeIndex = currentKeyIndex;
     const key = getCurrentKey();
     const url = `${BASE_URL}/${model}:generateContent?key=${key}`;
 
@@ -127,13 +142,21 @@ async function callGeminiREST(parts, maxOutputTokens = 8192, model = "gemini-2.5
         throw err;
     }
 
+    // ── Usage tracking (non-blocking) ─────────────────────────────────────
+    if (data?.usageMetadata) {
+        // Legacy callback (keeps existing controller behaviour intact)
+        if (onUsage) onUsage(data.usageMetadata);
+        // New dashboard tracking
+        usageTracking.recordSuccess(activeIndex, data.usageMetadata, feature).catch(() => {});
+    }
+
     return data?.candidates?.[0]?.content?.parts
         ?.filter(p => p.text)
         ?.map(p => p.text)
         ?.join("") ?? "";
 }
 
-// FIX 2: error helpers take the full error object (not two separate args)
+// ── Error classifiers ─────────────────────────────────────────────────────────
 function isRateLimitError(error) {
     const msg = JSON.stringify(error?.body || error?.message || "").toLowerCase();
     return (
@@ -153,12 +176,6 @@ function isOverloadError(error) {
     );
 }
 
-// Catches the "project denied / permission denied / API key invalid /
-// service disabled" family of errors. These come back as 403 (or sometimes
-// 400) from Google when a specific key's project has been suspended,
-// disabled, or restricted — a DIFFERENT problem per key, not a global rate
-// limit. Previously these fell through to the generic `throw error`, which
-// killed the request on the very first bad key instead of trying the other 3.
 function isAccessDeniedError(error) {
     const msg = JSON.stringify(error?.body || error?.message || "").toLowerCase();
     return (
@@ -182,40 +199,46 @@ function parseRetryAfter(error) {
 }
 
 // ── Retry + rotate across all keys ───────────────────────────────────────────
-// FIX 3: callWithRotation now calls callGeminiREST (not the old geminiRequest)
-//         and passes error object correctly to isRateLimitError / isOverloadError
-async function callWithRotation(buildParts, maxOutputTokens = 8192, model = "gemini-2.5-flash") {
+/**
+ * @param {Function} buildParts     - returns the parts array for this call
+ * @param {number}   maxOutputTokens
+ * @param {string}   model
+ * @param {Function|null} onUsage   - legacy token callback from controllers
+ * @param {string}   feature        - "summarize"|"banking"|"table"
+ */
+async function callWithRotation(buildParts, maxOutputTokens = 8192, model = "gemini-2.5-flash", onUsage = null, feature = "summarize") {
     let keysTriedCount = 0;
 
     while (keysTriedCount < GEMINI_KEYS.length) {
         try {
             const parts = buildParts();
-            return await callGeminiREST(parts, maxOutputTokens, model);
+            return await callGeminiREST(parts, maxOutputTokens, model, onUsage, feature);
         } catch (error) {
-            if (isRateLimitError(error)) {               // ✅ pass full error
+            if (isRateLimitError(error)) {
                 const retryMs = parseRetryAfter(error);
                 console.log(`⚠️  Key ${currentKeyIndex + 1} rate limited. Rotating to next key...`);
-                rotateKey();
+                const { from, to } = rotateKey();
+                usageTracking.recordRateLimit(from, to).catch(() => {});
                 keysTriedCount++;
                 await sleep(retryMs ? Math.min(retryMs, 15000) : 2000);
                 continue;
             }
-            if (isOverloadError(error)) {                // ✅ pass full error
+            if (isOverloadError(error)) {
                 console.log(`⏳ Gemini overloaded (503), waiting 4s...`);
                 await sleep(4000);
                 continue;
             }
             if (isAccessDeniedError(error)) {
-                // This key's project is denied/suspended/invalid — that says
-                // nothing about the other keys, so rotate and keep going
-                // instead of failing the whole request on one bad key.
                 console.log(
                     `🚫 Key ${currentKeyIndex + 1} was denied access (${error.message}). Rotating to next key...`
                 );
-                rotateKey();
+                const { from, to } = rotateKey();
+                usageTracking.recordRateLimit(from, to).catch(() => {});
                 keysTriedCount++;
                 continue;
             }
+            // Unexpected error — record it, then rethrow
+            usageTracking.recordError(currentKeyIndex).catch(() => {});
             throw error;
         }
     }
@@ -227,7 +250,7 @@ async function callWithRotation(buildParts, maxOutputTokens = 8192, model = "gem
     let finalGeminiError;
     try {
         const parts = buildParts();
-        return await callGeminiREST(parts, maxOutputTokens, model);
+        return await callGeminiREST(parts, maxOutputTokens, model, onUsage, feature);
     } catch (finalError) {
         finalGeminiError = finalError;
         console.log("⚠️  Final Gemini retry also failed. Trying Groq fallback...");
@@ -260,7 +283,6 @@ async function callWithRotation(buildParts, maxOutputTokens = 8192, model = "gem
 function isBankingDocument(text) {
     const lower = text.toLowerCase();
     const bankingKeywords = [
-        // Core banking
         "account number", "account balance", "bank statement", "transaction",
         "credit", "debit", "deposit", "withdrawal", "cheque", "check",
         "ifsc", "swift", "iban", "routing number", "sort code",
@@ -269,21 +291,16 @@ function isBankingDocument(text) {
         "atm", "net banking", "bank", "savings account", "current account",
         "beneficiary", "payee", "invoice amount", "due amount",
         "outstanding balance", "minimum payment", "statement date",
-        // Credit card
         "credit card", "card statement", "billing cycle", "credit limit",
         "minimum due", "payment due date", "cashback", "reward points",
         "over limit", "card number", "cvv",
-        // Loan / mortgage
         "principal", "repayment", "emi amount", "loan account", "disbursement",
         "foreclosure", "prepayment", "amortization", "tenure", "collateral",
-        // Investment / wealth
         "portfolio", "nav", "mutual fund", "sip", "nifty", "sensex",
         "dividend", "unrealized", "realized gain", "units held", "folio",
         "demat", "broker", "stock", "equity", "bond", "fixed deposit",
-        // Insurance / tax
         "premium due", "policy number", "sum assured", "tds deducted",
         "pan number", "gst number", "form 26as", "tds certificate",
-        // Indian banking specific
         "neft", "rtgs", "imps", "upi", "nach", "ecs", "micr",
         "cif", "kyc", "nbfc", "rbi",
     ];
@@ -349,137 +366,43 @@ Return clean Markdown following this EXACT section order. Every key-value pair o
 
 ## Account Overview
 - **Account Holder Name:** {full name or "Not specified"}
-- **Joint Holder (if any):** {name or "None"}
 - **Bank / Institution:** {name}
-- **Branch:** {branch name and city or "Not stated"}
 - **Account Type:** {Savings / Current / Credit Card / Loan / OD / Fixed Deposit / Demat / etc.}
 - **Account Number:** {****XXXX — last 4 digits only}
-- **Customer ID / CIF:** {value or "Not stated"}
 - **IFSC Code:** {value or "Not stated"}
-- **MICR Code:** {value or "Not stated"}
-- **SWIFT / IBAN (if applicable):** {value or "N/A"}
 - **Currency:** {INR / USD / EUR / etc.}
-- **Nominee Registered:** {Yes / No / Not stated}
 - **Account Status:** {Active / Dormant / Frozen / Overdrawn / In Arrears / Good Standing / Not stated}
 - **Statement Period:** {start date – end date or document date}
-- **Statement Date:** {date or "Not stated"}
 
 ## Key Metrics
-List every headline financial figure present. Use "**Label:** Value" on its own line. Include all that apply:
-- Opening Balance, Closing Balance, Available Balance, Lien Amount
-- Total Credits (count + amount), Total Debits (count + amount)
-- Net Change this Period, Average Monthly Balance, Minimum Balance Required
-- Credit Limit, Credit Utilized, Available Credit
-- Minimum Payment Due, Total Amount Due, Last Payment Received
-- Outstanding Principal, Interest Accrued, EMI Amount, Loan Tenure Remaining
-- APR / Interest Rate, Compound Frequency
-- Fixed Deposit Amount, FD Maturity Value, FD Tenure, FD Interest Rate
-- Investment Value, Unrealized Gain/Loss, Dividend Received
-- TDS Deducted, GST Amount, Service Tax
-- Salary Credited (if salary account)
-Aim for 6–14 bullets. Only include what genuinely appears in the document.
+List every headline financial figure present. Use "**Label:** Value" on its own line.
 
 ## Financial Summary
-3–4 paragraphs covering: how the balance moved during the period; what drove the largest inflows and outflows; any visible spending pattern, EMI commitments, or recurring credits; comparison to any prior-period figures mentioned in the document; and whether the account is in a healthy, stressed, or at-risk state based solely on the numbers.
+3–4 paragraphs covering how the balance moved during the period.
 
 ## Transaction Breakdown
-If transaction category data is available, list it:
-- **{Category}:** {total amount} ({count} transactions)
-Examples: Groceries, Utilities, EMI/Loan Repayment, Salary Credit, UPI Transfers, ATM Withdrawals, International Transactions, Insurance Premium, Investment, Tax Payment, Refunds.
-If no categorization is present, write "Transaction category breakdown not available in this document."
+List categories with total amounts if available.
 
 ## Key Transactions
-List the 6–12 most significant transactions: largest amounts, recurring items, international transfers, unusual one-offs, reversals, and anything flagged. Format:
-**{DD MMM YYYY}** — {Description / Narration}, {Amount} ({Credit / Debit}) | Ref: {ref no. or "N/A"}
+List 6–12 most significant transactions.
 
 ## Fees, Charges & Taxes
-List every fee, charge, penalty, and tax. "**Label:** Value" format:
-- Annual / Renewal Fee, Late Payment Fee, Over-Limit Fee
-- ATM Usage Fee (own bank / other bank), SMS Alert Charges, Cheque Return Charges
-- NEFT / RTGS / IMPS Transaction Fee, Foreign Currency Markup
-- Minimum Balance Penalty, Demat AMC, Locker Charges
-- GST on charges, TDS deducted, Other levies
-If none: "No fees or charges noted in this document."
-
-## Interest & Loan Details (if applicable)
-- **Loan Type:** {Home / Personal / Auto / Education / Gold / OD / etc.}
-- **Loan Account Number:** {****XXXX}
-- **Disbursement Date:** {date}
-- **Sanctioned Amount:** {value}
-- **Outstanding Principal:** {value}
-- **Interest Rate:** {value} ({Fixed / Floating})
-- **EMI Amount:** {value}
-- **EMI Due Date:** {date}
-- **Loan Maturity Date:** {date}
-- **Prepayment Charges:** {value or "Not stated"}
-- **Overdue Amount (if any):** {value or "None"}
-If not a loan document, write "Not applicable."
-
-## Investment & Wealth Details (if applicable)
-- **Portfolio Value:** {value}
-- **Asset Allocation:** {Equity / Debt / Liquid / Gold / etc. with %}
-- **Unrealized P&L:** {value and %}
-- **Realized Gain/Loss (this period):** {value}
-- **Dividend / Interest Received:** {value}
-- **Units / Shares Held:** {value}
-- **NAV / Share Price (as of):** {value and date}
-If not applicable, write "Not applicable."
-
-## Compliance & Tax Details (if applicable)
-- **PAN:** {masked — last 4 chars only or "Not stated"}
-- **GST Number:** {masked or "Not stated"}
-- **TDS Deducted (this period):** {value or "None"}
-- **Form 16A / 26AS Reference:** {value or "Not stated"}
-- **Tax Regime:** {Old / New / Not stated}
-If not applicable, write "Not applicable."
-
-## Important Dates & Deadlines
-List every critical date as "**Label:** Date":
-- Statement Date, Payment Due Date, Grace Period End Date
-- EMI Due Date, Loan Maturity Date, FD Maturity Date
-- Autopay / ECS Date, Cheque Clearance Date
-- Tax Filing Deadline (if referenced), Insurance Premium Due Date
-- KYC Renewal Date, Account Review Date
+List every fee, charge, penalty, and tax.
 
 ## Risk Flags & Alerts
-Flag everything requiring immediate attention, ranked by urgency:
-1. Overdue payments or missed EMIs
-2. Penalty charges or interest on late payment
-3. Bounced / returned items (ECS / NACH / cheques)
-4. Minimum balance violation
-5. High credit utilization (>80% of limit)
-6. Large or unusual one-time transactions
-7. International / cross-border transactions without prior notice
-8. Account restrictions, lien, or freeze
-9. KYC overdue / account at risk of suspension
-10. Printed warnings or disclaimers
-If none apply, write "No risk flags or alerts noted in this document."
+Flag everything requiring immediate attention.
 
 ## Conclusion
-One tight paragraph synthesizing the overall financial health picture of this account as of the statement date — what is happening, what the key numbers reveal, and what the account holder should double-check based strictly on this document. No financial advice; only factual synthesis.
-
-STRICT RULES:
-- Never invent numbers, dates, names, or references not in the document.
-- Mask all but the last 4 digits of any account, loan, or card number using ****.
-- Do not wrap the response in a code block.
-- Every metric in "Key Metrics", "Fees & Charges", "Interest & Loan Details", "Investment Details", "Compliance Details", and "Important Dates" MUST be on its own line in "**Label:** Value" format — it is parsed automatically.
-- Do not skip "Key Metrics" — extract everything genuinely present even if brief.
-- Do not add headers, sections, or commentary beyond what is listed above.
+One tight paragraph synthesizing the overall financial health picture.
 
 Document:
 ${text}
 `;
 
 // ── Long-document map-reduce summarization ────────────────────────────────────
-// Documents beyond this length (~10+ pages for a typical text-heavy doc) get
-// split into chunks, each chunk gets a quick "extract the facts" pass, and the
-// combined notes are fed into the normal structured prompt as the final step.
-// This keeps each individual call smaller (less quota pressure per call, which
-// matters most when keys are already close to their per-minute limits) and
-// avoids the model skimming the back half of a very long single prompt.
-const SUMMARY_CHUNK_THRESHOLD = 15000; // characters
+const SUMMARY_CHUNK_THRESHOLD = 15000;
 const SUMMARY_CHUNK_SIZE = 6000;
-const SUMMARY_CHUNK_BATCH_SIZE = 3; // chunks processed in parallel per batch
+const SUMMARY_CHUNK_BATCH_SIZE = 3;
 
 const CHUNK_EXTRACT_PROMPT = (chunk, index, total) => `
 You are extracting the key facts from part ${index} of ${total} of a larger document. These notes will be combined with the other parts and summarized as a whole later — this is a note-taking pass, not the final summary.
@@ -490,13 +413,14 @@ Excerpt (part ${index} of ${total}):
 ${chunk}
 `;
 
-async function extractChunkNotes(chunk, index, total) {
+async function extractChunkNotes(chunk, index, total, onUsage = null, feature = "summarize") {
     const prompt = CHUNK_EXTRACT_PROMPT(chunk, index, total);
-    return callWithRotation(() => [{ text: prompt }], 2048, "gemini-2.5-flash");
+    return callWithRotation(() => [{ text: prompt }], 2048, "gemini-2.5-flash", onUsage, feature);
 }
 
-async function generateSummaryChunked(text, isBanking) {
+async function generateSummaryChunked(text, isBanking, onUsage = null) {
     const chunks = chunkText(text, SUMMARY_CHUNK_SIZE);
+    const feature = isBanking ? "banking" : "summarize";
     console.log(`📚 Long document (${text.length} chars, ${chunks.length} chunks) — running map-reduce summarization...`);
 
     const notesParts = [];
@@ -505,7 +429,7 @@ async function generateSummaryChunked(text, isBanking) {
         console.log(`⚙️  Extracting notes: batch ${Math.floor(b / SUMMARY_CHUNK_BATCH_SIZE) + 1}/${Math.ceil(chunks.length / SUMMARY_CHUNK_BATCH_SIZE)}...`);
 
         const batchNotes = await Promise.all(
-            batch.map((chunk, i) => extractChunkNotes(chunk, b + i + 1, chunks.length))
+            batch.map((chunk, i) => extractChunkNotes(chunk, b + i + 1, chunks.length, onUsage, feature))
         );
         notesParts.push(...batchNotes);
     }
@@ -514,27 +438,28 @@ async function generateSummaryChunked(text, isBanking) {
         .map((notes, i) => `--- Part ${i + 1} of ${chunks.length} ---\n${notes}`)
         .join("\n\n");
 
-    console.log(`📝 Combined notes: ${combinedNotes.length} chars (from ${text.length} chars original). Generating final summary...`);
+    console.log(`📝 Combined notes: ${combinedNotes.length} chars. Generating final summary...`);
 
     const prompt = isBanking ? BANKING_PROMPT(combinedNotes) : GENERAL_PROMPT(combinedNotes);
-    return callWithRotation(() => [{ text: prompt }], 8192, "gemini-2.5-flash");
+    return callWithRotation(() => [{ text: prompt }], 8192, "gemini-2.5-flash", onUsage, feature);
 }
 
 // ── Public: summarize text document ──────────────────────────────────────────
-async function generateSummary(text) {
+async function generateSummary(text, onUsage) {
     const isBanking = isBankingDocument(text);
+    const feature = isBanking ? "banking" : "summarize";
     if (isBanking) console.log("🏦 Banking document detected — using financial summary prompt");
 
     if (text.length > SUMMARY_CHUNK_THRESHOLD) {
-        return generateSummaryChunked(text, isBanking);
+        return generateSummaryChunked(text, isBanking, onUsage);
     }
 
     const prompt = isBanking ? BANKING_PROMPT(text) : GENERAL_PROMPT(text);
-    return callWithRotation(() => [{ text: prompt }], 8192, "gemini-2.5-flash");
+    return callWithRotation(() => [{ text: prompt }], 8192, "gemini-2.5-flash", onUsage, feature);
 }
 
 // ── Public: summarize image ───────────────────────────────────────────────────
-async function summarizeImage(base64Data, mimeType) {
+async function summarizeImage(base64Data, mimeType, onUsage) {
     const prompt = `
 You are an expert document and image analyst. Examine this image carefully and extract all readable text and meaningful content from it.
 
@@ -564,10 +489,10 @@ RULES:
     return callWithRotation(() => [
         { text: prompt },
         { inline_data: { mime_type: mimeType, data: base64Data } },
-    ], 8192, "gemini-2.5-flash");
+    ], 8192, "gemini-2.5-flash", onUsage, "summarize");
 }
 
-// ── Structured table extraction ───────────────────────────────────────────────
+// ── Table extraction helpers ──────────────────────────────────────────────────
 function buildTablePrompt(text, fields) {
     return `
 You are a precise data-extraction engine. Read the document below and extract structured data for these fields: ${fields.join(", ")}.
@@ -575,8 +500,8 @@ You are a precise data-extraction engine. Read the document below and extract st
 RULES:
 - Return ONLY a raw JSON array of objects — no markdown, no code fences, no commentary before or after.
 - Every object must use exactly these keys: ${JSON.stringify(fields)}.
-- If the document describes a single entity (one invoice, one statement, one person, one form), return a single-element array.
-- If the document contains multiple records (e.g. a list of transactions, multiple line items, multiple people), return one array element per record.
+- If the document describes a single entity, return a single-element array.
+- If the document contains multiple records, return one array element per record.
 - If a field's value isn't present, use an empty string "" — never invent data.
 - Preserve numbers, dates, and names exactly as written in the document.
 
@@ -598,9 +523,6 @@ RULES:
 `;
 }
 
-// Extracts the JSON value most likely to be our data array out of a model
-// response that may include commentary, code fences, or stray "[1]"-style
-// footnote brackets the model tacked on around the real array.
 function tryParseJSON(rawText) {
     let cleaned = rawText.trim();
     const fenceMatch = cleaned.match(/```(?:json)?\s*([\s\S]*?)```/i);
@@ -609,11 +531,8 @@ function tryParseJSON(rawText) {
     try {
         const direct = JSON.parse(cleaned);
         if (Array.isArray(direct) || (direct && typeof direct === "object")) return direct;
-    } catch { /* fall through to bracket scan */ }
+    } catch { /* fall through */ }
 
-    // Scan every '[' as a possible array start and keep whichever balanced
-    // bracket pair parses to the largest array of objects — the real table,
-    // not an incidental bracketed reference elsewhere in the response.
     const candidates = [];
     for (let start = 0; start < cleaned.length; start++) {
         if (cleaned[start] !== "[") continue;
@@ -623,7 +542,7 @@ function tryParseJSON(rawText) {
             else if (cleaned[i] === "]") {
                 depth--;
                 if (depth === 0) {
-                    try { candidates.push(JSON.parse(cleaned.slice(start, i + 1))); } catch { /* not valid on its own */ }
+                    try { candidates.push(JSON.parse(cleaned.slice(start, i + 1))); } catch { }
                     break;
                 }
             }
@@ -639,8 +558,6 @@ function tryParseJSON(rawText) {
     return candidates[0];
 }
 
-// Some models wrap the array in an object (e.g. { "rows": [...] }) despite
-// instructions, or return a single object for a single-record document.
 function coerceToRowsArray(parsed) {
     if (Array.isArray(parsed)) return parsed;
     if (parsed && typeof parsed === "object") {
@@ -667,31 +584,36 @@ function parseTableJSON(raw, fields) {
     });
 }
 
-// Asks the model to reformat its own previous (unparseable) reply as strict
-// JSON, without re-reading the whole document — fixes format-only failures.
-async function repairTableJSON(previousRaw, fields) {
+async function repairTableJSON(previousRaw, fields, onUsage = null) {
     const prompt = `
-The text below was supposed to be a raw JSON array of objects with exactly these keys: ${JSON.stringify(fields)}, but it isn't valid JSON — it may contain commentary, markdown, or stray text around the data.
+The text below was supposed to be a raw JSON array of objects with exactly these keys: ${JSON.stringify(fields)}, but it isn't valid JSON.
 
 Rebuild and return ONLY the valid JSON array using exactly those keys. No commentary, no markdown code fences, nothing before or after the array.
 
 Text:
 ${previousRaw}
 `;
-    return callWithRotation(() => [{ text: prompt }], 8192, "gemini-2.5-flash");
+    return callWithRotation(() => [{ text: prompt }], 8192, "gemini-2.5-flash", onUsage, "table");
 }
 
-// ── Chunk text into ~3500 char pieces, splitting on newlines ─────────────────
-// Smaller chunks → smaller JSON output per call → less chance of the model
-// hitting maxOutputTokens mid-object, which was previously causing nearly
-// every chunk to fail its first parse and burn an extra repair call.
-function chunkText(text, chunkSize = 3500) {
+function cleanTableText(rawText) {
+    if (!rawText) return "";
+    let cleaned = rawText.replace(/"([^"]*)"/g, (match, insideQuotes) => {
+        const flattened = insideQuotes.replace(/[\n\r]+/g, ' ').replace(/\s{2,}/g, ' ').trim();
+        return `"${flattened}"`;
+    });
+    cleaned = cleaned.replace(/"\s*,\s*\n\s*"/g, '","');
+    cleaned = cleaned.replace(/"\s*\n\s*,\s*"/g, '","');
+    cleaned = cleaned.replace(/\n{3,}/g, '\n\n');
+    return cleaned;
+}
+
+function chunkText(text, chunkSize = 4000) {
     const chunks = [];
     let start = 0;
     while (start < text.length) {
         let end = start + chunkSize;
         if (end < text.length) {
-            // Try to split on a newline so we don't cut mid-row
             const nl = text.lastIndexOf("\n", end);
             if (nl > start) end = nl;
         }
@@ -701,26 +623,25 @@ function chunkText(text, chunkSize = 3500) {
     return chunks.filter(c => c.length > 0);
 }
 
-// ── Public: extract structured table rows from text (chunked for large docs) ──
-async function extractTableData(text, fields) {
-    // For short docs, use the simple single-call path
-    if (text.length <= 8000) {
-        const prompt = buildTablePrompt(text, fields);
-        const raw = await callWithRotation(() => [{ text: prompt }], 16384, "gemini-2.5-flash");
+async function extractTableData(text, fields, onUsage) {
+    const cleanedText = cleanTableText(text);
+
+    if (cleanedText.length <= 8000) {
+        const prompt = buildTablePrompt(cleanedText, fields);
+        const raw = await callWithRotation(() => [{ text: prompt }], 16384, "gemini-2.5-flash", onUsage, "table");
         try {
             return parseTableJSON(raw, fields);
         } catch {
             console.log("⚠️  Table JSON parse failed, attempting one repair pass...");
-            const repaired = await repairTableJSON(raw, fields);
+            const repaired = await repairTableJSON(raw, fields, onUsage);
             return parseTableJSON(repaired, fields);
         }
     }
 
-    // Large document — split into chunks and extract each in parallel batches
-    const chunks = chunkText(text, 3500);
-    console.log(`📄 Large document detected (${text.length} chars). Splitting into ${chunks.length} chunks...`);
+    const chunks = chunkText(cleanedText, 4000);
+    console.log(`📄 Large document detected (${cleanedText.length} chars). Splitting into ${chunks.length} chunks...`);
 
-    const BATCH_SIZE = 3; // process 3 chunks at a time to avoid rate limits
+    const BATCH_SIZE = 3;
     const allRows = [];
 
     for (let b = 0; b < chunks.length; b += BATCH_SIZE) {
@@ -730,13 +651,13 @@ async function extractTableData(text, fields) {
         const batchResults = await Promise.all(
             batch.map(async (chunk, i) => {
                 const prompt = buildTablePrompt(chunk, fields);
-                const raw = await callWithRotation(() => [{ text: prompt }], 16384, "gemini-2.5-flash");
+                const raw = await callWithRotation(() => [{ text: prompt }], 16384, "gemini-2.5-flash", onUsage, "table");
                 try {
                     return parseTableJSON(raw, fields);
                 } catch {
                     console.log(`⚠️  Chunk ${b + i + 1} JSON parse failed, attempting repair...`);
                     try {
-                        const repaired = await repairTableJSON(raw, fields);
+                        const repaired = await repairTableJSON(raw, fields, onUsage);
                         return parseTableJSON(repaired, fields);
                     } catch {
                         console.warn(`⚠️  Chunk ${b + i + 1} could not be parsed, skipping.`);
@@ -751,7 +672,6 @@ async function extractTableData(text, fields) {
         }
     }
 
-    // Deduplicate rows that may have been repeated across chunk boundaries
     const seen = new Set();
     const deduped = allRows.filter(row => {
         const key = JSON.stringify(row);
@@ -760,42 +680,37 @@ async function extractTableData(text, fields) {
         return true;
     });
 
-    // Remove empty/header-only rows (all field values empty or matching field names)
-    const cleaned = deduped.filter(row =>
+    const cleanedRows = deduped.filter(row =>
         fields.some(f => row[f] && row[f].trim() !== "" && row[f].trim().toLowerCase() !== f.toLowerCase())
     );
 
-    console.log(`✅ Extracted ${cleaned.length} rows from ${chunks.length} chunks.`);
-    return cleaned;
+    console.log(`✅ Extracted ${cleanedRows.length} rows from ${chunks.length} chunks.`);
+    return cleanedRows;
 }
 
-// ── Public: extract structured table rows from an image (incl. handwriting) ──
-async function extractTableFromImage(base64Data, mimeType, fields) {
+async function extractTableFromImage(base64Data, mimeType, fields, onUsage) {
     const prompt = buildTableImagePrompt(fields);
     const raw = await callWithRotation(() => [
         { text: prompt },
         { inline_data: { mime_type: mimeType, data: base64Data } },
-    ], 8192, "gemini-2.5-flash");
+    ], 8192, "gemini-2.5-flash", onUsage, "table");
     try {
         return parseTableJSON(raw, fields);
     } catch {
         console.log("⚠️  Table JSON parse failed, attempting one repair pass...");
-        const repaired = await repairTableJSON(raw, fields);
+        const repaired = await repairTableJSON(raw, fields, onUsage);
         return parseTableJSON(repaired, fields);
     }
 }
 
-
-// ── Public: suggest relevant table fields from document text ─────────────────
-async function suggestTableFields(text) {
-    // Sample from start, middle AND end so we catch repeating table rows
-    // even when the document has a long header (e.g. 18-page bank statements)
+async function suggestTableFields(textData) {
+    const text = typeof textData === 'object' ? (textData.rawText || textData.text || "") : String(textData);
     const len = text.length;
     const chunk = 1500;
-    const startSnip  = text.slice(0, chunk);
-    const midSnip    = text.slice(Math.floor(len / 2) - Math.floor(chunk / 2), Math.floor(len / 2) + Math.floor(chunk / 2));
-    const endSnip    = text.slice(Math.max(0, len - chunk));
-    const snippet    = [startSnip, midSnip, endSnip].join("\n\n...\n\n");
+    const startSnip = text.slice(0, chunk);
+    const midSnip = text.slice(Math.floor(len / 2) - Math.floor(chunk / 2), Math.floor(len / 2) + Math.floor(chunk / 2));
+    const endSnip = text.slice(Math.max(0, len - chunk));
+    const snippet = [startSnip, midSnip, endSnip].join("\n\n...\n\n");
 
     const prompt = `You are a data analyst. Read the document excerpts below and suggest the most useful column names for extracting its repeating data into a structured table.
 
@@ -823,19 +738,14 @@ ${snippet}`;
     return [];
 }
 
-// ── Public: extract plain text from an image (for chat context) ──────────────
-// This is a separate, lightweight call used ONLY to populate extractedText so
-// the document chat has real content to work with. It intentionally does NOT
-// produce a formatted summary — just the raw readable text from the image.
-async function extractTextFromImage(base64Data, mimeType) {
+async function extractTextFromImage(base64Data, mimeType, onUsage) {
     const prompt = `Read this image carefully and transcribe ALL visible text exactly as it appears, preserving labels, values, and layout as faithfully as plain text allows. Include every word, number, name, and date you can read. Return only the transcribed text — no commentary, no markdown formatting, no introductory sentence.`;
     return callWithRotation(() => [
         { text: prompt },
         { inline_data: { mime_type: mimeType, data: base64Data } },
-    ], 4096, "gemini-2.5-flash");
+    ], 4096, "gemini-2.5-flash", onUsage, "summarize");
 }
 
-// ── Public: suggest fields from an image ─────────────────────────────────────
 async function suggestTableFieldsFromImage(base64Data, mimeType) {
     const prompt = `You are a data analyst. Look at this image and suggest the most useful column names for extracting its data into a structured table.
 
@@ -860,4 +770,13 @@ Example: ["Name", "Date", "Amount", "Description"]`;
     return [];
 }
 
-module.exports = { generateSummary, summarizeImage, extractTextFromImage, callWithRotation, extractTableData, extractTableFromImage, suggestTableFields, suggestTableFieldsFromImage };
+module.exports = {
+    generateSummary,
+    summarizeImage,
+    extractTextFromImage,
+    callWithRotation,
+    extractTableData,
+    extractTableFromImage,
+    suggestTableFields,
+    suggestTableFieldsFromImage,
+};

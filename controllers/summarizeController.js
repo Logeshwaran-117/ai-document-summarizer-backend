@@ -1,4 +1,4 @@
-const { incrementUsage } = require("../middleware/planLimit");
+const { incrementUsage, deductTokens } = require("../middleware/planLimit");
 const { extractText, isEmptyContent } = require("../services/extractText");
 const { generateSummary, summarizeImage, extractTextFromImage } = require("../services/geminiService");
 const { saveHistory } = require("../services/historyService");
@@ -7,6 +7,10 @@ const { emitProgress, startProgressTicker } = require("../routes/progressRoutes"
 async function summarizeDocument(req, res) {
   // jobId is sent by the frontend alongside the file so we can push SSE progress
   const jobId = req.body?.jobId || null;
+
+  // Token tracking for this session
+  let sessionTokens = 0;
+  const trackUsage = (usage) => { sessionTokens += (usage?.totalTokenCount || 0); };
 
   try {
     if (!req.file) {
@@ -65,8 +69,8 @@ async function summarizeDocument(req, res) {
       let imageSummary, imageText;
       try {
         [imageSummary, imageText] = await Promise.all([
-          summarizeImage(extracted.base64Data, extracted.mimeType),
-          extractTextFromImage(extracted.base64Data, extracted.mimeType),
+          summarizeImage(extracted.base64Data, extracted.mimeType, trackUsage),
+          extractTextFromImage(extracted.base64Data, extracted.mimeType, trackUsage),
         ]);
       } finally {
         stopTicker();
@@ -124,7 +128,7 @@ async function summarizeDocument(req, res) {
 
       try {
         extractedText = (extracted && typeof extracted.rawText === 'string') ? extracted.rawText : extracted;
-        summary = await generateSummary(extractedText);
+        summary = await generateSummary(extractedText, trackUsage);
       } finally {
         stopTicker();
       }
@@ -148,6 +152,9 @@ async function summarizeDocument(req, res) {
     // Increment usage counter (non-blocking — don't await to keep response fast)
     incrementUsage(req.user._id, "summarize").catch(() => {});
 
+    // Deduct tokens consumed by all AI calls in this pipeline
+    const tokenStatus = await deductTokens(req.user._id, sessionTokens);
+
     // ── Stage 5: done ─────────────────────────────────────────────────────────
     emitProgress(jobId, "done", 100, "Summary complete! ✅");
 
@@ -158,6 +165,8 @@ async function summarizeDocument(req, res) {
       extractedText,
       summary,
       stats: { words, characters, readingTime },
+      tokensUsed: sessionTokens,
+      tokenStatus,
     });
   } catch (error) {
     console.error("Server Error:", error);

@@ -1,4 +1,4 @@
-const { incrementUsage } = require("../middleware/planLimit");
+const { incrementUsage, deductTokens } = require("../middleware/planLimit");
 const { extractText, isEmptyContent } = require("../services/extractText");
 const { extractTableData, extractTableFromImage } = require("../services/geminiService");
 const TableExtraction = require("../models/TableExtraction");
@@ -7,6 +7,10 @@ const { emitProgress, startProgressTicker } = require("../routes/progressRoutes"
 async function extractTable(req, res) {
   // jobId sent by the frontend so we can push real-time SSE progress
   const jobId = req.body?.jobId || null;
+
+  // Token tracking for this session
+  let sessionTokens = 0;
+  const trackUsage = (usage) => { sessionTokens += (usage?.totalTokenCount || 0); };
 
   try {
     if (!req.file) {
@@ -85,10 +89,10 @@ async function extractTable(req, res) {
     let rows;
     try {
       if (isImage) {
-        rows = await extractTableFromImage(extracted.base64Data, extracted.mimeType, fields);
+        rows = await extractTableFromImage(extracted.base64Data, extracted.mimeType, fields, trackUsage);
       } else {
         const tableText = (extracted && typeof extracted.rawText === 'string') ? extracted.rawText : extracted;
-        rows = await extractTableData(tableText, fields);
+        rows = await extractTableData(tableText, fields, trackUsage);
       }
     } finally {
       stopTicker();
@@ -107,6 +111,9 @@ async function extractTable(req, res) {
     // Increment usage counter (non-blocking)
     incrementUsage(req.user._id, "tables").catch(() => {});
 
+    // Deduct tokens consumed by all AI calls in this pipeline
+    const tokenStatus = await deductTokens(req.user._id, sessionTokens);
+
     // ── Stage 5: done ─────────────────────────────────────────────────────────
     emitProgress(jobId, "done", 100, `Table ready — ${rows.length} rows extracted! ✅`);
 
@@ -117,6 +124,8 @@ async function extractTable(req, res) {
       fields:    saved.fields,
       rows:      saved.rows,
       createdAt: saved.createdAt,
+      tokensUsed: sessionTokens,
+      tokenStatus,
     });
   } catch (error) {
     console.error("Table extraction error:", error);

@@ -204,6 +204,10 @@ router.post("/suggest-fields", upload.single("document"), async (req, res) => {
     if (extracted && extracted.isImage) {
       fields = await suggestTableFieldsFromImage(extracted.base64Data, extracted.mimeType);
     } else {
+      const text =
+        extracted && typeof extracted.rawText === "string"
+        ? extracted.rawText
+        : extracted;
       fields = await suggestTableFields(extracted);
     }
 

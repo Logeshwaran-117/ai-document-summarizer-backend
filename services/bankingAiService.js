@@ -12,6 +12,19 @@
  */
 const { callWithRotation } = require('../services/geminiService');
 
+// ── Pre-process text to remove pdf-parse pseudo-CSV artifacts ────────────────
+function cleanTableText(rawText) {
+    if (!rawText) return "";
+    let cleaned = rawText.replace(/"([^"]*)"/g, (match, insideQuotes) => {
+        const flattened = insideQuotes.replace(/[\n\r]+/g, ' ').replace(/\s{2,}/g, ' ').trim();
+        return `"${flattened}"`;
+    });
+    cleaned = cleaned.replace(/"\s*,\s*\n\s*"/g, '","');
+    cleaned = cleaned.replace(/"\s*\n\s*,\s*"/g, '","');
+    cleaned = cleaned.replace(/\n{3,}/g, '\n\n');
+    return cleaned;
+}
+
 const VALID_DOC_TYPES = ['bank_statement', 'loan', 'financial_report', 'investment', 'unknown'];
 
 function normaliseDocType(raw) {
@@ -230,11 +243,13 @@ function parseTransactionJson(raw) {
   }
 }
 
-async function extractTransactions(text) {
-  const CHUNK_SIZE = 3500;
+async function extractTransactions(text, onUsage) {
+   // Clean pdf-parse artifacts first
+  const cleanedText = cleanTableText(text);
+  const CHUNK_SIZE = 7000;
   const chunks = [];
-  for (let i = 0; i < text.length; i += CHUNK_SIZE) {
-    chunks.push(text.slice(i, i + CHUNK_SIZE));
+  for (let i = 0; i < cleanedText.length; i += CHUNK_SIZE) {
+    chunks.push(cleanedText.slice(i, i + CHUNK_SIZE));
   }
 
   const allTransactions = [];
@@ -246,12 +261,14 @@ async function extractTransactions(text) {
     const prompt = `You are a financial data extractor. Extract ALL transactions from this Indian bank statement text.
 
 CRITICAL RULES:
-- The format is: DATE | DESCRIPTION (may span multiple lines) | DEBIT amount | CREDIT amount | BALANCE
-- Amounts look like "INR 50.00" or "INR 2,779.00" — extract as plain numbers: 50.00 or 2779.00
-- A "-" in the debit column means no debit (null). A "-" in credit column means no credit (null).
-- Remove ALL commas from numbers: "2,779.00" → 2779.00, "14,451.01" → 14451.01
-- Dates look like "27 Jun 2026" or "28 Jun 2026"
-- Return ONLY a valid JSON array, no markdown, no explanation
+1. You MUST extract EVERY SINGLE transaction present in this text.
+2. Never stop after the first few rows.
+3. Never summarize.
+4. Never write "...", "etc", "and so on", "[remaining rows]", or similar.
+5. If this chunk contains 30 transactions, return exactly 30 JSON objects.
+6. Missing even one transaction is considered a failure.
+7. Continue until the end of the document excerpt.
+8. Return ONLY a JSON array.
 
 Each object MUST have:
 {
@@ -273,7 +290,7 @@ ${chunk}
 Return JSON array only:`;
 
     try {
-      const raw = await callWithRotation(() => [{ text: prompt }], 8192);
+      const raw = await callWithRotation(() => [{ text: prompt }], 16384,"gemini-2.5-flash", onUsage);
       const parsed = parseTransactionJson(raw);
       if (Array.isArray(parsed) && parsed.length > 0) {
         console.log(`[banking] AI chunk ${ci + 1}/${chunks.length}: ${parsed.length} transactions`);
@@ -289,7 +306,7 @@ Return JSON array only:`;
   // FALLBACK: If AI returned nothing or very few, use regex parser
   if (allTransactions.length < 3) {
     console.log('[banking] AI extraction insufficient, trying regex fallback...');
-    const regexResult = regexExtractIndianBankTransactions(text);
+    const regexResult = regexExtractIndianBankTransactions(cleanedText);
     if (regexResult.length > allTransactions.length) {
       console.log(`[banking] Using regex result: ${regexResult.length} transactions`);
       return regexResult;
@@ -378,7 +395,7 @@ ${summary}`;
 }
 
 // ── Executive summary ─────────────────────────────────────────────────────────
-async function generateBankingSummary(text, analytics, documentType) {
+async function generateBankingSummary(text, analytics, documentType, onUsage) {
   const statsBlock = analytics ? `
 Key Statistics:
 - Total Credits: ${analytics.currency} ${analytics.totalCredits?.toLocaleString() ?? 'N/A'}
@@ -405,7 +422,7 @@ Write your summary using Markdown with these sections:
 
 Be specific with numbers. Be concise but thorough.`;
 
-  return callWithRotation(() => [{ text: prompt }], 3000);
+  return callWithRotation(() => [{ text: prompt }], 3000, "gemini-2.5-flash", onUsage);
 }
 
 // ── Q&A ───────────────────────────────────────────────────────────────────────
@@ -436,7 +453,7 @@ ${txSample || 'No structured transactions extracted — use raw document text ab
 Question: ${question}
 Answer:`;
 
-  return callWithRotation(() => [{ text: prompt }], 1500);
+  return callWithRotation(() => [{ text: prompt }], 1500, "gemini-2.5-flash", onUsage);
 }
 
 // Updated exports

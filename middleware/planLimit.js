@@ -48,4 +48,35 @@ async function incrementUsage(userId, action) {
   await User.findByIdAndUpdate(userId, { $inc: { [field]: 1 } });
 }
 
-module.exports = { limitAction, incrementUsage };
+async function deductTokens(userId, tokensUsed) {
+  try {
+    const user = await User.findById(userId);
+    if (!user) return null;
+
+    if (user.tokensUsed === undefined) user.tokensUsed = 0;
+    if (!user.tokenLimit) user.tokenLimit = 1000000; 
+    
+    // Auto-reset if the date has passed
+    if (!user.tokenResetDate || new Date() > user.tokenResetDate) {
+      user.tokensUsed = 0;
+      const nextMonth = new Date();
+      nextMonth.setMonth(nextMonth.getMonth() + 1);
+      user.tokenResetDate = nextMonth;
+    }
+
+    user.tokensUsed += tokensUsed;
+    await user.save();
+
+    return {
+      used: user.tokensUsed,
+      limit: user.tokenLimit,
+      remaining: Math.max(0, user.tokenLimit - user.tokensUsed),
+      resetDate: user.tokenResetDate
+    };
+  } catch (error) {
+    console.error("Token deduction error:", error);
+    return null;
+  }
+}
+
+module.exports = { limitAction, incrementUsage, deductTokens };

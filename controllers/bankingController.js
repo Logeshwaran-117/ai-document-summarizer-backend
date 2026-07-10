@@ -11,6 +11,7 @@
  *   PDF (digital) → pdf-parse text → AI/regex parse → transactions ✅
  */
 const { extractText } = require('../services/extractText');
+const { deductTokens } = require('../middleware/planLimit');
 const {
   detectDocumentType,
   extractMetadata,
@@ -64,6 +65,10 @@ function sanitiseTransactions(transactions) {
 }
 
 async function analyseBankingDocument(req, res) {
+  // Token tracking for this session
+  let sessionTokens = 0;
+  const trackUsage = (usage) => { sessionTokens += (usage?.totalTokenCount || 0); };
+
   try {
     if (!req.file) return res.status(400).json({ success: false, message: 'No file uploaded.' });
     if (!req.user) return res.status(401).json({ success: false, message: 'Not authenticated.' });
@@ -92,8 +97,8 @@ async function analyseBankingDocument(req, res) {
     // ── Stage 2: Doc type + metadata ─────────────────────────────────────────
     const textForMeta = rawText.trim().length > 50 ? rawText : '';
     let [documentType, metadata] = await Promise.all([
-      detectDocumentType(textForMeta || 'bank statement Indian Bank savings account'),
-      textForMeta ? extractMetadata(textForMeta) : Promise.resolve({}),
+      detectDocumentType(textForMeta || 'bank statement Indian Bank savings account', trackUsage),
+      textForMeta ? extractMetadata(textForMeta, trackUsage) : Promise.resolve({}),
     ]);
     documentType = normaliseDocType(documentType);
 
@@ -109,7 +114,7 @@ async function analyseBankingDocument(req, res) {
       // SCANNED PDF: send raw buffer directly to Gemini Vision — skip text re-parsing
       console.log('[banking] Scanned PDF → using Gemini Vision direct extraction...');
       const fileBuffer = req.file.buffer || require('fs').readFileSync(req.file.path);
-      const visionTx = await extractTransactionsFromPdfVision(fileBuffer);
+      const visionTx = await extractTransactionsFromPdfVision(fileBuffer, trackUsage);
       transactions = sanitiseTransactions(visionTx);
       console.log(`[banking] Vision extraction: ${transactions.length} transactions`);
     }
@@ -117,7 +122,7 @@ async function analyseBankingDocument(req, res) {
     // Fallback / digital PDF: use text-based AI extraction
     if (transactions.length < 3 && rawText.trim().length > 100) {
       console.log('[banking] Trying text-based AI extraction...');
-      const rawTx = await extractTransactions(rawText);
+      const rawTx = await extractTransactions(rawText, trackUsage);
       const sanitised = sanitiseTransactions(rawTx);
       if (sanitised.length > transactions.length) {
         transactions = sanitised;
@@ -127,8 +132,8 @@ async function analyseBankingDocument(req, res) {
 
     // ── Stage 4: Categorise + anomaly detection ───────────────────────────────
     if (transactions.length > 0) {
-      transactions = await categoriseTransactions(transactions);
-      transactions = await detectAnomalies(transactions);
+      transactions = await categoriseTransactions(transactions, trackUsage);
+      transactions = await detectAnomalies(transactions, trackUsage);
     }
 
     // ── Stage 5: Analytics ────────────────────────────────────────────────────
@@ -137,7 +142,7 @@ async function analyseBankingDocument(req, res) {
 
     // ── Stage 6: Summary ──────────────────────────────────────────────────────
     const summaryText = rawText.trim().length > 100 ? rawText : JSON.stringify(transactions.slice(0, 10));
-    const summary = await generateBankingSummary(summaryText, analytics, documentType);
+    const summary = await generateBankingSummary(summaryText, analytics, documentType, trackUsage);
 
     // ── Stage 7: Save ─────────────────────────────────────────────────────────
     const doc = await BankingDocument.create({
@@ -156,6 +161,9 @@ async function analyseBankingDocument(req, res) {
       analytics,
     });
 
+    // Deduct tokens consumed by all AI calls in this pipeline
+    const tokenStatus = await deductTokens(req.user._id, sessionTokens);
+
     res.json({
       success: true,
       _id:         doc._id,
@@ -169,6 +177,8 @@ async function analyseBankingDocument(req, res) {
       summary,
       transactions,
       analytics,
+      tokensUsed: sessionTokens,
+      tokenStatus,
     });
 
   } catch (err) {
