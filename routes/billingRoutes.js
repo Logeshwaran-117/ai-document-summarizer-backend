@@ -32,6 +32,18 @@ router.get('/status', auth, async (req, res) => {
     const summarizeResult = checkLimit(user, 'summarize');
     const tableResult     = checkLimit(user, 'tables');
 
+    // If a new calendar day has started, persist the reset so the UI always
+    // shows the correct (zeroed) counts — not stale counts from yesterday.
+    if (summarizeResult.needsReset || tableResult.needsReset) {
+      await User.findByIdAndUpdate(user._id, {
+        $set: {
+          'subscription.usageResetAt':   new Date(),
+          'subscription.summarizeCount': 0,
+          'subscription.tableCount':     0,
+        },
+      });
+    }
+
     let periodEnd = sub.currentPeriodEnd;
     if (!periodEnd) {
       const base = sub.usageResetAt || user.createdAt || new Date();
@@ -43,6 +55,11 @@ router.get('/status', auth, async (req, res) => {
     const lastPayment = await Payment.findOne({ userId: user._id, status: 'paid' })
       .sort({ paidAt: -1 });
 
+    // Compute tomorrow's midnight (server local time) for the daily reset display
+    const tomorrowMidnight = new Date();
+    tomorrowMidnight.setDate(tomorrowMidnight.getDate() + 1);
+    tomorrowMidnight.setHours(0, 0, 0, 0);
+
     res.json({
       plan,
       planName:           planConfig.name,
@@ -50,9 +67,11 @@ router.get('/status', auth, async (req, res) => {
       subscriptionStatus: sub.status || 'active',
       currentPeriodStart: sub.currentPeriodStart || user.createdAt,
       currentPeriodEnd:   periodEnd,
+      dailyResetAt:       tomorrowMidnight,   // when today's quota resets
       usage: {
-        summarize: { used: summarizeResult.used, limit: summarizeResult.limit, remaining: summarizeResult.remaining },
-        tables:    { used: tableResult.used,     limit: tableResult.limit,     remaining: tableResult.remaining     },
+        summarize: { used: summarizeResult.used, limit: summarizeResult.limit, remaining: summarizeResult.remaining, resetDate: tomorrowMidnight },
+        tables:    { used: tableResult.used,     limit: tableResult.limit,     remaining: tableResult.remaining,     resetDate: tomorrowMidnight },
+        banking:   { used: sub.bankingCount || 0, limit: -1, remaining: Infinity, resetDate: tomorrowMidnight },
       },
       price:       planConfig.price,
       features:    planConfig.features,

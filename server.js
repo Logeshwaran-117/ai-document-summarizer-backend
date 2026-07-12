@@ -20,6 +20,9 @@ const adminRoutes = require("./routes/adminRoutes");
 require('./models/Payment');
 const billingRoutes = require("./routes/billingRoutes");
 
+const chatRoutes = require('./routes/chatRoutes');   // adjust path if needed
+
+
 // ── NEW: Usage dashboard routes ───────────────────────────────────────────────
 const usageRoutes = require("./routes/usageRoutes");
 
@@ -92,7 +95,7 @@ app.use('/auth', settingsRoutes);
 app.use("/api", tableRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/billing", billingRoutes);
-
+app.use('/api/chat', chatRoutes);
 // ── NEW: mount usage dashboard ────────────────────────────────────────────────
 app.use("/api/usage", usageRoutes);
 

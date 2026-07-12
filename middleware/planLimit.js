@@ -15,12 +15,16 @@ function limitAction(action) {
     const result = checkLimit(user, action);
 
     if (result.needsReset) {
-      // Reset usage counters
-      const resetUpdate = { 'subscription.usageResetAt': new Date() };
-      if (action === 'summarize') resetUpdate['subscription.summarizeCount'] = 0;
-      else resetUpdate['subscription.tableCount'] = 0;
-      await User.findByIdAndUpdate(user._id, { $set: resetUpdate });
-      result.allowed = true;
+      // Reset BOTH counters together so a new calendar day always starts clean,
+      // regardless of which action triggers the reset first.
+      await User.findByIdAndUpdate(user._id, {
+        $set: {
+          'subscription.usageResetAt':    new Date(),
+          'subscription.summarizeCount':  0,
+          'subscription.tableCount':      0,
+        },
+      });
+      result.allowed   = true;
       result.remaining = result.limit;
     }
 

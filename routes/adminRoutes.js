@@ -165,11 +165,16 @@ router.get('/users/:id', async (req, res) => {
 
     const docCount = await Document.countDocuments({ userId: user._id });
     const tableCount = await TableExtraction.countDocuments({ userId: user._id });
-    const recentDocs = await Document.find({ userId: user._id })
-      .sort({ uploadedAt: -1 }).limit(5)
-      .select('filename summary uploadedAt stats');
 
-    res.json({ ...user, docCount, tableCount, recentDocs });
+    // Enterprise users have document privacy — admins can see counts but not content
+    const isEnterprisePrivate = user.plan === 'enterprise';
+    const recentDocs = isEnterprisePrivate
+      ? []
+      : await Document.find({ userId: user._id })
+          .sort({ uploadedAt: -1 }).limit(5)
+          .select('filename summary uploadedAt stats');
+
+    res.json({ ...user, docCount, tableCount, recentDocs, documentsPrivate: isEnterprisePrivate });
   } catch (err) {
     res.status(500).json({ message: 'Failed to fetch user' });
   }
@@ -178,8 +183,19 @@ router.get('/users/:id', async (req, res) => {
 // ── ALL documents for a user (paginated) ────────────────────────────────────
 router.get('/users/:id/documents', async (req, res) => {
   try {
+    // Enterprise users have document privacy — block content access entirely
+    const targetUser = await User.findById(req.params.id).select('plan').lean();
+    if (!targetUser) return res.status(404).json({ message: 'User not found' });
+
+    if (targetUser.plan === 'enterprise') {
+      return res.status(403).json({
+        message: 'Documents of enterprise users are private and cannot be viewed by administrators.',
+        documentsPrivate: true
+      });
+    }
+
     const page = Math.max(parseInt(req.query.page) || 1, 1);
-    const limit = Math.min(parseInt(req.query.limit) || 10, 50);
+    const limit = Math.min(parseInt(req.query.limit) || 50, 200);
     const total = await Document.countDocuments({ userId: req.params.id });
     const docs = await Document.find({ userId: req.params.id })
       .sort({ uploadedAt: -1 })
