@@ -5,6 +5,7 @@ const Razorpay = require('razorpay');
 const User     = require('../models/User');
 const Payment  = require('../models/Payment');
 const { PLANS, checkLimit } = require('../config/plans');
+const { sendPaymentConfirmationEmail } = require("../services/emailService");
 
 // ── Razorpay instance ────────────────────────────────────────────────────────
 const razorpay = new Razorpay({
@@ -146,6 +147,8 @@ router.post('/create-order', auth, async (req, res) => {
       status:          'created',
       notes:           order.notes,
     });
+
+    sendPaymentConfirmationEmail(user, payment);  // fire-and-forget
 
     res.json({
       orderId:       order.id,

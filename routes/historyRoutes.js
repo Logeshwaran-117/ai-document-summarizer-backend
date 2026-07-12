@@ -1,5 +1,6 @@
 const express = require("express");
 const router = express.Router();
+const crypto = require("crypto");
 const { deleteHistory } = require("../services/historyService");
 const Document = require("../models/Document");
 const answerQuestion = require("../services/qaService");
@@ -20,6 +21,7 @@ const SORT_MAP = {
   wordsAsc: { "stats.words": 1 },
 };
 
+// ── List history ──────────────────────────────────────────────────────────────
 router.get("/", async (req, res) => {
   try {
     if (!req.user) return res.status(401).json({ message: "Not authenticated" });
@@ -89,6 +91,7 @@ router.get("/", async (req, res) => {
   }
 });
 
+// ── Get single document (authenticated) ───────────────────────────────────────
 router.get("/:id", async (req, res) => {
   try {
     if (!req.user) return res.status(401).json({ message: "Not authenticated" });
@@ -100,6 +103,7 @@ router.get("/:id", async (req, res) => {
   }
 });
 
+// ── Delete document ───────────────────────────────────────────────────────────
 router.delete("/:id", async (req, res) => {
   try {
     if (!req.user) return res.status(401).json({ message: "Not authenticated" });
@@ -110,7 +114,65 @@ router.delete("/:id", async (req, res) => {
   }
 });
 
-// Get chat history for a document
+// ── Generate / revoke a public share link ─────────────────────────────────────
+//   POST /api/history/:id/share        → creates shareToken, returns shareUrl
+//   DELETE /api/history/:id/share      → clears shareToken (revoke access)
+
+router.post("/:id/share", async (req, res) => {
+  try {
+    if (!req.user) return res.status(401).json({ message: "Not authenticated" });
+
+    const doc = await Document.findOne({ _id: req.params.id, userId: req.user._id });
+    if (!doc) return res.status(404).json({ message: "Document not found" });
+
+    // Re-use existing token or generate a fresh one
+    if (!doc.shareToken) {
+      doc.shareToken = crypto.randomBytes(24).toString("hex");
+      await doc.save();
+    }
+
+    const origin = req.headers.origin || `${req.protocol}://${req.get("host")}`;
+    const shareUrl = `${origin}/shared/${doc.shareToken}`;
+
+    res.json({ success: true, shareToken: doc.shareToken, shareUrl });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Failed to generate share link" });
+  }
+});
+
+router.delete("/:id/share", async (req, res) => {
+  try {
+    if (!req.user) return res.status(401).json({ message: "Not authenticated" });
+
+    const doc = await Document.findOne({ _id: req.params.id, userId: req.user._id });
+    if (!doc) return res.status(404).json({ message: "Document not found" });
+
+    doc.shareToken = undefined;
+    await doc.save();
+
+    res.json({ success: true, message: "Share link revoked" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Failed to revoke share link" });
+  }
+});
+
+// ── Public share view (no auth required) ──────────────────────────────────────
+//   GET /api/history/shared/:token  → returns summary + filename only (no chat, no extracted text)
+router.get("/shared/:token", async (req, res) => {
+  try {
+    const doc = await Document.findOne({ shareToken: req.params.token }).select(
+      "filename summary stats uploadedAt shareToken"
+    );
+    if (!doc) return res.status(404).json({ message: "Share link is invalid or has been revoked" });
+    res.json(doc);
+  } catch (err) {
+    res.status(500).json({ message: "Failed to load shared summary" });
+  }
+});
+
+// ── Chat history ──────────────────────────────────────────────────────────────
 router.get("/:id/chat", async (req, res) => {
   try {
     if (!req.user) return res.status(401).json({ message: "Not authenticated" });
@@ -122,7 +184,7 @@ router.get("/:id/chat", async (req, res) => {
   }
 });
 
-// Ask a question about a document
+// ── Ask a question ────────────────────────────────────────────────────────────
 router.post("/:id/chat", async (req, res) => {
   try {
     if (!req.user) return res.status(401).json({ message: "Not authenticated" });

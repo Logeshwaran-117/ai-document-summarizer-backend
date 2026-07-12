@@ -76,7 +76,7 @@ app.use(session({
     saveUninitialized: false,
     store: MongoStore.create({ mongoUrl: process.env.MONGO_URI }),
     cookie: {
-      maxAge: 1000 * 60 * 60 * 24,
+      maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days — prevents daily logouts
       secure: NODE_ENV === "production",
       httpOnly: true,
       sameSite: NODE_ENV === "production" ? "none" : "lax"
@@ -124,16 +124,7 @@ app.get("/auth/google/callback",
   }
 );
 
-app.get("/auth/logout", (req, res) => {
-  req.logout((err) => {
-    if (err) return res.status(500).json({ message: "Logout failed" });
-    req.session.destroy((err) => {
-      if (err) return res.status(500).json({ message: "Session destroy failed" });
-      res.clearCookie("connect.sid");
-      res.json({ message: "Logged out" });
-    });
-  });
-});
+// NOTE: /auth/logout is handled as POST by authRoutes.js — no GET handler needed here.
 
 app.listen(PORT, () => {
     console.log(`Server is running on http://localhost:${PORT} (${NODE_ENV} mode)`);

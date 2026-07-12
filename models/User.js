@@ -28,6 +28,8 @@ const userSchema = new mongoose.Schema({
   tokensUsed: { type: Number, default: 0 },
   tokenLimit: { type: Number, default: 1000000 }, // e.g., 1 Million free tokens
   tokenResetDate: { type: Date },
+  resetToken:    { type: String },
+  resetTokenExp: { type: Date },
   createdAt: { type: Date, default: Date.now },
   lastLogin: { type: Date },
   suspendedReason: { type: String, default: '' },
