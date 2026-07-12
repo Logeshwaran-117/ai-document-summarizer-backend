@@ -60,11 +60,11 @@ app.set('trust proxy', 1);
 
 // CORS Configuration
 app.use(cors({
-    origin: NODE_ENV === "production"
-      ? process.env.FRONTEND_URL
-      : ["http://localhost:5173", "http://localhost:5174"],
-    credentials: true,
-    exposedHeaders: ["Content-Disposition", "X-Presentation-Id"],
+  origin: process.env.NODE_ENV === "production"
+    ? process.env.FRONTEND_URL
+    : ["http://localhost:5173", "http://localhost:5174"],
+  credentials: true,
+  exposedHeaders: ["Content-Disposition", "X-Presentation-Id"],
 }));
 
 app.use("/api/billing/webhook", express.raw({ type: "application/json" }));
