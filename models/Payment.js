@@ -1,18 +1,22 @@
 const mongoose = require('mongoose');
 
 const paymentSchema = new mongoose.Schema({
-  userId:           { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-  razorpayOrderId:  { type: String, required: true, unique: true },
-  razorpayPaymentId:{ type: String, default: null },
-  razorpaySignature:{ type: String, default: null },
-  plan:             { type: String, enum: ['pro', 'enterprise'], required: true },
-  billingCycle:     { type: String, enum: ['monthly', 'yearly'], required: true },
-  amount:           { type: Number, required: true },   // in INR paise (₹499 → 49900)
-  currency:         { type: String, default: 'INR' },
-  status:           { type: String, enum: ['created', 'paid', 'failed', 'refunded'], default: 'created' },
-  invoiceNumber:    { type: String, unique: true, sparse: true },
-  paidAt:           { type: Date },
-  notes:            { type: Object, default: {} },
+  userId:              { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+
+  // Cashfree fields (replaces Razorpay fields)
+  cashfreeOrderId:     { type: String, required: true, unique: true },  // cf_order_id we create
+  cashfreePaymentId:   { type: String, default: null },                 // cf_payment_id from Cashfree
+  cashfreeSignature:   { type: String, default: null },                 // signature from webhook
+  paymentSessionId:    { type: String, default: null },                 // session for JS checkout
+
+  plan:                { type: String, enum: ['pro', 'enterprise'], required: true },
+  billingCycle:        { type: String, enum: ['monthly', 'yearly'], required: true },
+  amount:              { type: Number, required: true },    // in INR rupees (NOT paise — Cashfree uses rupees)
+  currency:            { type: String, default: 'INR' },
+  status:              { type: String, enum: ['created', 'paid', 'failed', 'refunded'], default: 'created' },
+  invoiceNumber:       { type: String, unique: true, sparse: true },
+  paidAt:              { type: Date },
+  notes:               { type: Object, default: {} },
 }, { timestamps: true });
 
 // Auto-generate invoice number on save when paid
