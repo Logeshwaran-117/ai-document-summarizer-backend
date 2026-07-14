@@ -150,8 +150,8 @@ router.post('/create-order', auth, async (req, res) => {
         customer_phone: user.phone || '9999999999',  // Cashfree requires phone
       },
       order_meta: {
-        return_url: `${process.env.FRONTEND_URL}/pricing?order_id={order_id}`,
-        notify_url: `${process.env.BACKEND_URL}/api/billing/webhook`,
+        return_url: `${process.env.FRONTEND_URL || 'https://ai-document-summarizer-frontend-ten.vercel.app'}/pricing?order_id={order_id}`,
+        notify_url: `${process.env.BACKEND_URL || 'https://ai-document-summarizer-backend-1.onrender.com'}/api/billing/webhook`,
       },
       order_tags: {
         userId:       user._id.toString(),
