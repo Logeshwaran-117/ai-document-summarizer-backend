@@ -13,7 +13,8 @@ Cashfree.XClientSecret = process.env.CASHFREE_SECRET_KEY;
 Cashfree.XEnvironment  = process.env.CASHFREE_ENV === 'PRODUCTION'
   ? CFEnvironment.PRODUCTION
   : CFEnvironment.SANDBOX;
-const cf = new Cashfree(); 
+const cf = new Cashfree();
+console.log('[Cashfree] Init — ENV:', process.env.CASHFREE_ENV, '| APP_ID starts with:', (process.env.CASHFREE_APP_ID || '').substring(0, 8) + '...');
 
 // ── Auth guard ────────────────────────────────────────────────────────────────
 function auth(req, res, next) {
@@ -147,7 +148,7 @@ router.post('/create-order', auth, async (req, res) => {
       },
     };
 
-    const response = await cf.PGCreateOrder(orderRequest);;
+    const response = await cf.PGCreateOrder(orderRequest);
     const cfOrder  = response.data;
 
     // Save pending payment record
