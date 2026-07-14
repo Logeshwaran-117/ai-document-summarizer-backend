@@ -1,20 +1,32 @@
 const express  = require('express');
 const router   = express.Router();
 const crypto   = require('crypto');
-const { Cashfree, CFEnvironment } = require('cashfree-pg');
+const axios    = require('axios');
 const User     = require('../models/User');
 const Payment  = require('../models/Payment');
 const { PLANS, checkLimit } = require('../config/plans');
 const { sendPaymentConfirmationEmail } = require('../services/emailService');
 
-// ── Cashfree instance ─────────────────────────────────────────────────────────
-Cashfree.XClientId     = process.env.CASHFREE_APP_ID;
-Cashfree.XClientSecret = process.env.CASHFREE_SECRET_KEY;
-Cashfree.XEnvironment  = process.env.CASHFREE_ENV === 'PRODUCTION'
-  ? CFEnvironment.PRODUCTION
-  : CFEnvironment.SANDBOX;
-const cf = new Cashfree();
-console.log('[Cashfree] Init — ENV:', process.env.CASHFREE_ENV, '| APP_ID starts with:', (process.env.CASHFREE_APP_ID || '').substring(0, 8) + '...');
+// ── Cashfree direct API (no SDK — avoids SDK version bugs) ────────────────────
+const CF_ENV        = process.env.CASHFREE_ENV === 'PRODUCTION' ? 'PRODUCTION' : 'TEST';
+const CF_BASE_URL   = CF_ENV === 'PRODUCTION'
+  ? 'https://api.cashfree.com/pg'
+  : 'https://sandbox.cashfree.com/pg';
+const CF_API_VER    = '2026-01-01';
+const CF_APP_ID     = process.env.CASHFREE_APP_ID;
+const CF_SECRET_KEY = process.env.CASHFREE_SECRET_KEY;
+
+const cfAxios = axios.create({
+  baseURL: CF_BASE_URL,
+  headers: {
+    'Content-Type':    'application/json',
+    'x-api-version':   CF_API_VER,
+    'x-client-id':     CF_APP_ID,
+    'x-client-secret': CF_SECRET_KEY,
+  },
+});
+
+console.log('[Cashfree] Init — ENV:', CF_ENV, '| URL:', CF_BASE_URL, '| APP_ID:', (CF_APP_ID || 'MISSING').substring(0, 12) + '...');
 
 // ── Auth guard ────────────────────────────────────────────────────────────────
 function auth(req, res, next) {
@@ -148,7 +160,7 @@ router.post('/create-order', auth, async (req, res) => {
       },
     };
 
-    const response = await cf.PGCreateOrder(orderRequest);
+    const response = await cfAxios.post("/orders", orderRequest);
     const cfOrder  = response.data;
 
     // Save pending payment record
@@ -187,7 +199,7 @@ router.post('/verify-payment', auth, async (req, res) => {
     if (!orderId) return res.status(400).json({ success: false, message: 'orderId required' });
 
     // Fetch order status from Cashfree
-    const response = await cf.PGCreateOrder(orderRequest);
+    const response = await cfAxios.get(`/orders/${orderId}`);
     const cfOrder   = response.data;
 
     if (cfOrder.order_status !== 'PAID') {
@@ -198,7 +210,7 @@ router.post('/verify-payment', auth, async (req, res) => {
     }
 
     // Get payment details
-    const paymentsResp = await cf.PGOrderFetchPayments(orderId);
+    const paymentsResp = await cfAxios.get(`/orders/${orderId}/payments`);
     const payments     = paymentsResp.data;
     const successPay   = payments.find(p => p.payment_status === 'SUCCESS');
 
