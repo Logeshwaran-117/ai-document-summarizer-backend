@@ -56,6 +56,14 @@ const connectDB = async () => {
 
 connectDB();
 
+// After connectDB() - permanently safe, silently skips if index already gone
+mongoose.connection.once('open', async () => {
+  try {
+    await mongoose.connection.db.collection('payments').dropIndex('razorpayOrderId_1');
+    console.log('✅ Cleaned up old Razorpay index');
+  } catch(e) { /* already gone, ignore */ }
+});
+
 app.set('trust proxy', 1);
 
 // CORS Configuration
