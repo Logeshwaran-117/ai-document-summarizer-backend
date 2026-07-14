@@ -20,8 +20,10 @@ const adminRoutes = require("./routes/adminRoutes");
 require('./models/Payment');
 const billingRoutes = require("./routes/billingRoutes");
 
-const chatRoutes = require('./routes/chatRoutes');
+const chatRoutes = require('./routes/chatRoutes');   // adjust path if needed
 
+
+// ── NEW: Usage dashboard routes ───────────────────────────────────────────────
 const usageRoutes = require("./routes/usageRoutes");
 
 require("./config/passport");
@@ -54,14 +56,6 @@ const connectDB = async () => {
 
 connectDB();
 
-// After connectDB() - permanently safe, silently skips if index already gone
-mongoose.connection.once('open', async () => {
-  try {
-    await mongoose.connection.db.collection('payments').dropIndex('razorpayOrderId_1');
-    console.log('✅ Cleaned up old Razorpay index');
-  } catch(e) { /* already gone, ignore */ }
-});
-
 app.set('trust proxy', 1);
 
 // CORS Configuration
@@ -82,7 +76,7 @@ app.use(session({
     saveUninitialized: false,
     store: MongoStore.create({ mongoUrl: process.env.MONGO_URI }),
     cookie: {
-      maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days
+      maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days — prevents daily logouts
       secure: NODE_ENV === "production",
       httpOnly: true,
       sameSite: NODE_ENV === "production" ? "none" : "lax"
@@ -102,6 +96,7 @@ app.use("/api", tableRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/billing", billingRoutes);
 app.use('/api/chat', chatRoutes);
+// ── NEW: mount usage dashboard ────────────────────────────────────────────────
 app.use("/api/usage", usageRoutes);
 
 const { router: progressRoutes } = require("./routes/progressRoutes");
@@ -125,10 +120,11 @@ app.get("/auth/google", passport.authenticate("google", { scope: ["profile", "em
 app.get("/auth/google/callback",
   passport.authenticate("google", { failureRedirect: `${FRONTEND_URL}/login` }),
   (req, res) => {
-    // ✅ Fixed: redirect to /dashboard instead of / so users land in the app
-    res.redirect(`${FRONTEND_URL}/dashboard`);
+    res.redirect(`${FRONTEND_URL}/?googleAuth=success`);
   }
 );
+
+// NOTE: /auth/logout is handled as POST by authRoutes.js — no GET handler needed here.
 
 app.listen(PORT, () => {
     console.log(`Server is running on http://localhost:${PORT} (${NODE_ENV} mode)`);
