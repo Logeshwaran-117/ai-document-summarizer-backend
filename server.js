@@ -20,10 +20,8 @@ const adminRoutes = require("./routes/adminRoutes");
 require('./models/Payment');
 const billingRoutes = require("./routes/billingRoutes");
 
-const chatRoutes = require('./routes/chatRoutes');   // adjust path if needed
+const chatRoutes = require('./routes/chatRoutes');
 
-
-// ── NEW: Usage dashboard routes ───────────────────────────────────────────────
 const usageRoutes = require("./routes/usageRoutes");
 
 require("./config/passport");
@@ -84,7 +82,7 @@ app.use(session({
     saveUninitialized: false,
     store: MongoStore.create({ mongoUrl: process.env.MONGO_URI }),
     cookie: {
-      maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days — prevents daily logouts
+      maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days
       secure: NODE_ENV === "production",
       httpOnly: true,
       sameSite: NODE_ENV === "production" ? "none" : "lax"
@@ -104,7 +102,6 @@ app.use("/api", tableRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/billing", billingRoutes);
 app.use('/api/chat', chatRoutes);
-// ── NEW: mount usage dashboard ────────────────────────────────────────────────
 app.use("/api/usage", usageRoutes);
 
 const { router: progressRoutes } = require("./routes/progressRoutes");
@@ -128,11 +125,10 @@ app.get("/auth/google", passport.authenticate("google", { scope: ["profile", "em
 app.get("/auth/google/callback",
   passport.authenticate("google", { failureRedirect: `${FRONTEND_URL}/login` }),
   (req, res) => {
-    res.redirect(`${FRONTEND_URL}/?googleAuth=success`);
+    // ✅ Fixed: redirect to /dashboard instead of / so users land in the app
+    res.redirect(`${FRONTEND_URL}/dashboard`);
   }
 );
-
-// NOTE: /auth/logout is handled as POST by authRoutes.js — no GET handler needed here.
 
 app.listen(PORT, () => {
     console.log(`Server is running on http://localhost:${PORT} (${NODE_ENV} mode)`);
