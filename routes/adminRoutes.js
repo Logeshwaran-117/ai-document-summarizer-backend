@@ -7,7 +7,36 @@ const TableExtraction = require('../models/TableExtraction');
 const { requireAdmin } = require('../middleware/adminAuth');
 const Payment = require('../models/Payment');
 
+// ── In-memory App Settings (Maintenance + Feature Flags + Announcements) ─────
+// Stored in-memory: survives until server restart.
+// For persistence across restarts, save these to a DB settings collection.
+let _appSettings = {
+  maintenance: null,   // null = off; { enabled: true, reason, endTime, ... } = on
+  featureFlags: {},    // key->bool overrides on top of frontend DEFAULT_FLAGS
+  announcements: [],   // active announcement objects
+};
+
+// PUBLIC — no auth needed so ALL users can poll maintenance/feature-flag status.
+// Uses explicit CORS allow-all so it works even without session cookies (plain fetch).
+router.get('/app-settings', (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  // Allow any origin to read this endpoint without credentials
+  res.setHeader('Access-Control-Allow-Origin', req.headers.origin || '*');
+  res.setHeader('Access-Control-Allow-Credentials', 'false');
+  res.json(_appSettings);
+});
+
+// All routes below this line require admin
 router.use(requireAdmin);
+
+// ADMIN ONLY — save maintenance/flags/announcements
+router.post('/app-settings', (req, res) => {
+  const { maintenance, featureFlags, announcements } = req.body;
+  if (maintenance !== undefined)    _appSettings.maintenance    = maintenance;
+  if (featureFlags !== undefined)   _appSettings.featureFlags   = featureFlags;
+  if (announcements !== undefined)  _appSettings.announcements  = announcements;
+  res.json({ ok: true, settings: _appSettings });
+});
 
 // ── Overview Stats ──────────────────────────────────────────────────────────
 router.get('/stats', async (req, res) => {
