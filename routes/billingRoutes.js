@@ -13,6 +13,7 @@ Cashfree.XClientSecret = process.env.CASHFREE_SECRET_KEY;
 Cashfree.XEnvironment  = process.env.CASHFREE_ENV === 'PRODUCTION'
   ? CFEnvironment.PRODUCTION
   : CFEnvironment.SANDBOX;
+const cf = new Cashfree(); 
 
 // ── Auth guard ────────────────────────────────────────────────────────────────
 function auth(req, res, next) {
@@ -146,7 +147,7 @@ router.post('/create-order', auth, async (req, res) => {
       },
     };
 
-    const response = await Cashfree.PGCreateOrder('2023-08-01', orderRequest);
+    const response = await cf.PGCreateOrder(orderRequest);;
     const cfOrder  = response.data;
 
     // Save pending payment record
@@ -185,7 +186,7 @@ router.post('/verify-payment', auth, async (req, res) => {
     if (!orderId) return res.status(400).json({ success: false, message: 'orderId required' });
 
     // Fetch order status from Cashfree
-    const response  = await Cashfree.PGFetchOrder('2023-08-01', orderId);
+    const response = await cf.PGCreateOrder(orderRequest);
     const cfOrder   = response.data;
 
     if (cfOrder.order_status !== 'PAID') {
@@ -196,7 +197,7 @@ router.post('/verify-payment', auth, async (req, res) => {
     }
 
     // Get payment details
-    const paymentsResp = await Cashfree.PGOrderFetchPayments('2023-08-01', orderId);
+    const paymentsResp = await cf.PGOrderFetchPayments(orderId);
     const payments     = paymentsResp.data;
     const successPay   = payments.find(p => p.payment_status === 'SUCCESS');
 
