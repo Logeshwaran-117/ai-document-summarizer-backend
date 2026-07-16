@@ -165,19 +165,53 @@ function plainTextNotes(slide) {
 }
 
 // ── Shared slide elements ─────────────────────────────────────────────────────
+// SAFE ZONE: content must stay within x:0.3-9.7, y:1.4-5.2 (footer at 5.25)
+const SAFE = { x1: 0.3, x2: 9.7, y1: 1.40, y2: 5.20, w: 9.4, h: 3.80 };
+
 function addFooter(s, COLORS, docTitle, idx, total) {
-  s.addText(docTitle, { x: 0.3, y: 5.35, w: 6.5, h: 0.25, fontSize: 9, color: COLORS.textMuted, fontFace: "Calibri" });
-  s.addShape("roundRect", { x: 8.75, y: 5.28, w: 0.95, h: 0.32, fill: { color: COLORS.bgDark }, line: { color: COLORS.bgDark }, rectRadius: 0.16 });
-  s.addText(`${idx} / ${total}`, { x: 8.75, y: 5.28, w: 0.95, h: 0.32, fontSize: 9, color: COLORS.textLight, align: "center", valign: "middle", fontFace: "Calibri", bold: true });
+  // Footer at y=5.28 — below safe content zone
+  s.addText(docTitle.slice(0, 50), {
+    x: 0.3, y: 5.28, w: 7.5, h: 0.27,
+    fontSize: 8.5, color: COLORS.textMuted, fontFace: "Calibri",
+  });
+  s.addShape("roundRect", {
+    x: 8.8, y: 5.25, w: 0.9, h: 0.3,
+    fill: { color: COLORS.bgDark }, line: { color: COLORS.bgDark }, rectRadius: 0.15,
+  });
+  s.addText(`${idx} / ${total}`, {
+    x: 8.8, y: 5.25, w: 0.9, h: 0.3,
+    fontSize: 8.5, color: COLORS.textLight, align: "center", valign: "middle",
+    fontFace: "Calibri", bold: true,
+  });
 }
 
 function addSlideHeader(s, pres, COLORS, title, icon) {
-  s.addShape(pres.shapes.RECTANGLE, { x: 0, y: 0, w: 10, h: 1.25, fill: { color: COLORS.bgDark }, line: { color: COLORS.bgDark } });
-  s.addShape(pres.shapes.RECTANGLE, { x: 0, y: 1.25, w: 10, h: 0.05, fill: { color: COLORS.accent }, line: { color: COLORS.accent } });
-  // subtle right-corner decoration
-  s.addShape(pres.shapes.OVAL, { x: 8.8, y: -0.5, w: 1.8, h: 1.8, fill: { color: COLORS.accent, transparency: 88 }, line: { color: COLORS.accent, transparency: 88 } });
-  s.addText(icon, { x: 0.4, y: 0.26, w: 0.7, h: 0.7, fontSize: 26, align: "center", valign: "middle" });
-  s.addText(title, { x: 1.1, y: 0.24, w: 8.3, h: 0.78, fontSize: 24, color: COLORS.textLight, bold: true, fontFace: "Cambria", valign: "middle", margin: 0 });
+  // Header occupies y:0–1.3, content starts at 1.4
+  s.addShape(pres.shapes.RECTANGLE, {
+    x: 0, y: 0, w: 10, h: 1.3,
+    fill: { color: COLORS.bgDark }, line: { color: COLORS.bgDark },
+  });
+  s.addShape(pres.shapes.RECTANGLE, {
+    x: 0, y: 1.3, w: 10, h: 0.04,
+    fill: { color: COLORS.accent }, line: { color: COLORS.accent },
+  });
+  // Subtle right corner decoration — clipped to header only
+  s.addShape(pres.shapes.OVAL, {
+    x: 8.6, y: -0.6, w: 1.8, h: 1.8,
+    fill: { color: COLORS.accent, transparency: 88 },
+    line: { color: COLORS.accent, transparency: 88 },
+  });
+  // Icon
+  s.addText(icon, {
+    x: 0.35, y: 0.28, w: 0.65, h: 0.65,
+    fontSize: 24, align: "center", valign: "middle",
+  });
+  // Title — capped width so it never overflows
+  s.addText(title, {
+    x: 1.08, y: 0.2, w: 8.2, h: 0.88,
+    fontSize: 22, color: COLORS.textLight, bold: true,
+    fontFace: "Cambria", valign: "middle", margin: 0, autoFit: false,
+  });
 }
 
 // Section divider slide between major sections
@@ -185,22 +219,26 @@ function addSectionDivider(pres, COLORS, sectionTitle, sectionSubtitle, docTitle
   const s = pres.addSlide();
   s.background = { color: COLORS.bgDark };
 
-  // Left vertical accent bar
-  s.addShape(pres.shapes.RECTANGLE, { x: 0, y: 0, w: 0.45, h: 5.63, fill: { color: COLORS.accent }, line: { color: COLORS.accent } });
-
-  // Background decorations
+  // Background decorations only (no left bar to avoid overlap)
   s.addShape(pres.shapes.OVAL, { x: 7.5, y: -1.0, w: 4.0, h: 4.0, fill: { color: COLORS.accent, transparency: 88 }, line: { color: COLORS.accent, transparency: 88 } });
   s.addShape(pres.shapes.OVAL, { x: 6.5, y: 3.8, w: 2.5, h: 2.5, fill: { color: COLORS.teal, transparency: 85 }, line: { color: COLORS.teal, transparency: 85 } });
+  s.addShape(pres.shapes.OVAL, { x: -0.8, y: 3.5, w: 2.5, h: 2.5, fill: { color: COLORS.teal, transparency: 90 }, line: { color: COLORS.teal, transparency: 90 } });
 
   // Section label
-  s.addText("SECTION", { x: 0.8, y: 1.6, w: 8.5, h: 0.4, fontSize: 11, color: COLORS.accent, bold: true, charSpacing: 5, fontFace: "Calibri" });
-  // Divider line
-  s.addShape(pres.shapes.RECTANGLE, { x: 0.8, y: 2.1, w: 5.5, h: 0.04, fill: { color: COLORS.accent, transparency: 50 }, line: { color: COLORS.accent, transparency: 50 } });
-  // Title
-  s.addText(sectionTitle, { x: 0.8, y: 2.2, w: 8.5, h: 1.2, fontSize: 36, color: COLORS.textLight, bold: true, fontFace: "Cambria", valign: "top" });
-  // Subtitle / description
+  s.addText("SECTION", { x: 0.6, y: 1.5, w: 8.5, h: 0.4, fontSize: 11, color: COLORS.accent, bold: true, charSpacing: 5, fontFace: "Calibri" });
+  // Thin divider line (below label, above title)
+  s.addShape(pres.shapes.RECTANGLE, { x: 0.6, y: 1.98, w: 5.0, h: 0.03, fill: { color: COLORS.accent, transparency: 50 }, line: { color: COLORS.accent, transparency: 50 } });
+  // Title — constrained to avoid decoration area
+  s.addText(sectionTitle.slice(0, 60), {
+    x: 0.6, y: 2.05, w: 7.8, h: 1.3,
+    fontSize: 34, color: COLORS.textLight, bold: true, fontFace: "Cambria", valign: "top",
+  });
+  // Subtitle
   if (sectionSubtitle) {
-    s.addText(sectionSubtitle.slice(0, 200), { x: 0.8, y: 3.55, w: 7.5, h: 0.85, fontSize: 14, color: "8099C0", fontFace: "Calibri", italic: true, valign: "top" });
+    s.addText(sectionSubtitle.slice(0, 180), {
+      x: 0.6, y: 3.5, w: 7.2, h: 0.9,
+      fontSize: 13, color: "8099C0", fontFace: "Calibri", italic: true, valign: "top",
+    });
   }
 
   addFooter(s, COLORS, docTitle, slideCounter, totalSlides);
@@ -208,61 +246,176 @@ function addSectionDivider(pres, COLORS, sectionTitle, sectionSubtitle, docTitle
   return s;
 }
 
-// ── Metrics grid (shared) ─────────────────────────────────────────────────────
+// ── Metrics grid (shared) — fixed layout calculations ─────────────────────────
 function addMetricsGrid(s, COLORS, metrics, startY, availH) {
-  const items = metrics.slice(0, 9);
-  const cols = items.length <= 4 ? 2 : 3;
+  // Cap at 6 items max to prevent overcrowding (was 9)
+  const items = metrics.slice(0, 6);
+  const cols = items.length <= 2 ? 2 : items.length <= 4 ? 2 : 3;
   const rows = Math.ceil(items.length / cols);
-  const gap = 0.22;
-  const cardW = (9.4 - gap * (cols - 1)) / cols;
-  const cardH = Math.min((availH - gap * (rows - 1)) / rows, 1.55);
+  const gap = 0.18;
+  const totalW = SAFE.w;
+  const cardW = (totalW - gap * (cols - 1)) / cols;
+  // Minimum card height 1.1", max 1.6" — ensures values don't overflow
+  const cardH = Math.min(Math.max((availH - gap * (rows - 1)) / rows, 1.1), 1.6);
 
   items.forEach((m, i) => {
     const col = i % cols;
     const row = Math.floor(i / cols);
-    const x = 0.3 + col * (cardW + gap);
+    const x = SAFE.x1 + col * (cardW + gap);
     const y = startY + row * (cardH + gap);
 
-    s.addShape("roundRect", { x, y, w: cardW, h: cardH, fill: { color: COLORS.cardBg }, line: { color: COLORS.border }, rectRadius: 0.08, shadow: { type: "outer", color: "000000", blur: 6, offset: 2, angle: 45, opacity: 0.06 } });
-    s.addShape("rect", { x, y, w: 0.06, h: cardH, fill: { color: COLORS.teal }, line: { color: COLORS.teal } });
-    s.addText(m.label.toUpperCase(), { x: x + 0.2, y: y + 0.12, w: cardW - 0.4, h: 0.3, fontSize: 9.5, color: COLORS.textMuted, bold: true, fontFace: "Calibri", charSpacing: 0.5 });
-    s.addText(m.value.slice(0, 40), { x: x + 0.2, y: y + 0.42, w: cardW - 0.4, h: cardH - 0.55, fontSize: cardH > 1.1 ? 17 : 14, color: COLORS.textDark, bold: true, fontFace: "Cambria", valign: "top", autoFit: true });
+    s.addShape("roundRect", {
+      x, y, w: cardW, h: cardH,
+      fill: { color: COLORS.cardBg }, line: { color: COLORS.border }, rectRadius: 0.08,
+      shadow: { type: "outer", color: "000000", blur: 6, offset: 2, angle: 45, opacity: 0.06 },
+    });
+    // Left accent bar
+    s.addShape("rect", { x, y, w: 0.05, h: cardH, fill: { color: COLORS.teal }, line: { color: COLORS.teal } });
+    // Label — uppercase, small, muted — safely within card
+    s.addText(m.label.toUpperCase().slice(0, 28), {
+      x: x + 0.18, y: y + 0.1, w: cardW - 0.28, h: 0.28,
+      fontSize: 8.5, color: COLORS.textMuted, bold: true, fontFace: "Calibri", charSpacing: 0.3,
+    });
+    // Value — larger but constrained height so it can't overflow
+    const valueText = m.value.slice(0, 36);
+    const valueFontSize = valueText.length > 20 ? 13 : cardH > 1.3 ? 17 : 15;
+    s.addText(valueText, {
+      x: x + 0.18, y: y + 0.40, w: cardW - 0.28, h: cardH - 0.52,
+      fontSize: valueFontSize, color: COLORS.textDark, bold: true,
+      fontFace: "Cambria", valign: "top", autoFit: true,
+    });
   });
 }
 
-// ── Chart slide helpers ───────────────────────────────────────────────────────
+// ── Chart data limiter — prevents unreadable charts ───────────────────────────
+// Limit chart data to a readable number of points, keeping highest values
+function limitChartData(data, maxPoints = 8) {
+  if (data.length <= maxPoints) return data;
+  // Sort by value descending, keep top N
+  const sorted = [...data].sort((a, b) => b.numericValue - a.numericValue);
+  return sorted.slice(0, maxPoints);
+}
 
-// REPLACEMENT for addBarChartSlide - more meaningful, titled, properly labelled
-function addBarChartSlide(pres, COLORS, chartData, slideTitle, docTitle, slideCounter, totalSlides, includeNotes) {
+// ── Bar Chart Slide — fixed outEnd → ctr for stacked, cleaned up right panel ──
+function addBarChartSlide(pres, COLORS, chartDataRaw, slideTitle, docTitle, slideCounter, totalSlides, includeNotes) {
   const s = pres.addSlide();
   s.background = { color: COLORS.bgLight };
   addSlideHeader(s, pres, COLORS, slideTitle, "\u{1F4CA}");
 
+  // Limit to 8 items max for readability
+  const chartData = limitChartData(chartDataRaw, 8);
   const chartColors = [COLORS.chart1, COLORS.chart2, COLORS.chart3, COLORS.chart4, COLORS.chart5, COLORS.chart6, COLORS.chart7];
-
-  // Format value labels nicely
-  const maxVal = Math.max(...chartData.map(d => d.numericValue));
-  const formatLabel = (val) => {
-    if (maxVal >= 1000000) return `${(val/1000000).toFixed(1)}M`;
-    if (maxVal >= 1000) return `${(val/1000).toFixed(1)}K`;
-    return val.toFixed(1);
-  };
 
   const barData = [{
     name: slideTitle.replace(/ — Chart View$/, '').slice(0, 40),
-    labels: chartData.map(d => d.label.slice(0, 18)),
+    labels: chartData.map(d => d.label.slice(0, 16)),
     values: chartData.map(d => d.numericValue),
   }];
 
+  // Chart area — leave room for right panel, stay within safe zone
   s.addChart(pres.ChartType.bar, barData, {
-    x: 0.4, y: 1.5, w: 5.8, h: 3.8,
+    x: 0.3, y: 1.45, w: 5.9, h: 3.65,
     barDir: "col",
     chartColors: chartColors.slice(0, chartData.length),
     showLegend: false,
     showValue: true,
+    dataLabelFontSize: 8,
+    dataLabelPosition: "inEnd",   // FIX: was "outEnd" which spills off-slide
+    dataLabelColor: COLORS.textLight,
+    catAxisLabelFontSize: 8,
+    valAxisLabelFontSize: 8,
+    catAxisLabelColor: COLORS.textDark,
+    valAxisLabelColor: COLORS.textMuted,
+    catGridLine: { style: "none" },
+    valGridLine: { style: "dash", color: COLORS.border, size: 0.5 },
+    plotAreaBorderColor: COLORS.border,
+    chartAreaBorderColor: COLORS.border,
+    showTitle: true,
+    title: slideTitle.replace(/ — Chart View$/, '').slice(0, 50),
+    titleFontSize: 10,
+    titleColor: COLORS.textDark,
+  });
+
+  // Right insight panel — x:6.35, width:3.35, y:1.45–5.15
+  const rightX = 6.35;
+  const panelW = 3.35;
+  const total = chartData.reduce((a, b) => a + b.numericValue, 0);
+  const maxItem = chartData.reduce((a, b) => a.numericValue > b.numericValue ? a : b);
+  const minItem = chartData.reduce((a, b) => a.numericValue < b.numericValue ? a : b);
+
+  // Summary box
+  s.addShape("roundRect", {
+    x: rightX, y: 1.45, w: panelW, h: 1.55,
+    fill: { color: COLORS.cardAlt }, line: { color: COLORS.border }, rectRadius: 0.1,
+  });
+  s.addText("INSIGHTS", {
+    x: rightX + 0.15, y: 1.55, w: panelW - 0.2, h: 0.26,
+    fontSize: 8, color: COLORS.accent, bold: true, charSpacing: 1, fontFace: "Calibri",
+  });
+  s.addText("Highest", { x: rightX + 0.15, y: 1.84, w: panelW - 0.2, h: 0.22, fontSize: 8, color: COLORS.textMuted, fontFace: "Calibri" });
+  s.addText(maxItem.label.slice(0, 22), { x: rightX + 0.15, y: 2.04, w: panelW - 0.2, h: 0.26, fontSize: 11, color: COLORS.chart2, bold: true, fontFace: "Cambria" });
+  s.addText("Lowest", { x: rightX + 0.15, y: 2.34, w: panelW - 0.2, h: 0.22, fontSize: 8, color: COLORS.textMuted, fontFace: "Calibri" });
+  s.addText(minItem.label.slice(0, 22), { x: rightX + 0.15, y: 2.55, w: panelW - 0.2, h: 0.26, fontSize: 11, color: COLORS.chart4, bold: true, fontFace: "Cambria" });
+
+  // Value legend cards — fixed height so they don't overflow footer
+  const available = 5.12 - 3.1;  // from 3.1 to footer y
+  const cardH = Math.min(available / Math.max(chartData.slice(0, 5).length, 1), 0.52);
+  let rightY = 3.10;
+  chartData.slice(0, 5).forEach((d, i) => {
+    const pct = total > 0 ? ((d.numericValue / total) * 100).toFixed(1) : '0';
+    if (rightY + cardH > 5.12) return;  // guard against overflow
+    s.addShape("roundRect", {
+      x: rightX, y: rightY, w: panelW, h: cardH - 0.03,
+      fill: { color: COLORS.cardBg }, line: { color: COLORS.border }, rectRadius: 0.05,
+    });
+    s.addShape("roundRect", {
+      x: rightX + 0.1, y: rightY + cardH * 0.2, w: 0.14, h: 0.14,
+      fill: { color: chartColors[i % 7] }, line: { color: chartColors[i % 7] }, rectRadius: 0.03,
+    });
+    s.addText(d.label.slice(0, 20), {
+      x: rightX + 0.32, y: rightY + 0.03, w: panelW - 0.85, h: 0.22,
+      fontSize: 8, color: COLORS.textMuted, fontFace: "Calibri", bold: true,
+    });
+    s.addText(d.value.slice(0, 16), {
+      x: rightX + 0.32, y: rightY + 0.22, w: panelW - 0.85, h: cardH - 0.28,
+      fontSize: 10, color: COLORS.textDark, fontFace: "Cambria", bold: true,
+    });
+    s.addText(`${pct}%`, {
+      x: rightX + panelW - 0.55, y: rightY + 0.03, w: 0.5, h: cardH - 0.08,
+      fontSize: 9, color: chartColors[i % 7], bold: true, align: "right", valign: "middle", fontFace: "Cambria",
+    });
+    rightY += cardH;
+  });
+
+  addFooter(s, COLORS, docTitle, slideCounter, totalSlides);
+  if (includeNotes) s.addNotes(`Bar Chart: ${slideTitle}\n${chartData.map(d => `${d.label}: ${d.value}`).join("\n")}`);
+  return s;
+}
+
+// Horizontal bar — full width, limit items, use inEnd label position
+function addHorizontalBarChartSlide(pres, COLORS, chartDataRaw, slideTitle, docTitle, slideCounter, totalSlides, includeNotes) {
+  const s = pres.addSlide();
+  s.background = { color: COLORS.bgLight };
+  addSlideHeader(s, pres, COLORS, slideTitle, "\u{1F4CA}");
+
+  // Limit to 8 items for readability
+  const chartData = limitChartData(chartDataRaw, 8);
+  const chartColors = [COLORS.chart2, COLORS.chart3, COLORS.chart4, COLORS.chart5, COLORS.chart6, COLORS.chart7, COLORS.chart1];
+  const barData = [{
+    name: slideTitle.replace(/ — Ranking$/, '').slice(0, 40),
+    labels: chartData.map(d => d.label.slice(0, 22)),
+    values: chartData.map(d => d.numericValue),
+  }];
+
+  s.addChart(pres.ChartType.bar, barData, {
+    x: 0.3, y: 1.45, w: 9.4, h: 3.65,
+    barDir: "bar",
+    chartColors: chartColors.slice(0, chartData.length),
+    showLegend: false,
+    showValue: true,
     dataLabelFontSize: 9,
-    dataLabelPosition: "outEnd",
-    dataLabelColor: COLORS.textDark,
+    dataLabelPosition: "inEnd",   // FIX: inEnd is safe inside bars
+    dataLabelColor: COLORS.textLight,
     catAxisLabelFontSize: 9,
     valAxisLabelFontSize: 8,
     catAxisLabelColor: COLORS.textDark,
@@ -272,77 +425,8 @@ function addBarChartSlide(pres, COLORS, chartData, slideTitle, docTitle, slideCo
     plotAreaBorderColor: COLORS.border,
     chartAreaBorderColor: COLORS.border,
     showTitle: true,
-    title: `${slideTitle.replace(/ — Chart View$/, '')} \u2014 Comparison`,
-    titleFontSize: 11,
-    titleColor: COLORS.textDark,
-  });
-
-  // Insight panel on the right
-  const rightX = 6.5;
-  const total = chartData.reduce((a, b) => a + b.numericValue, 0);
-  const maxItem = chartData.reduce((a, b) => a.numericValue > b.numericValue ? a : b);
-  const minItem = chartData.reduce((a, b) => a.numericValue < b.numericValue ? a : b);
-
-  s.addShape("roundRect", { x: rightX, y: 1.55, w: 3.1, h: 1.55, fill: { color: COLORS.cardAlt }, line: { color: COLORS.border }, rectRadius: 0.1,
-    shadow: { type: "outer", color: "000000", blur: 6, offset: 2, angle: 45, opacity: 0.07 } });
-  s.addText("CHART INSIGHTS", { x: rightX + 0.18, y: 1.68, w: 2.7, h: 0.28, fontSize: 8.5, color: COLORS.accent, bold: true, charSpacing: 1, fontFace: "Calibri" });
-  s.addText("Highest", { x: rightX + 0.18, y: 2.02, w: 1.1, h: 0.22, fontSize: 8, color: COLORS.textMuted, fontFace: "Calibri" });
-  s.addText(maxItem.value, { x: rightX + 0.18, y: 2.22, w: 2.7, h: 0.28, fontSize: 13, color: COLORS.chart2, bold: true, fontFace: "Cambria" });
-  s.addText(`${maxItem.label}`, { x: rightX + 0.18, y: 2.50, w: 2.7, h: 0.22, fontSize: 8, color: COLORS.textMuted, fontFace: "Calibri" });
-  s.addText("Lowest", { x: rightX + 0.18, y: 2.76, w: 1.1, h: 0.22, fontSize: 8, color: COLORS.textMuted, fontFace: "Calibri" });
-  s.addText(minItem.value, { x: rightX + 0.18, y: 2.96, w: 2.7, h: 0.28, fontSize: 13, color: COLORS.chart4, bold: true, fontFace: "Cambria" });
-
-  // Value legend cards
-  const cardH = Math.min(3.4 / Math.max(chartData.length, 1), 0.58);
-  let rightY = 3.25;
-  chartData.slice(0, 5).forEach((d, i) => {
-    const pct = total > 0 ? ((d.numericValue / total) * 100).toFixed(1) : '0';
-    s.addShape("roundRect", { x: rightX, y: rightY, w: 3.1, h: cardH - 0.04, fill: { color: COLORS.cardBg }, line: { color: COLORS.border }, rectRadius: 0.06 });
-    s.addShape("roundRect", { x: rightX + 0.12, y: rightY + cardH * 0.25, w: 0.18, h: 0.18, fill: { color: chartColors[i % 7] }, line: { color: chartColors[i % 7] }, rectRadius: 0.04 });
-    s.addText(d.label.slice(0, 18), { x: rightX + 0.4, y: rightY + 0.04, w: 1.8, h: 0.22, fontSize: 8.5, color: COLORS.textMuted, fontFace: "Calibri", bold: true });
-    s.addText(d.value, { x: rightX + 0.4, y: rightY + 0.24, w: 1.6, h: cardH - 0.32, fontSize: 11, color: COLORS.textDark, fontFace: "Cambria", bold: true });
-    s.addText(`${pct}%`, { x: rightX + 2.5, y: rightY + 0.04, w: 0.5, h: cardH - 0.1, fontSize: 10, color: chartColors[i % 7], bold: true, align: "right", valign: "middle", fontFace: "Cambria" });
-    rightY += cardH;
-  });
-
-  addFooter(s, COLORS, docTitle, slideCounter, totalSlides);
-  if (includeNotes) s.addNotes(`Bar Chart: ${slideTitle}\n${chartData.map(d => `${d.label}: ${d.value}`).join("\n")}`);
-  return s;
-}
-
-// REPLACEMENT for addHorizontalBarChartSlide - with proper ranking context
-function addHorizontalBarChartSlide(pres, COLORS, chartData, slideTitle, docTitle, slideCounter, totalSlides, includeNotes) {
-  const s = pres.addSlide();
-  s.background = { color: COLORS.bgLight };
-  addSlideHeader(s, pres, COLORS, slideTitle, "\u{1F4CA}");
-
-  const chartColors = [COLORS.chart2, COLORS.chart3, COLORS.chart4, COLORS.chart5, COLORS.chart6, COLORS.chart7, COLORS.chart1];
-  const barData = [{
-    name: slideTitle.replace(/ — Ranking$/, '').slice(0, 40),
-    labels: chartData.map(d => d.label.slice(0, 24)),
-    values: chartData.map(d => d.numericValue),
-  }];
-
-  s.addChart(pres.ChartType.bar, barData, {
-    x: 0.4, y: 1.5, w: 9.2, h: 3.8,
-    barDir: "bar",
-    chartColors: chartColors.slice(0, chartData.length),
-    showLegend: false,
-    showValue: true,
-    dataLabelFontSize: 9.5,
-    dataLabelPosition: "outEnd",
-    dataLabelColor: COLORS.textDark,
-    catAxisLabelFontSize: 10,
-    valAxisLabelFontSize: 8,
-    catAxisLabelColor: COLORS.textDark,
-    valAxisLabelColor: COLORS.textMuted,
-    catGridLine: { style: "none" },
-    valGridLine: { style: "dash", color: COLORS.border, size: 0.5 },
-    plotAreaBorderColor: COLORS.border,
-    chartAreaBorderColor: COLORS.border,
-    showTitle: true,
-    title: `${slideTitle.replace(/ — Ranking$/, '')} \u2014 Ranked by Value`,
-    titleFontSize: 11,
+    title: slideTitle.replace(/ — Ranking$/, '').slice(0, 50),
+    titleFontSize: 10,
     titleColor: COLORS.textDark,
   });
 
@@ -351,63 +435,80 @@ function addHorizontalBarChartSlide(pres, COLORS, chartData, slideTitle, docTitl
   return s;
 }
 
-// REPLACEMENT for addPieChartSlide - better legend, percentage, clear title
-function addPieChartSlide(pres, COLORS, chartData, slideTitle, docTitle, slideCounter, totalSlides, includeNotes) {
+// Doughnut chart — limit items, fix label position, fix legend overflow
+function addPieChartSlide(pres, COLORS, chartDataRaw, slideTitle, docTitle, slideCounter, totalSlides, includeNotes) {
   const s = pres.addSlide();
   s.background = { color: COLORS.bgLight };
   addSlideHeader(s, pres, COLORS, slideTitle, "\u{1F967}");
 
+  // Limit to 7 items for doughnut readability
+  const chartData = limitChartData(chartDataRaw, 7);
   const chartColors = [COLORS.chart1, COLORS.chart2, COLORS.chart3, COLORS.chart4, COLORS.chart5,
     COLORS.chart6, COLORS.chart7, COLORS.chart8, "9B59B6", "E74C3C"];
   const total = chartData.reduce((a, b) => a + b.numericValue, 0);
 
   const pieData = [{
     name: slideTitle.replace(/ — Distribution$/, '').slice(0, 40),
-    labels: chartData.map(d => d.label.slice(0, 20)),
+    labels: chartData.map(d => d.label.slice(0, 18)),
     values: chartData.map(d => d.numericValue),
   }];
 
   s.addChart(pres.ChartType.doughnut, pieData, {
-    x: 0.35, y: 1.45, w: 4.8, h: 4.0,
+    x: 0.3, y: 1.42, w: 4.9, h: 3.72,
     chartColors: chartColors.slice(0, chartData.length),
     showLegend: false,
-    showValue: true,
-    dataLabelFontSize: 9.5,
-    dataLabelColor: "FFFFFF",
-    holeSize: 50,
+    showValue: false,   // FIX: hide in-chart labels (they overlap on doughnut); use side legend instead
+    holeSize: 48,
     showTitle: true,
-    title: `${slideTitle.replace(/ — Distribution$/, '')} \u2014 Distribution`,
-    titleFontSize: 11,
+    title: slideTitle.replace(/ — Distribution$/, '').slice(0, 46),
+    titleFontSize: 10,
     titleColor: COLORS.textDark,
   });
 
-  // Total callout in doughnut hole area
-  s.addShape("roundRect", { x: 1.6, y: 2.9, w: 1.95, h: 0.75, fill: { color: COLORS.cardBg }, line: { color: COLORS.border }, rectRadius: 0.08 });
-  s.addText("TOTAL", { x: 1.6, y: 2.93, w: 1.95, h: 0.26, fontSize: 8, color: COLORS.textMuted, fontFace: "Calibri", bold: true, align: "center" });
+  // Center total callout
+  s.addShape("roundRect", { x: 1.7, y: 2.85, w: 1.85, h: 0.7, fill: { color: COLORS.cardBg }, line: { color: COLORS.border }, rectRadius: 0.08 });
+  s.addText("TOTAL", { x: 1.7, y: 2.88, w: 1.85, h: 0.24, fontSize: 7.5, color: COLORS.textMuted, fontFace: "Calibri", bold: true, align: "center" });
   const fmtTot = total >= 1000000 ? `${(total/1000000).toFixed(2)}M` : total >= 1000 ? `${(total/1000).toFixed(1)}K` : total.toFixed(1);
-  s.addText(fmtTot, { x: 1.6, y: 3.18, w: 1.95, h: 0.36, fontSize: 13, color: COLORS.textDark, fontFace: "Cambria", bold: true, align: "center" });
+  s.addText(fmtTot, { x: 1.7, y: 3.1, w: 1.85, h: 0.34, fontSize: 12, color: COLORS.textDark, fontFace: "Cambria", bold: true, align: "center" });
 
-  // Side legend with percentage bar
+  // Side legend — fixed spacing so items don't overflow footer
   const legendX = 5.45;
-  let legendY = 1.5;
-  const lH = Math.min(3.85 / Math.max(chartData.length, 1), 0.74);
+  const legendW = 4.25;
+  let legendY = 1.45;
+  // Calculate card height to fit all items above footer (y:5.18)
+  const availLegend = 5.18 - legendY;
+  const lH = Math.min(availLegend / Math.max(chartData.length, 1), 0.68);
 
   chartData.forEach((d, i) => {
     const pct = total > 0 ? (d.numericValue / total) * 100 : 0;
     const cc = chartColors[i % 10];
-    s.addShape("roundRect", { x: legendX, y: legendY, w: 4.3, h: lH - 0.06, fill: { color: COLORS.cardBg }, line: { color: COLORS.border }, rectRadius: 0.07,
-      shadow: { type: "outer", color: "000000", blur: 5, offset: 1, angle: 45, opacity: 0.06 } });
-    // Colour swatch
-    s.addShape("roundRect", { x: legendX + 0.12, y: legendY + lH * 0.22, w: 0.22, h: 0.22, fill: { color: cc }, line: { color: cc }, rectRadius: 0.04 });
-    s.addText(d.label.slice(0, 22), { x: legendX + 0.44, y: legendY + 0.04, w: 2.35, h: 0.26, fontSize: 9.5, color: COLORS.textMuted, fontFace: "Calibri", bold: true });
-    s.addText(d.value, { x: legendX + 0.44, y: legendY + 0.26, w: 2.35, h: 0.26, fontSize: 11, color: COLORS.textDark, fontFace: "Cambria", bold: true });
-    // Percentage
-    s.addText(`${pct.toFixed(1)}%`, { x: legendX + 3.6, y: legendY + 0.08, w: 0.58, h: lH - 0.18, fontSize: 13, color: cc, fontFace: "Cambria", bold: true, align: "right", valign: "middle" });
-    // Progress bar
-    if (lH > 0.55) {
-      s.addShape("roundRect", { x: legendX + 0.44, y: legendY + lH - 0.22, w: 3.2, h: 0.1, fill: { color: COLORS.border }, line: { color: COLORS.border }, rectRadius: 0.05 });
-      const barW = Math.max((pct / 100) * 3.2, 0.08);
-      s.addShape("roundRect", { x: legendX + 0.44, y: legendY + lH - 0.22, w: barW, h: 0.1, fill: { color: cc }, line: { color: cc }, rectRadius: 0.05 });
+    s.addShape("roundRect", {
+      x: legendX, y: legendY, w: legendW, h: lH - 0.05,
+      fill: { color: COLORS.cardBg }, line: { color: COLORS.border }, rectRadius: 0.06,
+      shadow: { type: "outer", color: "000000", blur: 4, offset: 1, angle: 45, opacity: 0.05 },
+    });
+    s.addShape("roundRect", {
+      x: legendX + 0.1, y: legendY + lH * 0.22, w: 0.18, h: 0.18,
+      fill: { color: cc }, line: { color: cc }, rectRadius: 0.04,
+    });
+    s.addText(d.label.slice(0, 22), {
+      x: legendX + 0.38, y: legendY + 0.04, w: legendW - 1.0, h: 0.24,
+      fontSize: 9, color: COLORS.textMuted, fontFace: "Calibri", bold: true,
+    });
+    s.addText(d.value.slice(0, 18), {
+      x: legendX + 0.38, y: legendY + 0.26, w: legendW - 1.0, h: lH - 0.35,
+      fontSize: 10, color: COLORS.textDark, fontFace: "Cambria", bold: true,
+    });
+    s.addText(`${pct.toFixed(1)}%`, {
+      x: legendX + legendW - 0.62, y: legendY + 0.06, w: 0.58, h: lH - 0.16,
+      fontSize: 12, color: cc, fontFace: "Cambria", bold: true, align: "right", valign: "middle",
+    });
+    // Mini progress bar — only if enough height
+    if (lH >= 0.56) {
+      const barY = legendY + lH - 0.17;
+      s.addShape("roundRect", { x: legendX + 0.38, y: barY, w: legendW - 1.05, h: 0.08, fill: { color: COLORS.border }, line: { color: COLORS.border }, rectRadius: 0.04 });
+      const barW = Math.max((pct / 100) * (legendW - 1.05), 0.06);
+      s.addShape("roundRect", { x: legendX + 0.38, y: barY, w: barW, h: 0.08, fill: { color: cc }, line: { color: cc }, rectRadius: 0.04 });
     }
     legendY += lH;
   });
@@ -417,30 +518,38 @@ function addPieChartSlide(pres, COLORS, chartData, slideTitle, docTitle, slideCo
   return s;
 }
 
-// REPLACEMENT for addLineChartSlide - show values, annotate trend
-function addLineChartSlide(pres, COLORS, chartData, slideTitle, docTitle, slideCounter, totalSlides, includeNotes) {
+// Line chart — limit points to prevent unreadable x-axis
+function addLineChartSlide(pres, COLORS, chartDataRaw, slideTitle, docTitle, slideCounter, totalSlides, includeNotes) {
   const s = pres.addSlide();
   s.background = { color: COLORS.bgLight };
   addSlideHeader(s, pres, COLORS, slideTitle, "\u{1F4C8}");
 
+  // Limit to 10 points — evenly sampled if more
+  let chartData = chartDataRaw;
+  if (chartDataRaw.length > 10) {
+    const step = Math.ceil(chartDataRaw.length / 10);
+    chartData = chartDataRaw.filter((_, i) => i % step === 0).slice(0, 10);
+  }
+
   const lineData = [{
     name: slideTitle.replace(/ — Trend Analysis$/, '').slice(0, 40),
-    labels: chartData.map(d => d.label.slice(0, 16)),
+    labels: chartData.map(d => d.label.slice(0, 14)),
     values: chartData.map(d => d.numericValue),
   }];
 
+  // Chart fills most of the slide, insight panel on right
   s.addChart(pres.ChartType.line, lineData, {
-    x: 0.4, y: 1.5, w: 6.5, h: 3.8,
+    x: 0.3, y: 1.42, w: 6.7, h: 3.68,
     chartColors: [COLORS.chart2],
     showLegend: false,
-    showValue: true,
-    dataLabelFontSize: 8.5,
+    showValue: chartData.length <= 7,  // only show values if few points
+    dataLabelFontSize: 8,
     dataLabelColor: COLORS.textDark,
     lineDataSymbol: "circle",
-    lineDataSymbolSize: 7,
-    lineSize: 2.5,
-    catAxisLabelFontSize: 9.5,
-    valAxisLabelFontSize: 8.5,
+    lineDataSymbolSize: 6,
+    lineSize: 2,
+    catAxisLabelFontSize: 8.5,
+    valAxisLabelFontSize: 8,
     catAxisLabelColor: COLORS.textDark,
     valAxisLabelColor: COLORS.textMuted,
     catGridLine: { style: "none" },
@@ -448,12 +557,14 @@ function addLineChartSlide(pres, COLORS, chartData, slideTitle, docTitle, slideC
     plotAreaBorderColor: COLORS.border,
     chartAreaBorderColor: COLORS.border,
     showTitle: true,
-    title: `${slideTitle.replace(/ — Trend Analysis$/, '')} \u2014 Trend Over Time`,
-    titleFontSize: 11,
+    title: slideTitle.replace(/ — Trend Analysis$/, '').slice(0, 48),
+    titleFontSize: 10,
     titleColor: COLORS.textDark,
   });
 
-  // Insight panel on right
+  // Insight panel — x:7.2 to 9.7
+  const panelX = 7.25;
+  const panelW = 2.45;
   const maxItem = chartData.reduce((a, b) => a.numericValue > b.numericValue ? a : b);
   const minItem = chartData.reduce((a, b) => a.numericValue < b.numericValue ? a : b);
   const first = chartData[0];
@@ -462,41 +573,53 @@ function addLineChartSlide(pres, COLORS, chartData, slideTitle, docTitle, slideC
     ? (((last.numericValue - first.numericValue) / first.numericValue) * 100).toFixed(1)
     : null;
 
-  const panelX = 7.15;
-  s.addShape("roundRect", { x: panelX, y: 1.55, w: 2.55, h: 3.75, fill: { color: COLORS.cardBg }, line: { color: COLORS.border }, rectRadius: 0.1,
-    shadow: { type: "outer", color: "000000", blur: 8, offset: 2, angle: 45, opacity: 0.07 } });
-  s.addText("TREND INSIGHTS", { x: panelX + 0.15, y: 1.68, w: 2.25, h: 0.28, fontSize: 8.5, color: COLORS.accent, bold: true, charSpacing: 1, fontFace: "Calibri" });
+  s.addShape("roundRect", {
+    x: panelX, y: 1.42, w: panelW, h: 3.68,
+    fill: { color: COLORS.cardBg }, line: { color: COLORS.border }, rectRadius: 0.1,
+    shadow: { type: "outer", color: "000000", blur: 8, offset: 2, angle: 45, opacity: 0.07 },
+  });
+  s.addText("TREND", {
+    x: panelX + 0.12, y: 1.54, w: panelW - 0.2, h: 0.26,
+    fontSize: 8, color: COLORS.accent, bold: true, charSpacing: 1, fontFace: "Calibri",
+  });
 
   const insightItems = [
-    { label: "Peak", val: maxItem.value, sub: maxItem.label, color: COLORS.chart2 },
-    { label: "Low", val: minItem.value, sub: minItem.label, color: COLORS.chart4 },
+    { label: "Peak", val: maxItem.value.slice(0, 14), sub: maxItem.label.slice(0, 16), color: COLORS.chart2 },
+    { label: "Low",  val: minItem.value.slice(0, 14), sub: minItem.label.slice(0, 16), color: COLORS.chart4 },
   ];
   if (changePct !== null) {
-    insightItems.push({ label: "Change", val: `${changePct > 0 ? '+' : ''}${changePct}%`, sub: `${first.label} \u2192 ${last.label}`, color: parseFloat(changePct) >= 0 ? COLORS.chart2 : COLORS.chart4 });
+    insightItems.push({
+      label: "Change",
+      val: `${changePct > 0 ? '+' : ''}${changePct}%`,
+      sub: `${first.label.slice(0,8)} \u2192 ${last.label.slice(0,8)}`,
+      color: parseFloat(changePct) >= 0 ? COLORS.chart2 : COLORS.chart4,
+    });
   }
 
-  let iy = 2.04;
+  let iy = 1.88;
   insightItems.forEach(item => {
-    s.addText(item.label.toUpperCase(), { x: panelX + 0.15, y: iy, w: 2.25, h: 0.22, fontSize: 8, color: COLORS.textMuted, fontFace: "Calibri", bold: true, charSpacing: 0.3 });
-    s.addText(item.val, { x: panelX + 0.15, y: iy + 0.2, w: 2.25, h: 0.34, fontSize: 14, color: item.color, fontFace: "Cambria", bold: true });
-    s.addText(item.sub, { x: panelX + 0.15, y: iy + 0.52, w: 2.25, h: 0.22, fontSize: 8, color: COLORS.textMuted, fontFace: "Calibri" });
-    iy += 0.86;
+    s.addText(item.label.toUpperCase(), { x: panelX + 0.12, y: iy, w: panelW - 0.2, h: 0.2, fontSize: 7.5, color: COLORS.textMuted, fontFace: "Calibri", bold: true });
+    s.addText(item.val, { x: panelX + 0.12, y: iy + 0.2, w: panelW - 0.2, h: 0.3, fontSize: 13, color: item.color, fontFace: "Cambria", bold: true });
+    s.addText(item.sub, { x: panelX + 0.12, y: iy + 0.49, w: panelW - 0.2, h: 0.2, fontSize: 7.5, color: COLORS.textMuted, fontFace: "Calibri" });
+    iy += 0.78;
   });
 
-  // Data point list
-  iy += 0.12;
-  s.addShape("roundRect", { x: panelX + 0.15, y: iy, w: 2.25, h: 0.02, fill: { color: COLORS.border }, line: { color: COLORS.border }, rectRadius: 0 });
+  // Data point list — only if space remains
   iy += 0.1;
-  s.addText("DATA POINTS", { x: panelX + 0.15, y: iy, w: 2.25, h: 0.22, fontSize: 7.5, color: COLORS.textMuted, fontFace: "Calibri", bold: true, charSpacing: 0.3 });
-  iy += 0.22;
-  const availH = 5.1 - iy;
-  const dpH = Math.min(availH / Math.max(chartData.length, 1), 0.32);
-  chartData.forEach(d => {
-    if (iy + dpH > 5.2) return;
-    s.addText(d.label.slice(0, 14), { x: panelX + 0.15, y: iy, w: 1.3, h: dpH, fontSize: 7.5, color: COLORS.textMuted, fontFace: "Calibri", valign: "middle" });
-    s.addText(d.value, { x: panelX + 1.35, y: iy, w: 1.05, h: dpH, fontSize: 8.5, color: COLORS.textDark, fontFace: "Cambria", bold: true, align: "right", valign: "middle" });
-    iy += dpH;
-  });
+  const dpAvail = 4.98 - iy;
+  if (dpAvail > 0.4 && chartData.length <= 10) {
+    s.addShape("roundRect", { x: panelX + 0.12, y: iy, w: panelW - 0.2, h: 0.02, fill: { color: COLORS.border }, line: { color: COLORS.border }, rectRadius: 0 });
+    iy += 0.1;
+    s.addText("DATA", { x: panelX + 0.12, y: iy, w: panelW - 0.2, h: 0.2, fontSize: 7, color: COLORS.textMuted, fontFace: "Calibri", bold: true, charSpacing: 0.3 });
+    iy += 0.22;
+    const dpH = Math.min(dpAvail / Math.max(chartData.length, 1), 0.28);
+    chartData.forEach(d => {
+      if (iy + dpH > 5.05) return;
+      s.addText(d.label.slice(0, 12), { x: panelX + 0.12, y: iy, w: 1.35, h: dpH, fontSize: 7, color: COLORS.textMuted, fontFace: "Calibri", valign: "middle" });
+      s.addText(d.value.slice(0, 10), { x: panelX + 1.35, y: iy, w: 1.0, h: dpH, fontSize: 7.5, color: COLORS.textDark, fontFace: "Cambria", bold: true, align: "right", valign: "middle" });
+      iy += dpH;
+    });
+  }
 
   addFooter(s, COLORS, docTitle, slideCounter, totalSlides);
   if (includeNotes) s.addNotes(`Line Trend: ${slideTitle}\n${chartData.map(d => `${d.label}: ${d.value}`).join("\n")}`);
@@ -522,14 +645,13 @@ function addStackedBarChartSlide(pres, COLORS, slides, slideTitle, docTitle, sli
   }));
 
   if (seriesData.length < 2) {
-    // Fallback to simple bar
     const cd = slides[0] ? extractChartData(slides[0].metrics) : null;
     if (cd) return addBarChartSlide(pres, COLORS, cd, slideTitle, docTitle, slideCounter, totalSlides, includeNotes);
     return s;
   }
 
   s.addChart(pres.ChartType.bar, seriesData, {
-    x: 0.4, y: 1.5, w: 9.2, h: 3.8,
+    x: 0.3, y: 1.45, w: 9.4, h: 3.65,
     barDir: "col",
     barGrouping: "stacked",
     chartColors: [COLORS.chart1, COLORS.chart2, COLORS.chart3, COLORS.chart4],
@@ -537,6 +659,7 @@ function addStackedBarChartSlide(pres, COLORS, slides, slideTitle, docTitle, sli
     legendPos: "b",
     legendFontSize: 9,
     showValue: false,
+    dataLabelPosition: "ctr",  // FIX: must be ctr/inEnd/inBase for stacked
     catAxisLabelFontSize: 9,
     valAxisLabelFontSize: 9,
     catAxisLabelColor: COLORS.textDark,
@@ -550,41 +673,56 @@ function addStackedBarChartSlide(pres, COLORS, slides, slideTitle, docTitle, sli
   return s;
 }
 
-function addRadarChartSlide(pres, COLORS, chartData, slideTitle, docTitle, slideCounter, totalSlides, includeNotes) {
+function addRadarChartSlide(pres, COLORS, chartDataRaw, slideTitle, docTitle, slideCounter, totalSlides, includeNotes) {
   const s = pres.addSlide();
   s.background = { color: COLORS.bgLight };
   addSlideHeader(s, pres, COLORS, slideTitle, "\u{1F578}\uFE0F");
 
+  // Radar works best with 5-8 dimensions
+  const chartData = chartDataRaw.slice(0, 8);
+  const maxVal = Math.max(...chartData.map(d => d.numericValue));
   const radarData = [{
     name: "Score",
-    labels: chartData.map(d => d.label.slice(0, 18)),
-    values: chartData.map(d => Math.min(d.numericValue, 100)), // normalize
+    labels: chartData.map(d => d.label.slice(0, 16)),
+    values: chartData.map(d => maxVal > 0 ? Math.round((d.numericValue / maxVal) * 100) : 0),
   }];
 
   s.addChart(pres.ChartType.radar, radarData, {
-    x: 0.4, y: 1.45, w: 5.5, h: 4.0,
+    x: 0.3, y: 1.42, w: 5.7, h: 3.72,
     chartColors: [COLORS.chart2],
     showLegend: false,
-    catAxisLabelFontSize: 9.5,
+    catAxisLabelFontSize: 9,
     catAxisLabelColor: COLORS.textDark,
     plotAreaBorderColor: COLORS.border,
     chartAreaBorderColor: COLORS.border,
   });
 
-  // Right insight panel
-  const rX = 6.2;
-  let rY = 1.55;
-  const rH = 3.8 / Math.max(chartData.length, 1);
-  chartData.slice(0, 6).forEach((d, i) => {
-    const fillPct = Math.min(Math.round((d.numericValue / Math.max(...chartData.map(x => x.numericValue))) * 100), 100);
-    s.addShape("roundRect", { x: rX, y: rY, w: 3.5, h: rH - 0.1, fill: { color: COLORS.cardBg }, line: { color: COLORS.border }, rectRadius: 0.06 });
-    s.addText(d.label.slice(0, 22), { x: rX + 0.15, y: rY + 0.05, w: 2.8, h: 0.25, fontSize: 9, color: COLORS.textMuted, fontFace: "Calibri", bold: true });
-    // Progress bar background
-    s.addShape("roundRect", { x: rX + 0.15, y: rY + 0.32, w: 3.1, h: 0.18, fill: { color: COLORS.border }, line: { color: COLORS.border }, rectRadius: 0.09 });
-    // Progress bar fill
-    const barW = Math.max((fillPct / 100) * 3.1, 0.1);
-    s.addShape("roundRect", { x: rX + 0.15, y: rY + 0.32, w: barW, h: 0.18, fill: { color: COLORS.chart2 }, line: { color: COLORS.chart2 }, rectRadius: 0.09 });
-    s.addText(d.value, { x: rX + 3.05, y: rY + 0.05, w: 0.35, h: 0.28, fontSize: 9, color: COLORS.chart2, fontFace: "Cambria", bold: true, align: "right" });
+  // Right insight panel — x:6.25 to 9.7
+  const rX = 6.25;
+  const rW = 3.45;
+  let rY = 1.45;
+  const availH = 5.10 - rY;
+  const rH = Math.min(availH / Math.max(chartData.length, 1), 0.56);
+
+  chartData.forEach((d, i) => {
+    if (rY + rH > 5.12) return;
+    const fillPct = maxVal > 0 ? Math.min(Math.round((d.numericValue / maxVal) * 100), 100) : 0;
+    s.addShape("roundRect", {
+      x: rX, y: rY, w: rW, h: rH - 0.06,
+      fill: { color: COLORS.cardBg }, line: { color: COLORS.border }, rectRadius: 0.06,
+    });
+    s.addText(d.label.slice(0, 24), {
+      x: rX + 0.12, y: rY + 0.05, w: rW - 0.55, h: 0.22,
+      fontSize: 8.5, color: COLORS.textMuted, fontFace: "Calibri", bold: true,
+    });
+    const barBgY = rY + (rH - 0.06) - 0.19;
+    s.addShape("roundRect", { x: rX + 0.12, y: barBgY, w: rW - 0.55, h: 0.14, fill: { color: COLORS.border }, line: { color: COLORS.border }, rectRadius: 0.07 });
+    const barFillW = Math.max((fillPct / 100) * (rW - 0.55), 0.08);
+    s.addShape("roundRect", { x: rX + 0.12, y: barBgY, w: barFillW, h: 0.14, fill: { color: COLORS.chart2 }, line: { color: COLORS.chart2 }, rectRadius: 0.07 });
+    s.addText(d.value.slice(0, 12), {
+      x: rX + rW - 0.5, y: rY + 0.04, w: 0.42, h: rH - 0.2,
+      fontSize: 8.5, color: COLORS.chart2, fontFace: "Cambria", bold: true, align: "right", valign: "top",
+    });
     rY += rH;
   });
 
@@ -606,7 +744,7 @@ function extractChartData(metrics) {
   return result.length >= 2 ? result : null;
 }
 
-// ── KPI Dashboard slide (premium dark layout) ─────────────────────────────────
+// ── KPI Dashboard slide — fixed card sizing and text overflow ─────────────────
 function addKpiSlide(pres, COLORS, metrics, docTitle, slideCounter, totalSlides, includeNotes) {
   const s = pres.addSlide();
   s.background = { color: COLORS.bgDark };
@@ -614,33 +752,48 @@ function addKpiSlide(pres, COLORS, metrics, docTitle, slideCounter, totalSlides,
   // Background decorations
   s.addShape(pres.shapes.OVAL, { x: 7.5, y: -0.8, w: 3.2, h: 3.2, fill: { color: COLORS.accent, transparency: 80 }, line: { color: COLORS.accent, transparency: 80 } });
   s.addShape(pres.shapes.OVAL, { x: -0.5, y: 4.3, w: 2.0, h: 2.0, fill: { color: COLORS.teal, transparency: 85 }, line: { color: COLORS.teal, transparency: 85 } });
-  s.addShape(pres.shapes.OVAL, { x: 4.5, y: 4.8, w: 1.2, h: 1.2, fill: { color: COLORS.chart3, transparency: 88 }, line: { color: COLORS.chart3, transparency: 88 } });
 
   // Header
   s.addText("KEY PERFORMANCE INDICATORS", { x: 0.4, y: 0.22, w: 9.2, h: 0.42, fontSize: 11, color: COLORS.accent, bold: true, charSpacing: 3, fontFace: "Calibri" });
   s.addShape(pres.shapes.RECTANGLE, { x: 0.4, y: 0.67, w: 9.2, h: 0.03, fill: { color: COLORS.accent, transparency: 60 }, line: { color: COLORS.accent, transparency: 60 } });
 
+  // Cap at 6 KPIs, use 2 cols if <=4, else 3 cols
   const items = metrics.slice(0, 6);
   const cols = items.length <= 4 ? 2 : 3;
   const rows = Math.ceil(items.length / cols);
-  const gap = 0.2;
+  const gap = 0.18;
   const cardW = (9.2 - gap * (cols - 1)) / cols;
-  const cardH = Math.min((4.35 - gap * (rows - 1)) / rows, 1.6);
+  // Reserve footer space — cards must end above y:5.22
+  const availCardH = (5.18 - 0.82 - gap * (rows - 1)) / rows;
+  const cardH = Math.min(Math.max(availCardH, 1.0), 1.65);
   const CARD_COLORS = [COLORS.chart2, COLORS.chart3, COLORS.chart4, COLORS.chart5, COLORS.chart1, COLORS.teal];
 
   items.forEach((m, i) => {
     const col = i % cols;
     const row = Math.floor(i / cols);
     const x = 0.4 + col * (cardW + gap);
-    const y = 0.85 + row * (cardH + gap);
+    const y = 0.82 + row * (cardH + gap);
     const cc = CARD_COLORS[i % CARD_COLORS.length];
 
-    s.addShape("roundRect", { x, y, w: cardW, h: cardH, fill: { color: cc, transparency: 88 }, line: { color: cc, transparency: 50 }, rectRadius: 0.12 });
-    s.addShape("rect", { x, y, w: 0.06, h: cardH, fill: { color: cc }, line: { color: cc } });
-    // Small trend arrow (cosmetic)
-    s.addText("▲", { x: x + cardW - 0.35, y: y + 0.1, w: 0.28, h: 0.28, fontSize: 10, color: COLORS.chart6, fontFace: "Calibri", align: "center" });
-    s.addText(m.label.toUpperCase(), { x: x + 0.2, y: y + 0.1, w: cardW - 0.6, h: 0.3, fontSize: 9, color: cc, bold: true, fontFace: "Calibri", charSpacing: 0.5 });
-    s.addText(m.value.slice(0, 28), { x: x + 0.2, y: y + 0.42, w: cardW - 0.3, h: cardH - 0.6, fontSize: cardH > 1.2 ? 18 : 15, color: COLORS.textLight, bold: true, fontFace: "Cambria", valign: "top", autoFit: true });
+    s.addShape("roundRect", {
+      x, y, w: cardW, h: cardH,
+      fill: { color: cc, transparency: 88 }, line: { color: cc, transparency: 50 }, rectRadius: 0.12,
+    });
+    s.addShape("rect", { x, y, w: 0.05, h: cardH, fill: { color: cc }, line: { color: cc } });
+
+    // Label — uppercase, small
+    s.addText(m.label.toUpperCase().slice(0, 28), {
+      x: x + 0.18, y: y + 0.1, w: cardW - 0.3, h: 0.28,
+      fontSize: 8.5, color: cc, bold: true, fontFace: "Calibri", charSpacing: 0.3,
+    });
+    // Value — font size scaled to card height and text length
+    const valText = m.value.slice(0, 30);
+    const valSize = valText.length > 18 ? 12 : cardH > 1.3 ? 17 : 14;
+    s.addText(valText, {
+      x: x + 0.18, y: y + 0.42, w: cardW - 0.28, h: cardH - 0.56,
+      fontSize: valSize, color: COLORS.textLight, bold: true,
+      fontFace: "Cambria", valign: "top", autoFit: true,
+    });
   });
 
   addFooter(s, COLORS, docTitle, slideCounter, totalSlides);
@@ -648,32 +801,43 @@ function addKpiSlide(pres, COLORS, metrics, docTitle, slideCounter, totalSlides,
   return s;
 }
 
-// ── Timeline slide ────────────────────────────────────────────────────────────
+// ── Timeline slide — fixed item spacing ───────────────────────────────────────
 function addTimelineSlide(pres, COLORS, metrics, title, docTitle, slideCounter, totalSlides, includeNotes) {
   const s = pres.addSlide();
   s.background = { color: COLORS.bgLight };
   addSlideHeader(s, pres, COLORS, title, "\u{1F4C5}");
 
-  const items = metrics.slice(0, 8);
-  const dotColors = [COLORS.chart2, COLORS.accent, COLORS.teal, COLORS.chart3, COLORS.chart4, COLORS.chart5, COLORS.chart6, COLORS.chart7];
-  const lineX = 0.9;
-  const startY = 1.65;
-  const itemH = 3.65 / Math.max(items.length, 1);
+  // Cap at 7 items to keep spacing comfortable
+  const items = metrics.slice(0, 7);
+  const dotColors = [COLORS.chart2, COLORS.accent, COLORS.teal, COLORS.chart3, COLORS.chart4, COLORS.chart5, COLORS.chart6];
+  const lineX = 0.85;
+  const startY = 1.5;
+  const endY = 5.12;
+  const totalH = endY - startY;
+  const itemH = totalH / Math.max(items.length, 1);
 
   // Vertical spine
-  s.addShape(pres.shapes.RECTANGLE, { x: lineX - 0.01, y: startY, w: 0.02, h: 3.55, fill: { color: COLORS.border }, line: { color: COLORS.border } });
+  s.addShape(pres.shapes.RECTANGLE, { x: lineX - 0.01, y: startY, w: 0.02, h: totalH - 0.15, fill: { color: COLORS.border }, line: { color: COLORS.border } });
 
   items.forEach((m, i) => {
     const y = startY + i * itemH;
     const dotC = dotColors[i % dotColors.length];
-    // Outer ring
-    s.addShape(pres.shapes.OVAL, { x: lineX - 0.15, y: y + 0.02, w: 0.3, h: 0.3, fill: { color: dotC, transparency: 70 }, line: { color: dotC, transparency: 70 } });
-    // Inner dot
-    s.addShape(pres.shapes.OVAL, { x: lineX - 0.09, y: y + 0.08, w: 0.18, h: 0.18, fill: { color: dotC }, line: { color: dotC } });
-    s.addText(m.label, { x: 1.2, y: y, w: 3.8, h: 0.28, fontSize: 10, color: COLORS.textMuted, fontFace: "Calibri", bold: true });
-    s.addShape("roundRect", { x: 5.2, y: y, w: 4.4, h: itemH * 0.78, fill: { color: COLORS.cardBg }, line: { color: dotC, transparency: 50 }, rectRadius: 0.06 });
-    s.addShape("rect", { x: 5.2, y: y, w: 0.05, h: itemH * 0.78, fill: { color: dotC }, line: { color: dotC } });
-    s.addText(m.value, { x: 5.38, y: y + 0.04, w: 4.0, h: itemH * 0.65, fontSize: 12, color: COLORS.textDark, fontFace: "Cambria", bold: true, valign: "middle" });
+    // Node circles
+    s.addShape(pres.shapes.OVAL, { x: lineX - 0.14, y: y + 0.04, w: 0.28, h: 0.28, fill: { color: dotC, transparency: 70 }, line: { color: dotC, transparency: 70 } });
+    s.addShape(pres.shapes.OVAL, { x: lineX - 0.08, y: y + 0.10, w: 0.16, h: 0.16, fill: { color: dotC }, line: { color: dotC } });
+    // Label on left of content box
+    s.addText(m.label.slice(0, 24), {
+      x: 1.1, y: y + 0.02, w: 4.0, h: 0.26,
+      fontSize: 9.5, color: COLORS.textMuted, fontFace: "Calibri", bold: true,
+    });
+    // Value card
+    const cardH = Math.max(itemH * 0.74, 0.28);
+    s.addShape("roundRect", { x: 5.3, y: y, w: 4.4, h: cardH, fill: { color: COLORS.cardBg }, line: { color: dotC, transparency: 50 }, rectRadius: 0.06 });
+    s.addShape("rect", { x: 5.3, y, w: 0.04, h: cardH, fill: { color: dotC }, line: { color: dotC } });
+    s.addText(m.value.slice(0, 50), {
+      x: 5.46, y: y + 0.03, w: 4.12, h: cardH - 0.06,
+      fontSize: 11, color: COLORS.textDark, fontFace: "Cambria", bold: true, valign: "middle",
+    });
   });
 
   addFooter(s, COLORS, docTitle, slideCounter, totalSlides);
@@ -681,75 +845,93 @@ function addTimelineSlide(pres, COLORS, metrics, title, docTitle, slideCounter, 
   return s;
 }
 
-// ── Comparison / Two-column chart slide ───────────────────────────────────────
+// ── Comparison slide — fixed column proportions ────────────────────────────────
 function addComparisonSlide(pres, COLORS, slideA, slideB, docTitle, slideCounter, totalSlides, includeNotes) {
   const s = pres.addSlide();
   s.background = { color: COLORS.bgLight };
   addSlideHeader(s, pres, COLORS, "Comparative Analysis", "\u2696\uFE0F");
 
-  // Left column
-  s.addShape("roundRect", { x: 0.25, y: 1.45, w: 4.65, h: 3.9, fill: { color: COLORS.cardBg }, line: { color: COLORS.border }, rectRadius: 0.1 });
-  s.addShape("rect", { x: 0.25, y: 1.45, w: 4.65, h: 0.05, fill: { color: COLORS.chart2 }, line: { color: COLORS.chart2 } });
-  s.addText(slideA.title.slice(0, 30), { x: 0.4, y: 1.52, w: 4.4, h: 0.35, fontSize: 12, color: COLORS.textDark, bold: true, fontFace: "Cambria" });
+  const colW = 4.6;
+  const colH = 3.75;
+  const colY = 1.42;
 
-  const itemHa = 3.35 / Math.max(slideA.metrics.slice(0, 5).length, 1);
-  slideA.metrics.slice(0, 5).forEach((m, i) => {
-    const y = 1.9 + i * itemHa;
-    s.addText(m.label.toUpperCase(), { x: 0.4, y, w: 4.3, h: 0.22, fontSize: 8.5, color: COLORS.textMuted, fontFace: "Calibri", bold: true });
-    s.addText(m.value, { x: 0.4, y: y + 0.22, w: 4.3, h: itemHa - 0.28, fontSize: 14, color: COLORS.chart2, fontFace: "Cambria", bold: true });
+  // Left column
+  s.addShape("roundRect", { x: 0.25, y: colY, w: colW, h: colH, fill: { color: COLORS.cardBg }, line: { color: COLORS.border }, rectRadius: 0.1 });
+  s.addShape("rect", { x: 0.25, y: colY, w: colW, h: 0.04, fill: { color: COLORS.chart2 }, line: { color: COLORS.chart2 } });
+  s.addText(slideA.title.slice(0, 28), { x: 0.38, y: colY + 0.08, w: colW - 0.2, h: 0.33, fontSize: 12, color: COLORS.textDark, bold: true, fontFace: "Cambria" });
+
+  const itemsA = slideA.metrics.slice(0, 5);
+  const itemHa = (colH - 0.45) / Math.max(itemsA.length, 1);
+  itemsA.forEach((m, i) => {
+    const y = colY + 0.44 + i * itemHa;
+    s.addText(m.label.toUpperCase().slice(0, 24), { x: 0.38, y, w: colW - 0.2, h: 0.2, fontSize: 8, color: COLORS.textMuted, fontFace: "Calibri", bold: true });
+    s.addText(m.value.slice(0, 24), { x: 0.38, y: y + 0.2, w: colW - 0.2, h: itemHa - 0.26, fontSize: 13, color: COLORS.chart2, fontFace: "Cambria", bold: true });
   });
 
   // Right column
-  s.addShape("roundRect", { x: 5.1, y: 1.45, w: 4.65, h: 3.9, fill: { color: COLORS.cardBg }, line: { color: COLORS.border }, rectRadius: 0.1 });
-  s.addShape("rect", { x: 5.1, y: 1.45, w: 4.65, h: 0.05, fill: { color: COLORS.chart3 }, line: { color: COLORS.chart3 } });
-  s.addText(slideB.title.slice(0, 30), { x: 5.25, y: 1.52, w: 4.4, h: 0.35, fontSize: 12, color: COLORS.textDark, bold: true, fontFace: "Cambria" });
+  s.addShape("roundRect", { x: 5.15, y: colY, w: colW, h: colH, fill: { color: COLORS.cardBg }, line: { color: COLORS.border }, rectRadius: 0.1 });
+  s.addShape("rect", { x: 5.15, y: colY, w: colW, h: 0.04, fill: { color: COLORS.chart3 }, line: { color: COLORS.chart3 } });
+  s.addText(slideB.title.slice(0, 28), { x: 5.28, y: colY + 0.08, w: colW - 0.2, h: 0.33, fontSize: 12, color: COLORS.textDark, bold: true, fontFace: "Cambria" });
 
-  const itemHb = 3.35 / Math.max(slideB.metrics.slice(0, 5).length, 1);
-  slideB.metrics.slice(0, 5).forEach((m, i) => {
-    const y = 1.9 + i * itemHb;
-    s.addText(m.label.toUpperCase(), { x: 5.25, y, w: 4.3, h: 0.22, fontSize: 8.5, color: COLORS.textMuted, fontFace: "Calibri", bold: true });
-    s.addText(m.value, { x: 5.25, y: y + 0.22, w: 4.3, h: itemHb - 0.28, fontSize: 14, color: COLORS.chart3, fontFace: "Cambria", bold: true });
+  const itemsB = slideB.metrics.slice(0, 5);
+  const itemHb = (colH - 0.45) / Math.max(itemsB.length, 1);
+  itemsB.forEach((m, i) => {
+    const y = colY + 0.44 + i * itemHb;
+    s.addText(m.label.toUpperCase().slice(0, 24), { x: 5.28, y, w: colW - 0.2, h: 0.2, fontSize: 8, color: COLORS.textMuted, fontFace: "Calibri", bold: true });
+    s.addText(m.value.slice(0, 24), { x: 5.28, y: y + 0.2, w: colW - 0.2, h: itemHb - 0.26, fontSize: 13, color: COLORS.chart3, fontFace: "Cambria", bold: true });
   });
 
-  // VS divider
-  s.addShape(pres.shapes.OVAL, { x: 4.62, y: 2.95, w: 0.76, h: 0.76, fill: { color: COLORS.bgDark }, line: { color: COLORS.bgDark } });
-  s.addText("VS", { x: 4.62, y: 2.95, w: 0.76, h: 0.76, fontSize: 10, color: COLORS.accent, bold: true, align: "center", valign: "middle", fontFace: "Calibri" });
+  // VS badge in center
+  s.addShape(pres.shapes.OVAL, { x: 4.63, y: 2.88, w: 0.74, h: 0.74, fill: { color: COLORS.bgDark }, line: { color: COLORS.bgDark } });
+  s.addText("VS", { x: 4.63, y: 2.88, w: 0.74, h: 0.74, fontSize: 10, color: COLORS.accent, bold: true, align: "center", valign: "middle", fontFace: "Calibri" });
 
   addFooter(s, COLORS, docTitle, slideCounter, totalSlides);
   if (includeNotes) s.addNotes(`Comparison: ${slideA.title} vs ${slideB.title}`);
   return s;
 }
 
-// ── Data Table slide ──────────────────────────────────────────────────────────
+// ── Data Table slide — fixed row height and overflow prevention ───────────────
 function addDataTableSlide(pres, COLORS, metrics, slideTitle, docTitle, slideCounter, totalSlides, includeNotes) {
   const s = pres.addSlide();
   s.background = { color: COLORS.bgLight };
   addSlideHeader(s, pres, COLORS, slideTitle, "\u{1F4CB}");
 
-  const items = metrics.slice(0, 12);
-  const rows = items.length;
-  const rowH = Math.min(3.7 / Math.max(rows, 1), 0.42);
-  const tableX = 0.3;
-  const tableY = 1.5;
-  const tableW = 9.4;
+  // Cap rows to prevent footer overlap
+  const maxRows = 10;
+  const items = metrics.slice(0, maxRows);
+  const tableX = SAFE.x1;
+  const tableY = 1.46;
+  const headerH = 0.38;
+  // Calculate row height to fit within safe zone
+  const availH = 5.15 - tableY - headerH;
+  const rowH = Math.min(availH / Math.max(items.length, 1), 0.42);
 
-  // Table header
-  s.addShape("roundRect", { x: tableX, y: tableY, w: tableW, h: 0.42, fill: { color: COLORS.bgDark }, line: { color: COLORS.bgDark }, rectRadius: 0.04 });
-  s.addText("METRIC", { x: tableX + 0.2, y: tableY, w: 5.5, h: 0.42, fontSize: 10, color: COLORS.accent, bold: true, fontFace: "Calibri", charSpacing: 1, valign: "middle" });
-  s.addText("VALUE", { x: tableX + 5.8, y: tableY, w: 3.5, h: 0.42, fontSize: 10, color: COLORS.accent, bold: true, fontFace: "Calibri", charSpacing: 1, valign: "middle" });
+  // Header row
+  s.addShape("roundRect", { x: tableX, y: tableY, w: SAFE.w, h: headerH, fill: { color: COLORS.bgDark }, line: { color: COLORS.bgDark }, rectRadius: 0.04 });
+  s.addText("METRIC", { x: tableX + 0.18, y: tableY, w: 5.5, h: headerH, fontSize: 9.5, color: COLORS.accent, bold: true, fontFace: "Calibri", charSpacing: 1, valign: "middle" });
+  s.addText("VALUE", { x: tableX + 5.85, y: tableY, w: 3.4, h: headerH, fontSize: 9.5, color: COLORS.accent, bold: true, fontFace: "Calibri", charSpacing: 1, valign: "middle" });
 
   items.forEach((m, i) => {
-    const y = tableY + 0.44 + i * rowH;
+    const y = tableY + headerH + i * rowH;
     const isAlt = i % 2 === 1;
-    s.addShape("rect", { x: tableX, y, w: tableW, h: rowH, fill: { color: isAlt ? COLORS.cardAlt : COLORS.cardBg }, line: { color: COLORS.border } });
+    s.addShape("rect", { x: tableX, y, w: SAFE.w, h: rowH, fill: { color: isAlt ? COLORS.cardAlt : COLORS.cardBg }, line: { color: COLORS.border } });
     // Accent dot
-    s.addShape(pres.shapes.OVAL, { x: tableX + 0.1, y: y + rowH * 0.3, w: 0.1, h: 0.1, fill: { color: COLORS.teal }, line: { color: COLORS.teal } });
-    s.addText(m.label, { x: tableX + 0.3, y, w: 5.3, h: rowH, fontSize: 11, color: COLORS.textDark, fontFace: "Calibri", valign: "middle" });
-    s.addText(m.value, { x: tableX + 5.8, y, w: 3.5, h: rowH, fontSize: 11, color: COLORS.chart2, fontFace: "Cambria", bold: true, valign: "middle" });
+    s.addShape(pres.shapes.OVAL, { x: tableX + 0.1, y: y + rowH * 0.35, w: 0.09, h: 0.09, fill: { color: COLORS.teal }, line: { color: COLORS.teal } });
+    s.addText(m.label.slice(0, 50), {
+      x: tableX + 0.28, y, w: 5.4, h: rowH,
+      fontSize: 10.5, color: COLORS.textDark, fontFace: "Calibri", valign: "middle",
+    });
+    s.addText(m.value.slice(0, 30), {
+      x: tableX + 5.85, y, w: 3.4, h: rowH,
+      fontSize: 10.5, color: COLORS.chart2, fontFace: "Cambria", bold: true, valign: "middle",
+    });
   });
 
-  // Bottom border
-  s.addShape("rect", { x: tableX, y: tableY + 0.44 + rows * rowH - 0.01, w: tableW, h: 0.04, fill: { color: COLORS.accent, transparency: 60 }, line: { color: COLORS.accent, transparency: 60 } });
+  // Bottom accent line
+  const bottomY = tableY + headerH + items.length * rowH;
+  if (bottomY < 5.18) {
+    s.addShape("rect", { x: tableX, y: bottomY - 0.02, w: SAFE.w, h: 0.03, fill: { color: COLORS.accent, transparency: 60 }, line: { color: COLORS.accent, transparency: 60 } });
+  }
 
   addFooter(s, COLORS, docTitle, slideCounter, totalSlides);
   if (includeNotes) s.addNotes(`Data Table: ${slideTitle}\n${items.map(m => `${m.label}: ${m.value}`).join("\n")}`);
@@ -776,34 +958,25 @@ function buildDeck({ summary, docTitle, heroTitle, theme, detail, chartDensityCo
     /key metrics|financial summary|account overview|key transactions|fees|alerts/i.test(sl.title)
   );
 
-  // Find slides with chart-able numeric data
   const chartCandidates = contentSlides.filter(sl => {
     const cd = extractChartData(sl.metrics);
     return cd && cd.length >= 2;
   });
 
-  // Date-heavy slides for timeline
   const dateCandidates = contentSlides.filter(sl =>
     /date|deadline|period|schedule/i.test(sl.title) && sl.metrics.length >= 2
   );
 
-  // Big metric slide for KPI dashboard
   const kpiCandidate = contentSlides.find(sl =>
     sl.metrics.length >= 4 && /metric|overview|summary|balance|account|kpi|perform/i.test(sl.title)
   );
 
-  // Data table candidate (slide with many metrics but no clear chart data)
   const tableCandidate = contentSlides.find(sl =>
     sl.metrics.length >= 6 && !chartCandidates.includes(sl)
   );
 
-  // Slides with enough metrics for comparison
   const compCandidates = contentSlides.filter(sl => sl.metrics.length >= 3);
-
-  // Slides with sequential numeric data (for line chart)
   const lineCandidates = chartCandidates.filter(sl => extractChartData(sl.metrics) && extractChartData(sl.metrics).length >= 4);
-
-  // Radar candidates (5+ metrics, analysis-style)
   const radarCandidates = contentSlides.filter(sl =>
     sl.metrics.length >= 5 && /analysis|score|rate|performance|compare|assess/i.test(sl.title)
   );
@@ -818,19 +991,16 @@ function buildDeck({ summary, docTitle, heroTitle, theme, detail, chartDensityCo
   const hasComparison = compCandidates.length >= 2 && (isBankingContent || forceCharts);
   const hasSectionDividers = contentSlides.length >= 4;
 
-  // How many chart slides (bar/pie/line/radar/stacked) to add
-  const numBarPie = Math.min(chartCandidates.length, Math.ceil(maxCharts * 0.5));
-  const numLine   = Math.min(lineCandidates.length, Math.ceil(maxCharts * 0.25));
-  const numRadar  = Math.min(radarCandidates.length, Math.ceil(maxCharts * 0.15));
+  const numBarPie  = Math.min(chartCandidates.length, Math.ceil(maxCharts * 0.5));
+  const numLine    = Math.min(lineCandidates.length, Math.ceil(maxCharts * 0.25));
+  const numRadar   = Math.min(radarCandidates.length, Math.ceil(maxCharts * 0.15));
   const numStacked = (chartCandidates.length >= 3 && maxCharts > 2) ? 1 : 0;
   const totalExtraCharts = Math.min(numBarPie + numLine + numRadar + numStacked, maxCharts);
 
-  // Section divider count (every 4 content slides)
   const numDividers = hasSectionDividers ? Math.floor(contentSlides.length / 4) : 0;
 
-  // Estimate total slides
   const totalSlides =
-    1                                        // cover
+    1
     + (showAgenda ? 1 : 0)
     + (hasKpi ? 1 : 0)
     + numDividers
@@ -840,7 +1010,7 @@ function buildDeck({ summary, docTitle, heroTitle, theme, detail, chartDensityCo
     + (hasDataTable ? 1 : 0)
     + (hasComparison ? 1 : 0)
     + (conclusionSlide ? 1 : 0)
-    + 1;                                     // closing
+    + 1;
 
   let slideCounter = 1;
   const pres = new pptxgen();
@@ -851,16 +1021,13 @@ function buildDeck({ summary, docTitle, heroTitle, theme, detail, chartDensityCo
   const coverSlide = pres.addSlide();
   coverSlide.background = { color: COLORS.bgDark };
 
-  // Premium decorative elements
   coverSlide.addShape(pres.shapes.OVAL, { x: 7.8, y: -1.0, w: 3.5, h: 3.5, fill: { color: COLORS.accent, transparency: 75 }, line: { color: COLORS.accent, transparency: 75 } });
   coverSlide.addShape(pres.shapes.OVAL, { x: -0.5, y: 4.0, w: 2.0, h: 2.0, fill: { color: COLORS.teal, transparency: 80 }, line: { color: COLORS.teal, transparency: 80 } });
   coverSlide.addShape(pres.shapes.OVAL, { x: 4.5, y: 3.5, w: 1.2, h: 1.2, fill: { color: COLORS.chart3, transparency: 85 }, line: { color: COLORS.chart3, transparency: 85 } });
   coverSlide.addShape(pres.shapes.OVAL, { x: 6.0, y: 2.5, w: 0.6, h: 0.6, fill: { color: COLORS.chart6, transparency: 80 }, line: { color: COLORS.chart6, transparency: 80 } });
 
-  // Accent bar
-  coverSlide.addShape(pres.shapes.RECTANGLE, { x: 0.6, y: 2.8, w: 1.6, h: 0.06, fill: { color: COLORS.accent }, line: { color: COLORS.accent } });
+  coverSlide.addShape(pres.shapes.RECTANGLE, { x: 0.6, y: 2.8, w: 1.6, h: 0.05, fill: { color: COLORS.accent }, line: { color: COLORS.accent } });
 
-  // Text content
   coverSlide.addText("AI DOCUMENT SUMMARY", { x: 0.6, y: 1.35, w: 8.8, h: 0.5, fontSize: 11, color: COLORS.accent, bold: true, charSpacing: 4, fontFace: "Calibri" });
   coverSlide.addText(heroTitle, { x: 0.6, y: 1.82, w: 8.8, h: 1.15, fontSize: 34, color: COLORS.textLight, bold: true, fontFace: "Cambria", lineSpacing: 40 });
   coverSlide.addText("Powered by AI Document Summarizer", { x: 0.6, y: 3.05, w: 8.8, h: 0.45, fontSize: 13, color: "A0B0D0", fontFace: "Calibri" });
@@ -868,7 +1035,7 @@ function buildDeck({ summary, docTitle, heroTitle, theme, detail, chartDensityCo
   const today = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
   const totalContentSections = contentSlides.length + (conclusionSlide ? 1 : 0);
   coverSlide.addText(`${today}  \u2022  ${totalContentSections} sections  \u2022  ${totalSlides} slides  \u2022  AI-generated`, {
-    x: 0.6, y: 4.75, w: 8.8, h: 0.42, fontSize: 11, color: "6A80A8", fontFace: "Calibri"
+    x: 0.6, y: 4.75, w: 8.8, h: 0.42, fontSize: 11, color: "6A80A8", fontFace: "Calibri",
   });
   if (includeNotes) coverSlide.addNotes(`Cover slide for "${docTitle}". Generated ${today}. ${totalContentSections} sections, ${totalSlides} total slides.`);
 
@@ -881,29 +1048,36 @@ function buildDeck({ summary, docTitle, heroTitle, theme, detail, chartDensityCo
     const all = conclusionSlide ? [...contentSlides, conclusionSlide] : contentSlides;
     const cols = 2;
     const rows = Math.ceil(all.length / cols);
-    const gap = 0.2;
-    const cardW = (9.4 - gap) / cols;
-    const cardH = Math.min((3.75 - gap * (rows - 1)) / rows, 0.85);
+    const gap = 0.18;
+    const cardW = (SAFE.w - gap) / cols;
+    // Card height must fit all rows within safe zone
+    const availH = 5.12 - SAFE.y1;
+    const cardH = Math.min((availH - gap * (rows - 1)) / rows, 0.82);
+
     all.forEach((sec, i) => {
       const col = i % cols;
       const row = Math.floor(i / cols);
-      const x = 0.3 + col * (cardW + gap);
-      const y = 1.55 + row * (cardH + gap);
+      const x = SAFE.x1 + col * (cardW + gap);
+      const y = SAFE.y1 + row * (cardH + gap);
+      if (y + cardH > 5.14) return;  // guard overflow
       agenda.addShape("roundRect", { x, y, w: cardW, h: cardH, fill: { color: COLORS.cardBg }, line: { color: COLORS.border }, rectRadius: 0.08 });
       agenda.addShape("rect", { x, y, w: 0.04, h: cardH, fill: { color: COLORS.accent }, line: { color: COLORS.accent } });
-      agenda.addText(sec.icon, { x: x + 0.15, y, w: 0.55, h: cardH, fontSize: 18, valign: "middle", align: "center" });
-      agenda.addText(`${i + 1}.  ${sec.title}`, { x: x + 0.65, y, w: cardW - 0.8, h: cardH, fontSize: 12, color: COLORS.textDark, bold: true, fontFace: "Calibri", valign: "middle" });
+      agenda.addText(sec.icon, { x: x + 0.12, y, w: 0.5, h: cardH, fontSize: 17, valign: "middle", align: "center" });
+      agenda.addText(`${i + 1}.  ${sec.title}`, {
+        x: x + 0.58, y: y + 0.04, w: cardW - 0.7, h: cardH - 0.08,
+        fontSize: 11.5, color: COLORS.textDark, bold: true, fontFace: "Calibri", valign: "middle",
+      });
     });
     addFooter(agenda, COLORS, docTitle, ++slideCounter, totalSlides);
     if (includeNotes) agenda.addNotes(`Agenda: ${all.map(sl => sl.title).join(", ")}`);
   }
 
-  // ── KPI DASHBOARD (early in deck) ─────────────────────────────────────────
+  // ── KPI DASHBOARD ────────────────────────────────────────────────────────
   if (hasKpi) {
     addKpiSlide(pres, COLORS, kpiCandidate.metrics, docTitle, ++slideCounter, totalSlides, includeNotes);
   }
 
-  // ── CONTENT SLIDES with inline chart injection ────────────────────────────
+  // ── CONTENT SLIDES ────────────────────────────────────────────────────────
   const chartSlidesSoFar = new Set();
   let barPieCount = 0;
   let lineCount = 0;
@@ -912,13 +1086,13 @@ function buildDeck({ summary, docTitle, heroTitle, theme, detail, chartDensityCo
   let dividerCount = 0;
 
   contentSlides.forEach((slide, slideIdx) => {
-    // Insert section divider every 4 slides
+    // Section divider every 4 slides
     if (hasSectionDividers && slideIdx > 0 && slideIdx % 4 === 0 && dividerCount < numDividers) {
       const nextSection = contentSlides[slideIdx];
       addSectionDivider(
         pres, COLORS,
         nextSection.title,
-        nextSection.body ? nextSection.body.slice(0, 160) : "",
+        nextSection.body ? nextSection.body.slice(0, 140) : "",
         docTitle, ++slideCounter, totalSlides, includeNotes
       );
       dividerCount++;
@@ -934,53 +1108,71 @@ function buildDeck({ summary, docTitle, heroTitle, theme, detail, chartDensityCo
     const maxB    = detail.maxBullets;
     const bodyLen = detail.bodyLen;
 
+    // Content starts at y:1.4, ends at y:5.18 (footer at 5.25)
+    const contentY = SAFE.y1;
+    const contentH = 5.18 - contentY;  // 3.78"
+
     if (hasMetrics) {
       const leftoverText = hasBody
-        ? slide.body.slice(0, 220)
-        : (hasBullets ? slide.bullets.slice(0, 2).join(" \u2022 ").slice(0, 220) : "");
-      const gridH = leftoverText ? 3.05 : 3.75;
-      addMetricsGrid(s, COLORS, slide.metrics, 1.55, gridH);
+        ? slide.body.slice(0, 200)
+        : (hasBullets ? slide.bullets.slice(0, 2).join(" \u2022 ").slice(0, 200) : "");
+      const noteH = leftoverText ? 0.55 : 0;
+      const gridH = contentH - noteH - (leftoverText ? 0.12 : 0);
+      addMetricsGrid(s, COLORS, slide.metrics, contentY, gridH);
       if (leftoverText) {
-        s.addShape("roundRect", { x: 0.3, y: 1.55 + gridH + 0.1, w: 9.4, h: 0.65, fill: { color: COLORS.cardAlt }, line: { color: COLORS.border }, rectRadius: 0.06 });
-        s.addText(leftoverText, { x: 0.5, y: 1.6 + gridH + 0.1, w: 9.0, h: 0.55, fontSize: 11, italic: true, color: COLORS.textMuted, fontFace: "Calibri", valign: "middle" });
+        const noteY = contentY + gridH + 0.1;
+        s.addShape("roundRect", { x: SAFE.x1, y: noteY, w: SAFE.w, h: noteH, fill: { color: COLORS.cardAlt }, line: { color: COLORS.border }, rectRadius: 0.06 });
+        s.addText(leftoverText, {
+          x: SAFE.x1 + 0.18, y: noteY + 0.05, w: SAFE.w - 0.3, h: noteH - 0.1,
+          fontSize: 10.5, italic: true, color: COLORS.textMuted, fontFace: "Calibri", valign: "middle",
+        });
       }
     } else if (hasBullets && hasBody) {
       const bulletItems = slide.bullets.slice(0, maxB).map((b, i) => ({
-        text: b.slice(0, 140),
-        options: { bullet: { code: "2022", color: COLORS.teal }, breakLine: i < Math.min(slide.bullets.length, maxB) - 1, fontSize: 13, color: COLORS.textDark, paraSpaceAfter: 6 },
+        text: b.slice(0, 130),
+        options: { bullet: { code: "2022", color: COLORS.teal }, breakLine: i < Math.min(slide.bullets.length, maxB) - 1, fontSize: 12.5, color: COLORS.textDark, paraSpaceAfter: 6 },
       }));
-      s.addShape("roundRect", { x: 0.3, y: 1.55, w: 5.5, h: 3.75, fill: { color: COLORS.cardBg }, line: { color: COLORS.border }, rectRadius: 0.1, shadow: { type: "outer", color: "000000", blur: 8, offset: 2, angle: 45, opacity: 0.07 } });
-      s.addText(bulletItems, { x: 0.5, y: 1.7, w: 5.1, h: 3.45, fontFace: "Calibri", valign: "top" });
-      s.addShape("roundRect", { x: 6.0, y: 1.55, w: 3.7, h: 3.75, fill: { color: COLORS.cardAlt }, line: { color: COLORS.border }, rectRadius: 0.1, shadow: { type: "outer", color: "000000", blur: 8, offset: 2, angle: 45, opacity: 0.07 } });
-      s.addText("KEY INSIGHT", { x: 6.15, y: 1.68, w: 3.4, h: 0.35, fontSize: 10, color: COLORS.accent, bold: true, fontFace: "Calibri", charSpacing: 1 });
-      s.addShape(pres.shapes.RECTANGLE, { x: 6.15, y: 2.05, w: 3.4, h: 0.03, fill: { color: COLORS.accent, transparency: 70 }, line: { color: COLORS.accent, transparency: 70 } });
-      s.addText(slide.body.slice(0, bodyLen), { x: 6.15, y: 2.1, w: 3.4, h: 3.05, fontSize: 12, color: COLORS.textDark, fontFace: "Calibri", valign: "top" });
+      s.addShape("roundRect", { x: SAFE.x1, y: contentY, w: 5.55, h: contentH, fill: { color: COLORS.cardBg }, line: { color: COLORS.border }, rectRadius: 0.1, shadow: { type: "outer", color: "000000", blur: 8, offset: 2, angle: 45, opacity: 0.07 } });
+      s.addText(bulletItems, { x: SAFE.x1 + 0.2, y: contentY + 0.15, w: 5.15, h: contentH - 0.3, fontFace: "Calibri", valign: "top" });
+      s.addShape("roundRect", { x: 6.1, y: contentY, w: 3.6, h: contentH, fill: { color: COLORS.cardAlt }, line: { color: COLORS.border }, rectRadius: 0.1, shadow: { type: "outer", color: "000000", blur: 8, offset: 2, angle: 45, opacity: 0.07 } });
+      s.addText("KEY INSIGHT", { x: 6.24, y: contentY + 0.14, w: 3.32, h: 0.3, fontSize: 9.5, color: COLORS.accent, bold: true, fontFace: "Calibri", charSpacing: 1 });
+      s.addShape(pres.shapes.RECTANGLE, { x: 6.24, y: contentY + 0.48, w: 3.32, h: 0.02, fill: { color: COLORS.accent, transparency: 70 }, line: { color: COLORS.accent, transparency: 70 } });
+      s.addText(slide.body.slice(0, bodyLen), {
+        x: 6.24, y: contentY + 0.55, w: 3.32, h: contentH - 0.65,
+        fontSize: 11.5, color: COLORS.textDark, fontFace: "Calibri", valign: "top",
+      });
     } else if (hasBullets) {
       const bullets = slide.bullets.slice(0, maxB);
       const cols2 = bullets.length > 5 ? 2 : 1;
-      s.addShape("roundRect", { x: 0.3, y: 1.55, w: 9.4, h: 3.75, fill: { color: COLORS.cardBg }, line: { color: COLORS.border }, rectRadius: 0.1, shadow: { type: "outer", color: "000000", blur: 8, offset: 2, angle: 45, opacity: 0.07 } });
+      s.addShape("roundRect", { x: SAFE.x1, y: contentY, w: SAFE.w, h: contentH, fill: { color: COLORS.cardBg }, line: { color: COLORS.border }, rectRadius: 0.1, shadow: { type: "outer", color: "000000", blur: 8, offset: 2, angle: 45, opacity: 0.07 } });
       if (cols2 === 2) {
         const half = Math.ceil(bullets.length / 2);
         const makeItems = (arr) => arr.map((b, i) => ({
-          text: b.slice(0, 120),
-          options: { bullet: { code: "2022", color: COLORS.teal }, breakLine: i < arr.length - 1, fontSize: 13, color: COLORS.textDark, paraSpaceAfter: 8 },
+          text: b.slice(0, 110),
+          options: { bullet: { code: "2022", color: COLORS.teal }, breakLine: i < arr.length - 1, fontSize: 12.5, color: COLORS.textDark, paraSpaceAfter: 8 },
         }));
-        s.addText(makeItems(bullets.slice(0, half)), { x: 0.5, y: 1.7, w: 4.5, h: 3.45, fontFace: "Calibri", valign: "top" });
-        s.addShape(pres.shapes.RECTANGLE, { x: 5.05, y: 1.75, w: 0.02, h: 3.3, fill: { color: COLORS.border }, line: { color: COLORS.border } });
-        s.addText(makeItems(bullets.slice(half)), { x: 5.1, y: 1.7, w: 4.5, h: 3.45, fontFace: "Calibri", valign: "top" });
+        s.addText(makeItems(bullets.slice(0, half)), { x: SAFE.x1 + 0.2, y: contentY + 0.15, w: 4.45, h: contentH - 0.3, fontFace: "Calibri", valign: "top" });
+        s.addShape(pres.shapes.RECTANGLE, { x: 5.0, y: contentY + 0.18, w: 0.02, h: contentH - 0.38, fill: { color: COLORS.border }, line: { color: COLORS.border } });
+        s.addText(makeItems(bullets.slice(half)), { x: 5.12, y: contentY + 0.15, w: 4.45, h: contentH - 0.3, fontFace: "Calibri", valign: "top" });
       } else {
         const bulletItems = bullets.map((b, i) => ({
-          text: b.slice(0, 160),
-          options: { bullet: { code: "2022", color: COLORS.teal }, breakLine: i < bullets.length - 1, fontSize: 14, color: COLORS.textDark, paraSpaceAfter: 10 },
+          text: b.slice(0, 150),
+          options: { bullet: { code: "2022", color: COLORS.teal }, breakLine: i < bullets.length - 1, fontSize: 13.5, color: COLORS.textDark, paraSpaceAfter: 10 },
         }));
-        s.addText(bulletItems, { x: 0.5, y: 1.7, w: 9.0, h: 3.45, fontFace: "Calibri", valign: "top" });
+        s.addText(bulletItems, { x: SAFE.x1 + 0.2, y: contentY + 0.18, w: SAFE.w - 0.3, h: contentH - 0.3, fontFace: "Calibri", valign: "top" });
       }
     } else if (hasBody) {
-      s.addShape("roundRect", { x: 0.3, y: 1.55, w: 9.4, h: 3.75, fill: { color: COLORS.cardBg }, line: { color: COLORS.border }, rectRadius: 0.1, shadow: { type: "outer", color: "000000", blur: 8, offset: 2, angle: 45, opacity: 0.07 } });
-      s.addShape(pres.shapes.RECTANGLE, { x: 0.3, y: 1.55, w: 0.06, h: 3.75, fill: { color: COLORS.accent }, line: { color: COLORS.accent } });
-      s.addText(slide.body.slice(0, bodyLen * 2), { x: 0.55, y: 1.7, w: 8.9, h: 3.45, fontSize: 14, color: COLORS.textDark, fontFace: "Calibri", valign: "top", lineSpacing: 22 });
+      s.addShape("roundRect", { x: SAFE.x1, y: contentY, w: SAFE.w, h: contentH, fill: { color: COLORS.cardBg }, line: { color: COLORS.border }, rectRadius: 0.1, shadow: { type: "outer", color: "000000", blur: 8, offset: 2, angle: 45, opacity: 0.07 } });
+      s.addShape(pres.shapes.RECTANGLE, { x: SAFE.x1, y: contentY, w: 0.05, h: contentH, fill: { color: COLORS.accent }, line: { color: COLORS.accent } });
+      s.addText(slide.body.slice(0, bodyLen * 2), {
+        x: SAFE.x1 + 0.22, y: contentY + 0.15, w: SAFE.w - 0.3, h: contentH - 0.28,
+        fontSize: 13.5, color: COLORS.textDark, fontFace: "Calibri", valign: "top", lineSpacing: 22,
+      });
     } else {
-      s.addText("No additional details in this section.", { x: 0.5, y: 2.8, w: 9.0, h: 0.6, fontSize: 13, italic: true, color: COLORS.textMuted, fontFace: "Calibri", align: "center" });
+      s.addText("No additional details in this section.", {
+        x: SAFE.x1, y: 3.0, w: SAFE.w, h: 0.6,
+        fontSize: 13, italic: true, color: COLORS.textMuted, fontFace: "Calibri", align: "center",
+      });
     }
 
     addFooter(s, COLORS, docTitle, ++slideCounter, totalSlides);
@@ -990,27 +1182,20 @@ function buildDeck({ summary, docTitle, heroTitle, theme, detail, chartDensityCo
     if (!chartSlidesSoFar.has(slide)) {
       const cd = extractChartData(slide.metrics);
 
-      // Line chart for sequential data
       if (cd && lineCandidates.includes(slide) && lineCount < numLine) {
         addLineChartSlide(pres, COLORS, cd, `${slide.title} — Trend Analysis`, docTitle, ++slideCounter, totalSlides, includeNotes);
         chartSlidesSoFar.add(slide);
         lineCount++;
-      }
-      // Radar for analysis slides
-      else if (cd && radarCandidates.includes(slide) && radarCount < numRadar) {
+      } else if (cd && radarCandidates.includes(slide) && radarCount < numRadar) {
         addRadarChartSlide(pres, COLORS, cd, `${slide.title} — Radar Analysis`, docTitle, ++slideCounter, totalSlides, includeNotes);
         chartSlidesSoFar.add(slide);
         radarCount++;
-      }
-      // Stacked bar (once, if multiple metric slides)
-      else if (cd && !stackedDone && numStacked > 0 && chartCandidates.indexOf(slide) >= 1 && chartCandidates.length >= 3) {
+      } else if (cd && !stackedDone && numStacked > 0 && chartCandidates.indexOf(slide) >= 1 && chartCandidates.length >= 3) {
         const multiSlides = chartCandidates.slice(0, 4);
         addStackedBarChartSlide(pres, COLORS, multiSlides, "Multi-Section Comparison", docTitle, ++slideCounter, totalSlides, includeNotes);
         chartSlidesSoFar.add(slide);
         stackedDone = true;
-      }
-      // Standard bar/pie alternation
-      else if (cd && chartCandidates.includes(slide) && barPieCount < numBarPie) {
+      } else if (cd && chartCandidates.includes(slide) && barPieCount < numBarPie) {
         if (barPieCount % 3 === 0) {
           addBarChartSlide(pres, COLORS, cd, `${slide.title} — Chart View`, docTitle, ++slideCounter, totalSlides, includeNotes);
         } else if (barPieCount % 3 === 1) {
@@ -1040,7 +1225,7 @@ function buildDeck({ summary, docTitle, heroTitle, theme, detail, chartDensityCo
     addComparisonSlide(pres, COLORS, compCandidates[0], compCandidates[1], docTitle, ++slideCounter, totalSlides, includeNotes);
   }
 
-  // ── CONCLUSION / KEY TAKEAWAY SLIDE ───────────────────────────────────────
+  // ── CONCLUSION SLIDE ──────────────────────────────────────────────────────
   if (conclusionSlide) {
     const t = pres.addSlide();
     t.background = { color: COLORS.bgDark };
@@ -1049,9 +1234,12 @@ function buildDeck({ summary, docTitle, heroTitle, theme, detail, chartDensityCo
     t.addShape(pres.shapes.OVAL, { x: 5.0, y: 0.5, w: 1.0, h: 1.0, fill: { color: COLORS.chart6, transparency: 85 }, line: { color: COLORS.chart6, transparency: 85 } });
 
     t.addText("\u2705  KEY TAKEAWAY", { x: 0.8, y: 0.85, w: 8.4, h: 0.5, fontSize: 12, color: COLORS.accent, bold: true, charSpacing: 3, fontFace: "Calibri" });
-    t.addShape(pres.shapes.RECTANGLE, { x: 0.85, y: 1.55, w: 0.06, h: 2.8, fill: { color: COLORS.accent }, line: { color: COLORS.accent } });
-    const conclusionText = (conclusionSlide.body || conclusionSlide.bullets.join(" ")).slice(0, 520);
-    t.addText(conclusionText, { x: 1.15, y: 1.5, w: 7.8, h: 2.9, fontSize: 18, color: COLORS.textLight, fontFace: "Cambria", italic: true, valign: "top", lineSpacing: 26 });
+    t.addShape(pres.shapes.RECTANGLE, { x: 0.85, y: 1.55, w: 0.05, h: 2.9, fill: { color: COLORS.accent }, line: { color: COLORS.accent } });
+    const conclusionText = (conclusionSlide.body || conclusionSlide.bullets.join(" ")).slice(0, 500);
+    t.addText(conclusionText, {
+      x: 1.15, y: 1.52, w: 7.8, h: 2.95,
+      fontSize: 17, color: COLORS.textLight, fontFace: "Cambria", italic: true, valign: "top", lineSpacing: 26,
+    });
     addFooter(t, COLORS, docTitle, ++slideCounter, totalSlides);
     if (includeNotes) t.addNotes(plainTextNotes(conclusionSlide));
   }
@@ -1064,9 +1252,7 @@ function buildDeck({ summary, docTitle, heroTitle, theme, detail, chartDensityCo
   endSlide.addShape(pres.shapes.OVAL, { x: 4.0, y: 2.0, w: 1.5, h: 1.5, fill: { color: COLORS.chart3, transparency: 85 }, line: { color: COLORS.chart3, transparency: 85 } });
   endSlide.addShape(pres.shapes.OVAL, { x: 2.5, y: 0.5, w: 0.8, h: 0.8, fill: { color: COLORS.chart6, transparency: 85 }, line: { color: COLORS.chart6, transparency: 85 } });
 
-  // Horizontal accent line
-  endSlide.addShape(pres.shapes.RECTANGLE, { x: 2.5, y: 2.9, w: 5.0, h: 0.05, fill: { color: COLORS.accent, transparency: 60 }, line: { color: COLORS.accent, transparency: 60 } });
-
+  endSlide.addShape(pres.shapes.RECTANGLE, { x: 2.5, y: 2.9, w: 5.0, h: 0.04, fill: { color: COLORS.accent, transparency: 60 }, line: { color: COLORS.accent, transparency: 60 } });
   endSlide.addText("Thank You", { x: 1, y: 1.5, w: 8, h: 1.2, fontSize: 46, color: COLORS.textLight, bold: true, fontFace: "Cambria", align: "center" });
   endSlide.addText("Summary generated by AI Document Summarizer", { x: 1, y: 3.05, w: 8, h: 0.5, fontSize: 14, color: "7A90B8", align: "center", fontFace: "Calibri" });
   endSlide.addText(today, { x: 1, y: 3.55, w: 8, h: 0.35, fontSize: 11, color: "5A6A8A", align: "center", fontFace: "Calibri" });
@@ -1186,7 +1372,7 @@ router.get("/presentations", async (req, res) => {
   }
 });
 
-// ── GET /presentations/:id/download (PPTX) ───────────────────────────────────
+// ── GET /presentations/:id/download ──────────────────────────────────────────
 router.get("/presentations/:id/download", async (req, res) => {
   try {
     if (!req.user) return res.status(401).json({ message: "Not authenticated" });

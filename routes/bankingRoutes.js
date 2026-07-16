@@ -314,6 +314,8 @@ router.get('/history/:id/export', async (req, res) => {
     }
 
     // ── PPT ──────────────────────────────────────────────────────────────
+
+    // ── PPT ──────────────────────────────────────────────────────────────
     if (format === 'ppt') {
       const pptxgen = require('pptxgenjs');
       const A = doc.analytics || {};
@@ -321,30 +323,27 @@ router.get('/history/:id/export', async (req, res) => {
       pres.layout = 'LAYOUT_16x9';
       pres.title = `Banking Report - ${doc.filename}`;
 
-      // ── Design tokens ──────────────────────────────────────────────────
+      // ── Design tokens ─────────────────────────────────────────────────
       const C = {
-        bgDark:   '0D1B2A',   // midnight navy (dominant)
-        bgLight:  'F0F6FF',   // cool near-white content bg
-        bgMid:    'E6EEF8',   // card alt
-        accent:   '00B4D8',   // vivid cyan accent
-        accentAlt:'0077B6',   // deeper teal
-        green:    '10B981',   // credits / positive
-        red:      'EF4444',   // debits / negative
-        amber:    'F59E0B',   // anomaly / warning
-        purple:   '8B5CF6',   // category 3
-        textLight:'FFFFFF',
-        textDark: '0D1B2A',
-        textMuted:'4A6080',
-        border:   'CBD5E1',
-        card:     'FFFFFF',
-        chart: ['00B4D8','10B981','F59E0B','EF4444','8B5CF6','06B6D4','F97316','84CC16'],
+        navy:     '0A1F44',
+        blue:     '1565C0',
+        teal:     '00838F',
+        green:    '1B8A5A',
+        red:      'C62828',
+        gold:     'F9A825',
+        white:    'FFFFFF',
+        gray1:    'F5F7FA',
+        gray2:    'CFD8DC',
+        gray3:    '546E7A',
+        light:    'E8F0FE',
+        chart: ['00838F','1565C0','F9A825','C62828','6A1B9A','F57C00','1B8A5A','0288D1'],
       };
 
       const fmt = n => n != null
-        ? Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+        ? Number(n).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
         : '0.00';
 
-      const today = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+      const today = new Date().toLocaleDateString('en-IN', { year: 'numeric', month: 'long', day: 'numeric' });
 
       // Precompute category data
       const catRaw = A.categoryBreakdown instanceof Map
@@ -356,12 +355,14 @@ router.get('/history/:id/export', async (req, res) => {
       // Monthly flow
       const monthly = (A.monthlyFlow || []).slice(-6);
 
-      // Count slides for footer
+      // Count total slides
       const TOTAL =
         1  // cover
         + 1  // KPI dashboard
-        + (monthly.length > 0 ? 1 : 0)   // cash flow chart
-        + (catData.length > 0 ? 1 : 0)   // category doughnut
+        + 1  // credits vs debits bar chart
+        + (monthly.length > 0 ? 1 : 0)   // monthly cash flow
+        + (catData.length > 0 ? 1 : 0)   // category chart
+        + (catData.length > 0 ? 1 : 0)   // category bar ranking
         + 1  // transaction table
         + (A.anomalyCount > 0 ? 1 : 0)   // anomalies
         + (doc.summary ? 1 : 0)           // AI summary
@@ -369,570 +370,458 @@ router.get('/history/:id/export', async (req, res) => {
 
       let sc = 0;
 
+      // ── Shared helpers ─────────────────────────────────────────────────
       function addFooter(s, docName, idx, total) {
-        s.addText(docName, {
-          x: 0.3, y: 5.32, w: 7, h: 0.22,
-          fontSize: 8, color: C.textMuted, fontFace: 'Calibri',
+        s.addShape('rect', {
+          x: 0, y: 5.32, w: 10, h: 0.3,
+          fill: { color: C.navy }, line: { color: C.navy },
         });
-        s.addShape('roundRect', {
-          x: 8.8, y: 5.25, w: 0.9, h: 0.3,
-          fill: { color: C.accent }, line: { color: C.accent }, rectRadius: 0.15,
+        s.addText(`AI Document Summarizer  •  ${docName}  •  ${today}`, {
+          x: 0.3, y: 5.32, w: 7.5, h: 0.3,
+          fontSize: 8.5, color: 'A0B8CC', fontFace: 'Calibri', valign: 'middle',
         });
         s.addText(`${idx} / ${total}`, {
-          x: 8.8, y: 5.25, w: 0.9, h: 0.3,
-          fontSize: 8.5, color: C.textLight, bold: true, align: 'center', valign: 'middle', fontFace: 'Calibri',
+          x: 9.2, y: 5.32, w: 0.7, h: 0.3,
+          fontSize: 8.5, color: C.white, bold: true, align: 'right', valign: 'middle', fontFace: 'Calibri',
         });
       }
 
-      // ── Slide 1: Cover ────────────────────────────────────────────────
+      function addHeader(s, title, subtitle) {
+        s.addShape('rect', {
+          x: 0, y: 0, w: 10, h: 1.08,
+          fill: { color: C.navy }, line: { color: C.navy },
+        });
+        s.addShape('rect', {
+          x: 0, y: 1.08, w: 10, h: 0.055,
+          fill: { color: C.gold }, line: { color: C.gold },
+        });
+        s.addText(title, {
+          x: 0.4, y: 0.08, w: 8.8, h: 0.56,
+          fontSize: 26, bold: true, color: C.white, fontFace: 'Calibri', valign: 'middle',
+        });
+        if (subtitle) {
+          s.addText(subtitle, {
+            x: 0.4, y: 0.63, w: 8.8, h: 0.36,
+            fontSize: 12, color: 'B0C8E0', fontFace: 'Calibri',
+          });
+        }
+        s.background = { color: C.gray1 };
+      }
+
+      function kpiCard(s, x, y, w, h, icon, label, value, accent) {
+        s.addShape('roundRect', {
+          x, y, w, h, rectRadius: 0.08,
+          fill: { color: C.white },
+          line: { color: C.gray2 },
+          shadow: { type: 'outer', blur: 6, offset: 2, angle: 90, color: 'BBBBBB', opacity: 0.35 },
+        });
+        s.addShape('rect', { x, y, w, h: 0.07, fill: { color: accent }, line: { color: accent } });
+        s.addText(icon, {
+          x, y: y + 0.1, w, h: 0.38,
+          fontSize: 20, align: 'center', valign: 'middle',
+        });
+        s.addText(label, {
+          x: x + 0.08, y: y + 0.5, w: w - 0.16, h: 0.26,
+          fontSize: 8.5, color: C.gray3, align: 'center', bold: true, fontFace: 'Calibri',
+        });
+        s.addText(value, {
+          x: x + 0.06, y: y + 0.76, w: w - 0.12, h: 0.4,
+          fontSize: 12.5, color: C.navy, align: 'center', bold: true, fontFace: 'Calibri', autoFit: true,
+        });
+      }
+
+      const docTitle = (doc.filename || 'Financial Document').replace(/\.[^/.]+$/, '');
+
+      // ── Slide 1: Professional Cover ────────────────────────────────────
       ++sc;
       const s1 = pres.addSlide();
-      s1.background = { color: C.bgDark };
+      s1.background = { color: C.navy };
 
-      // Decorative circles
-      s1.addShape(pres.shapes.OVAL, { x: 7.2, y: -1.2, w: 4.5, h: 4.5, fill: { color: C.accent, transparency: 82 }, line: { color: C.accent, transparency: 82 } });
-      s1.addShape(pres.shapes.OVAL, { x: -0.8, y: 3.8, w: 2.8, h: 2.8, fill: { color: C.accentAlt, transparency: 80 }, line: { color: C.accentAlt, transparency: 80 } });
-      s1.addShape(pres.shapes.OVAL, { x: 4.5, y: 3.2, w: 1.2, h: 1.2, fill: { color: C.green, transparency: 85 }, line: { color: C.green, transparency: 85 } });
+      // Right panel accent
+      s1.addShape('rect', { x: 7.0, y: 0, w: 3.0, h: 5.625, fill: { color: C.blue }, line: { color: C.blue } });
+      s1.addShape('rect', { x: 0, y: 5.05, w: 10, h: 0.575, fill: { color: C.gold }, line: { color: C.gold } });
 
-      // Tag line
-      s1.addText('BANKING ANALYSIS REPORT', {
-        x: 0.65, y: 1.2, w: 8.5, h: 0.44,
-        fontSize: 11, color: C.accent, bold: true, charSpacing: 4, fontFace: 'Calibri',
-      });
+      // Brand badge
+      s1.addShape('roundRect', { x: 7.3, y: 0.45, w: 2.4, h: 0.65, rectRadius: 0.05, fill: { color: '0A2A5A' }, line: { color: '0A2A5A' } });
+      s1.addText('🏦 AI DOCUMENT SUMMARIZER', { x: 7.15, y: 0.47, w: 2.7, h: 0.6, fontSize: 7, color: C.white, align: 'center', bold: true, fontFace: 'Calibri' });
 
-      // Main title
-      const docTitle = (doc.filename || 'Financial Document').replace(/\.[^/.]+$/, '');
-      s1.addText(docTitle, {
-        x: 0.65, y: 1.65, w: 8.5, h: 1.3,
-        fontSize: 36, color: C.textLight, bold: true, fontFace: 'Cambria', lineSpacing: 42,
-      });
+      s1.addText('BANKING ANALYSIS', { x: 0.55, y: 1.15, w: 6.2, h: 0.62, fontSize: 34, bold: true, color: C.gold, fontFace: 'Calibri' });
+      s1.addText('REPORT', { x: 0.55, y: 1.72, w: 6.2, h: 0.62, fontSize: 34, bold: true, color: C.white, fontFace: 'Calibri' });
 
-      // Meta details row
-      const metaParts = [
-        doc.bankName, doc.accountName, cur,
-        doc.periodStart ? `${doc.periodStart} \u2013 ${doc.periodEnd}` : null,
-      ].filter(Boolean);
-      s1.addText(metaParts.join('  \u2022  '), {
-        x: 0.65, y: 3.1, w: 8.5, h: 0.4,
-        fontSize: 13, color: 'A0C4E0', fontFace: 'Calibri',
-      });
+      const metaParts = [doc.bankName, doc.accountName, cur].filter(Boolean);
+      if (metaParts.length > 0) {
+        s1.addText(metaParts.join('  |  '), { x: 0.55, y: 2.55, w: 6.2, h: 0.38, fontSize: 14, color: 'A0C4E0', fontFace: 'Calibri' });
+      }
+      if (doc.periodStart) {
+        s1.addText(`Period: ${doc.periodStart} – ${doc.periodEnd}`, { x: 0.55, y: 2.95, w: 6.2, h: 0.32, fontSize: 12, color: '7A9FC0', fontFace: 'Calibri' });
+      }
 
-      // Stats preview strip
-      const previewMetrics = [
-        { label: 'Credits', val: `${cur} ${fmt(A.totalCredits)}`, color: C.green },
-        { label: 'Debits',  val: `${cur} ${fmt(A.totalDebits)}`,  color: C.red },
-        { label: 'Net Flow',val: `${cur} ${fmt(A.netCashFlow)}`,  color: A.netCashFlow >= 0 ? C.accent : C.amber },
-        { label: 'Txns',    val: String(A.transactionCount || 0), color: C.accent },
+      // Key metrics strip
+      const previewKpis = [
+        { label: 'Total Credits', val: `${cur} ${fmt(A.totalCredits)}` },
+        { label: 'Total Debits',  val: `${cur} ${fmt(A.totalDebits)}` },
+        { label: 'Net Flow',      val: `${cur} ${fmt(A.netCashFlow)}` },
+        { label: 'Transactions',  val: String(A.transactionCount || 0) },
       ];
-      previewMetrics.forEach((m, i) => {
-        const x = 0.65 + i * 2.3;
-        s1.addShape('roundRect', {
-          x, y: 3.75, w: 2.1, h: 1.1,
-          fill: { color: C.accent, transparency: 88 }, line: { color: C.accent, transparency: 55 }, rectRadius: 0.1,
-        });
-        s1.addText(m.val, {
-          x, y: 3.82, w: 2.1, h: 0.48,
-          fontSize: 14, color: m.color, bold: true, fontFace: 'Cambria', align: 'center', valign: 'middle',
-        });
-        s1.addText(m.label, {
-          x, y: 4.32, w: 2.1, h: 0.28,
-          fontSize: 9, color: 'A0C4E0', fontFace: 'Calibri', align: 'center',
-        });
+      previewKpis.forEach((m, i) => {
+        const x = 0.55 + i * 1.58;
+        s1.addShape('roundRect', { x, y: 3.5, w: 1.42, h: 1.0, rectRadius: 0.06, fill: { color: '0D2E5C' }, line: { color: '1A4A80' } });
+        s1.addText(m.val, { x, y: 3.55, w: 1.42, h: 0.45, fontSize: 12, bold: true, color: C.gold, align: 'center', fontFace: 'Calibri', autoFit: true });
+        s1.addText(m.label, { x, y: 4.0, w: 1.42, h: 0.3, fontSize: 8, color: '8AABCC', align: 'center', fontFace: 'Calibri' });
       });
 
-      s1.addText(`Powered by AI Document Summarizer  \u2022  ${today}`, {
-        x: 0.65, y: 5.05, w: 8.5, h: 0.28,
-        fontSize: 9, color: '5A7A9A', fontFace: 'Calibri',
-      });
+      s1.addText(`Generated  •  ${today}`, { x: 0.55, y: 5.1, w: 6, h: 0.28, fontSize: 9, color: C.navy, fontFace: 'Calibri' });
 
-      // ── Slide 2: KPI Dashboard ─────────────────────────────────────────
+      // ── Slide 2: KPI Dashboard (8 cards 4x2) ──────────────────────────
       ++sc;
       const s2 = pres.addSlide();
-      s2.background = { color: C.bgDark };
-
-      // Corner decorations
-      s2.addShape(pres.shapes.OVAL, { x: 8.0, y: -0.8, w: 2.8, h: 2.8, fill: { color: C.accent, transparency: 82 }, line: { color: C.accent, transparency: 82 } });
-      s2.addShape(pres.shapes.OVAL, { x: -0.5, y: 4.5, w: 1.8, h: 1.8, fill: { color: C.accentAlt, transparency: 80 }, line: { color: C.accentAlt, transparency: 80 } });
-
-      s2.addText('KEY PERFORMANCE INDICATORS', {
-        x: 0.4, y: 0.22, w: 9.2, h: 0.4,
-        fontSize: 10, color: C.accent, bold: true, charSpacing: 3, fontFace: 'Calibri',
-      });
-
-      const kpiItems = [
-        { label: 'TOTAL CREDITS',    val: `${cur} ${fmt(A.totalCredits)}`,        color: C.green,    icon: '\u25B2' },
-        { label: 'TOTAL DEBITS',     val: `${cur} ${fmt(A.totalDebits)}`,          color: C.red,      icon: '\u25BC' },
-        { label: 'NET CASH FLOW',    val: `${cur} ${fmt(A.netCashFlow)}`,          color: A.netCashFlow >= 0 ? C.accent : C.amber, icon: '\u2194' },
-        { label: 'TRANSACTIONS',     val: String(A.transactionCount || 0),         color: C.accent,   icon: '#' },
-        { label: 'LARGEST CREDIT',   val: `${cur} ${fmt(A.largestCredit)}`,        color: C.green,    icon: '\u2B06' },
-        { label: 'LARGEST DEBIT',    val: `${cur} ${fmt(A.largestDebit)}`,         color: C.red,      icon: '\u2B07' },
-        { label: 'AVG TRANSACTION',  val: `${cur} ${fmt(A.avgTransactionAmount)}`, color: C.accent,   icon: '\u2248' },
-        { label: 'ANOMALIES FOUND',  val: String(A.anomalyCount || 0),             color: A.anomalyCount > 0 ? C.amber : C.green, icon: '\u26A0' },
-      ];
-
-      const cols3 = 4, rows3 = 2;
-      const gapX = 0.18, gapY = 0.18;
-      const cW = (9.2 - gapX * (cols3 - 1)) / cols3;
-      const cH = (4.45 - gapY * (rows3 - 1)) / rows3;
-
-      kpiItems.forEach((m, i) => {
-        const col = i % cols3, row = Math.floor(i / cols3);
-        const x = 0.4 + col * (cW + gapX);
-        const y = 0.78 + row * (cH + gapY);
-        s2.addShape('roundRect', {
-          x, y, w: cW, h: cH,
-          fill: { color: m.color, transparency: 88 }, line: { color: m.color, transparency: 55 }, rectRadius: 0.12,
-        });
-        s2.addText(m.label, {
-          x: x + 0.18, y: y + 0.12, w: cW - 0.36, h: 0.28,
-          fontSize: 8.5, color: m.color, bold: true, fontFace: 'Calibri', charSpacing: 0.5,
-        });
-        s2.addText(m.val, {
-          x: x + 0.18, y: y + 0.42, w: cW - 0.36, h: cH - 0.6,
-          fontSize: 16, color: C.textLight, bold: true, fontFace: 'Cambria', valign: 'top', autoFit: true,
-        });
-        // Trend arrow in top-right
-        s2.addText(m.icon, {
-          x: x + cW - 0.38, y: y + 0.1, w: 0.28, h: 0.28,
-          fontSize: 10, color: m.color, fontFace: 'Calibri', align: 'center',
-        });
-      });
-
+      addHeader(s2, 'KEY PERFORMANCE INDICATORS', `Financial snapshot  |  ${cur}`);
       addFooter(s2, docTitle, sc, TOTAL);
 
-      // ── Slide 3: Monthly Cash Flow (native chart) ─────────────────────
+      const kpiDefs = [
+        { icon: '💰', label: 'TOTAL CREDITS',    val: `${cur} ${fmt(A.totalCredits)}`,        accent: C.teal  },
+        { icon: '💸', label: 'TOTAL DEBITS',      val: `${cur} ${fmt(A.totalDebits)}`,          accent: C.red   },
+        { icon: '📈', label: 'NET CASH FLOW',     val: `${cur} ${fmt(A.netCashFlow)}`,          accent: C.blue  },
+        { icon: '🔢', label: 'TRANSACTIONS',      val: String(A.transactionCount || 0),         accent: C.gold  },
+        { icon: '⬆️', label: 'LARGEST CREDIT',   val: `${cur} ${fmt(A.largestCredit)}`,        accent: C.teal  },
+        { icon: '⬇️', label: 'LARGEST DEBIT',    val: `${cur} ${fmt(A.largestDebit)}`,         accent: C.red   },
+        { icon: '⚖️', label: 'AVG TRANSACTION',  val: `${cur} ${fmt(A.avgTransactionAmount)}`, accent: C.blue  },
+        { icon: '✅',  label: 'ANOMALIES FOUND',  val: String(A.anomalyCount || 0),             accent: A.anomalyCount > 0 ? C.gold : C.teal },
+      ];
+
+      kpiDefs.forEach((k, i) => {
+        const col = i % 4, row = Math.floor(i / 4);
+        kpiCard(s2, 0.28 + col * 2.37, 1.26 + row * 1.5, 2.18, 1.32, k.icon, k.label, k.val, k.accent);
+      });
+
+      // Health indicator bar
+      const isHealthy = (A.netCashFlow || 0) >= 0 && (A.anomalyCount || 0) === 0;
+      s2.addShape('roundRect', {
+        x: 0.28, y: 4.42, w: 9.44, h: 0.6, rectRadius: 0.06,
+        fill: { color: isHealthy ? 'E8F5E9' : 'FFF3E0' }, line: { color: isHealthy ? C.teal : C.gold },
+      });
+      s2.addShape('rect', { x: 0.28, y: 4.42, w: 0.06, h: 0.6, fill: { color: isHealthy ? C.teal : C.gold }, line: { color: isHealthy ? C.teal : C.gold } });
+      const healthMsg = isHealthy
+        ? `✅  ACCOUNT HEALTH: POSITIVE  —  Net inflow of ${cur} ${fmt(A.netCashFlow)} confirms a healthy savings surplus. No anomalies detected across ${A.transactionCount || 0} transactions.`
+        : `⚠️  ACCOUNT STATUS: REVIEW RECOMMENDED  —  ${A.anomalyCount || 0} anomaly(ies) detected. Net flow: ${cur} ${fmt(A.netCashFlow)}.`;
+      s2.addText(healthMsg, {
+        x: 0.46, y: 4.44, w: 9.1, h: 0.56,
+        fontSize: 10.5, color: isHealthy ? '2E7D32' : 'E65100', fontFace: 'Calibri', valign: 'middle',
+      });
+
+      // ── Slide 3: Credits vs Debits Comparison (Clustered Bar) ─────────
+      ++sc;
+      const s3a = pres.addSlide();
+      addHeader(s3a, 'CREDITS VS DEBITS ANALYSIS', `Total credits: ${cur} ${fmt(A.totalCredits)}  |  Total debits: ${cur} ${fmt(A.totalDebits)}`);
+      addFooter(s3a, docTitle, sc, TOTAL);
+
+      // Build comparison data from categories or simple totals
+      const creditDebitData = [
+        { name: 'Credits', labels: ['Total Credits', 'Largest Single', 'Average Credit'], values: [
+          parseFloat((A.totalCredits || 0).toFixed(2)),
+          parseFloat((A.largestCredit || 0).toFixed(2)),
+          parseFloat((A.avgTransactionAmount || 0).toFixed(2)),
+        ]},
+        { name: 'Debits', labels: ['Total Debits', 'Largest Single', 'Average Debit'], values: [
+          parseFloat((A.totalDebits || 0).toFixed(2)),
+          parseFloat((A.largestDebit || 0).toFixed(2)),
+          parseFloat((A.avgTransactionAmount || 0).toFixed(2)),
+        ]},
+      ];
+
+      s3a.addChart(pres.ChartType.bar, creditDebitData, {
+        x: 0.35, y: 1.25, w: 5.9, h: 3.85,
+        barDir: 'col', barGrouping: 'clustered',
+        chartColors: [C.teal, C.red],
+        showLegend: true, legendPos: 'b', legendFontSize: 10,
+        showValue: true,
+        dataLabelFontSize: 8,
+        dataLabelPosition: 'outEnd',
+        dataLabelColor: C.navy,
+        catAxisLabelFontSize: 10, valAxisLabelFontSize: 8.5,
+        catAxisLabelColor: C.navy, valAxisLabelColor: C.gray3,
+        catGridLine: { style: 'none' },
+        valGridLine: { style: 'dash', color: C.gray2, size: 0.5 },
+        showTitle: true, title: 'Credits vs Debits Comparison', titleFontSize: 11, titleColor: C.navy,
+      });
+
+      // Right summary panel
+      const netFlow3 = (A.netCashFlow || 0);
+      const netColor3 = netFlow3 >= 0 ? C.teal : C.red;
+      s3a.addShape('roundRect', {
+        x: 6.55, y: 1.25, w: 3.15, h: 3.85, rectRadius: 0.08,
+        fill: { color: C.white }, line: { color: C.gray2 },
+        shadow: { type: 'outer', blur: 6, offset: 2, angle: 90, color: 'BBBBBB', opacity: 0.3 },
+      });
+      s3a.addText('SUMMARY', { x: 6.7, y: 1.4, w: 2.85, h: 0.3, fontSize: 10, bold: true, color: C.navy, align: 'center', fontFace: 'Calibri', charSpacing: 1 });
+
+      const summaryRows3 = [
+        { label: 'Total Credits', val: `${cur} ${fmt(A.totalCredits)}`, color: C.teal },
+        { label: 'Total Debits',  val: `${cur} ${fmt(A.totalDebits)}`,  color: C.red  },
+        { label: 'Net Cash Flow', val: `${cur} ${fmt(A.netCashFlow)}`,  color: netColor3 },
+        { label: 'Transactions',  val: String(A.transactionCount || 0), color: C.blue },
+      ];
+      summaryRows3.forEach((row, i) => {
+        const y3 = 1.85 + i * 0.72;
+        s3a.addShape('roundRect', { x: 6.7, y: y3, w: 2.85, h: 0.62, rectRadius: 0.06, fill: { color: C.gray1 }, line: { color: C.gray2 } });
+        s3a.addText(row.label, { x: 6.78, y: y3 + 0.05, w: 2.7, h: 0.24, fontSize: 8.5, color: C.gray3, fontFace: 'Calibri', bold: true });
+        s3a.addText(row.val, { x: 6.78, y: y3 + 0.28, w: 2.7, h: 0.28, fontSize: 13, color: row.color, fontFace: 'Calibri', bold: true });
+      });
+
+      // ── Slide 4: Monthly Cash Flow Chart ──────────────────────────────
       if (monthly.length > 0) {
         ++sc;
         const s3 = pres.addSlide();
-        s3.background = { color: C.bgLight };
+        addHeader(s3, 'MONTHLY CASH FLOW OVERVIEW', 'Credits vs Debits and net flow by month');
+        addFooter(s3, docTitle, sc, TOTAL);
 
-        // Header region
-        s3.addShape('roundRect', { x: 0, y: 0, w: 10, h: 1.2, fill: { color: C.bgDark }, line: { color: C.bgDark }, rectRadius: 0 });
-        s3.addText('Monthly Cash Flow Analysis', {
-          x: 0.4, y: 0.2, w: 8.5, h: 0.7,
-          fontSize: 24, color: C.textLight, bold: true, fontFace: 'Cambria', valign: 'middle',
-        });
-        s3.addText('Credits vs Debits & Net Cash Flow Trend', {
-          x: 0.4, y: 0.75, w: 8.5, h: 0.36,
-          fontSize: 11, color: 'A0C4E0', fontFace: 'Calibri',
-        });
-
-        // Build multi-series bar chart (Credits + Debits)
-        const barData = [
-          {
-            name: 'Credits',
-            labels: monthly.map(m => m.month || ''),
-            values: monthly.map(m => +(m.credits || 0).toFixed(2)),
-          },
-          {
-            name: 'Debits',
-            labels: monthly.map(m => m.month || ''),
-            values: monthly.map(m => +(m.debits || 0).toFixed(2)),
-          },
+        const barDataMonthly = [
+          { name: 'Credits', labels: monthly.map(m => m.month || ''), values: monthly.map(m => parseFloat((m.credits || 0).toFixed(2))) },
+          { name: 'Debits',  labels: monthly.map(m => m.month || ''), values: monthly.map(m => parseFloat((m.debits  || 0).toFixed(2))) },
         ];
 
-        s3.addChart(pres.ChartType.bar, barData, {
-          x: 0.35, y: 1.32, w: 6.5, h: 3.8,
-          barDir: 'col',
-          barGrouping: 'clustered',
-          chartColors: [C.green, C.red],
-          showLegend: true,
-          legendPos: 'b',
-          legendFontSize: 10,
-          legendFontColor: C.textDark,
-          showValue: true,
-          dataLabelFontSize: 7.5,
-          dataLabelPosition: 'outEnd',
-          dataLabelColor: C.textDark,
-          catAxisLabelFontSize: 9,
-          valAxisLabelFontSize: 8,
-          catAxisLabelColor: C.textDark,
-          valAxisLabelColor: C.textMuted,
+        s3.addChart(pres.ChartType.bar, barDataMonthly, {
+          x: 0.35, y: 1.25, w: 6.2, h: 3.85,
+          barDir: 'col', barGrouping: 'clustered',
+          chartColors: [C.teal, C.red],
+          showLegend: true, legendPos: 'b', legendFontSize: 10,
+          showValue: true, dataLabelFontSize: 7.5,
+          dataLabelPosition: 'outEnd', dataLabelColor: C.navy,
+          catAxisLabelFontSize: 9.5, valAxisLabelFontSize: 8.5,
+          catAxisLabelColor: C.navy, valAxisLabelColor: C.gray3,
           catGridLine: { style: 'none' },
-          valGridLine: { style: 'dash', color: C.border, size: 0.5 },
-          plotAreaBorderColor: C.border,
-          chartAreaBorderColor: C.border,
-          showTitle: true,
-          title: 'Monthly Credits vs Debits',
-          titleFontSize: 11,
-          titleColor: C.textDark,
+          valGridLine: { style: 'dash', color: C.gray2, size: 0.5 },
+          showTitle: true, title: 'Monthly Credits vs Debits', titleFontSize: 11, titleColor: C.navy,
         });
 
-        // Net flow line on right
-        const netMax = Math.max(...monthly.map(m => Math.abs(m.net || 0)), 1);
-        const netItems = monthly.map(m => ({
-          label: m.month || '',
-          net: m.net || 0,
-          pct: m.net != null ? ((m.net / netMax) * 100).toFixed(0) : '0',
-        }));
-
-        const panelX = 7.1;
+        // Net flow panel
+        const netMax3 = Math.max(...monthly.map(m => Math.abs(m.net || 0)), 1);
+        const panelX3 = 6.85;
         s3.addShape('roundRect', {
-          x: panelX, y: 1.35, w: 2.65, h: 3.75,
-          fill: { color: C.card }, line: { color: C.border }, rectRadius: 0.1,
-          shadow: { type: 'outer', color: '000000', blur: 8, offset: 2, angle: 45, opacity: 0.07 },
+          x: panelX3, y: 1.25, w: 2.85, h: 3.85, rectRadius: 0.08,
+          fill: { color: C.white }, line: { color: C.gray2 },
+          shadow: { type: 'outer', blur: 5, offset: 2, angle: 90, color: 'BBBBBB', opacity: 0.3 },
         });
-        s3.addText('NET FLOW BY MONTH', {
-          x: panelX + 0.15, y: 1.48, w: 2.35, h: 0.3,
-          fontSize: 8.5, color: C.accent, bold: true, fontFace: 'Calibri', charSpacing: 0.5,
-        });
+        s3.addText('NET FLOW BY MONTH', { x: panelX3 + 0.12, y: 1.38, w: 2.62, h: 0.28, fontSize: 9, bold: true, color: C.navy, fontFace: 'Calibri', align: 'center', charSpacing: 0.5 });
 
-        const itemH3 = 3.1 / Math.max(netItems.length, 1);
-        netItems.forEach((item, i) => {
-          const y3 = 1.85 + i * itemH3;
-          const color3 = item.net >= 0 ? C.green : C.red;
-          s3.addText(item.label, {
-            x: panelX + 0.15, y: y3, w: 1.2, h: 0.25,
-            fontSize: 8.5, color: C.textMuted, fontFace: 'Calibri',
-          });
-          s3.addText(`${item.net >= 0 ? '+' : ''}${fmt(item.net)}`, {
-            x: panelX + 0.15, y: y3 + 0.24, w: 2.35, h: itemH3 - 0.3,
-            fontSize: 12, color: color3, bold: true, fontFace: 'Cambria',
-          });
+        const itemH4 = 3.25 / Math.max(monthly.length, 1);
+        monthly.forEach((mo, i) => {
+          const y4 = 1.75 + i * itemH4;
+          const netC = (mo.net || 0) >= 0 ? C.teal : C.red;
+          s3.addText(mo.month || '', { x: panelX3 + 0.12, y: y4, w: 1.5, h: 0.26, fontSize: 9, color: C.gray3, fontFace: 'Calibri', bold: true });
+          s3.addText(`${(mo.net || 0) >= 0 ? '+' : ''}${cur} ${fmt(mo.net)}`, { x: panelX3 + 0.12, y: y4 + 0.24, w: 2.62, h: itemH4 - 0.32, fontSize: 11.5, color: netC, bold: true, fontFace: 'Calibri' });
+          // Mini progress bar
+          if (itemH4 > 0.65) {
+            s3.addShape('roundRect', { x: panelX3 + 0.12, y: y4 + itemH4 - 0.2, w: 2.6, h: 0.1, fill: { color: C.gray2 }, line: { color: C.gray2 }, rectRadius: 0.05 });
+            const bW = Math.max((Math.abs(mo.net || 0) / netMax3) * 2.6, 0.06);
+            s3.addShape('roundRect', { x: panelX3 + 0.12, y: y4 + itemH4 - 0.2, w: bW, h: 0.1, fill: { color: netC }, line: { color: netC }, rectRadius: 0.05 });
+          }
         });
-
-        addFooter(s3, docTitle, sc, TOTAL);
+        s3.addText('*Monthly values from account transaction data.', { x: 0.35, y: 5.1, w: 6.2, h: 0.2, fontSize: 8, color: C.gray3, fontFace: 'Calibri' });
       }
 
-      // ── Slide 4: Spending by Category (native doughnut) ───────────────
+      // ── Slide 5: Spending by Category – Donut + Legend ─────────────────
       if (catData.length > 0) {
         ++sc;
         const s4 = pres.addSlide();
-        s4.background = { color: C.bgLight };
+        addHeader(s4, 'SPENDING BY CATEGORY', `Total outflows: ${cur} ${fmt(catTotal)}`);
+        addFooter(s4, docTitle, sc, TOTAL);
 
-        s4.addShape('roundRect', { x: 0, y: 0, w: 10, h: 1.2, fill: { color: C.bgDark }, line: { color: C.bgDark }, rectRadius: 0 });
-        s4.addText('Spending by Category', {
-          x: 0.4, y: 0.2, w: 8.5, h: 0.7,
-          fontSize: 24, color: C.textLight, bold: true, fontFace: 'Cambria', valign: 'middle',
-        });
-        s4.addText('Breakdown of total outflows by merchant / transaction category', {
-          x: 0.4, y: 0.76, w: 8.5, h: 0.33,
-          fontSize: 11, color: 'A0C4E0', fontFace: 'Calibri',
-        });
-
-        const pieData = [{
-          name: 'Spending',
-          labels: catData.map(([cat]) => cat.slice(0, 20)),
-          values: catData.map(([, v]) => +v.toFixed(2)),
-        }];
+        const pieData = [{ name: 'Spending', labels: catData.map(([cat]) => cat.slice(0, 20)), values: catData.map(([, v]) => parseFloat(v.toFixed(2))) }];
 
         s4.addChart(pres.ChartType.doughnut, pieData, {
-          x: 0.35, y: 1.3, w: 4.8, h: 4.0,
+          x: 0.35, y: 1.25, w: 4.6, h: 3.95,
           chartColors: C.chart.slice(0, catData.length),
           showLegend: false,
-          showValue: true,
-          dataLabelFontSize: 9,
-          dataLabelColor: 'FFFFFF',
-          holeSize: 50,
-          showTitle: true,
-          title: `Total: ${cur} ${fmt(catTotal)}`,
-          titleFontSize: 11,
-          titleColor: C.textDark,
+          showValue: true, dataLabelFontSize: 9.5, dataLabelColor: 'FFFFFF',
+          holeSize: 52,
+          showTitle: true, title: `Total: ${cur} ${fmt(catTotal)}`, titleFontSize: 10.5, titleColor: C.navy,
         });
 
-        // Side legend with amount + pct + progress bar
-        const legX = 5.45;
-        let legY = 1.35;
-        const lH = Math.min(3.85 / Math.max(catData.length, 1), 0.72);
+        // Legend cards
+        const legX = 5.25;
+        let legY = 1.28;
+        const lH = Math.min(3.88 / Math.max(catData.length, 1), 0.74);
         catData.forEach(([cat, val], i) => {
           const pct = catTotal > 0 ? (val / catTotal) * 100 : 0;
           const cc = C.chart[i % C.chart.length];
-          s4.addShape('roundRect', {
-            x: legX, y: legY, w: 4.3, h: lH - 0.06,
-            fill: { color: C.card }, line: { color: C.border }, rectRadius: 0.07,
-            shadow: { type: 'outer', color: '000000', blur: 5, offset: 1, angle: 45, opacity: 0.06 },
-          });
-          // Colour swatch
-          s4.addShape('roundRect', {
-            x: legX + 0.12, y: legY + lH * 0.22, w: 0.22, h: 0.22,
-            fill: { color: cc }, line: { color: cc }, rectRadius: 0.04,
-          });
-          s4.addText(cat, {
-            x: legX + 0.44, y: legY + 0.04, w: 2.25, h: 0.26,
-            fontSize: 9, color: C.textMuted, fontFace: 'Calibri', bold: true,
-          });
-          s4.addText(`${cur} ${fmt(val)}`, {
-            x: legX + 0.44, y: legY + 0.26, w: 2.25, h: 0.26,
-            fontSize: 11, color: C.textDark, fontFace: 'Cambria', bold: true,
-          });
-          // Percentage badge
-          s4.addText(`${pct.toFixed(1)}%`, {
-            x: legX + 3.6, y: legY + 0.1, w: 0.58, h: lH - 0.2,
-            fontSize: 12, color: cc, fontFace: 'Cambria', bold: true, align: 'right', valign: 'middle',
-          });
-          // Progress bar
-          if (lH > 0.55) {
-            s4.addShape('roundRect', {
-              x: legX + 0.44, y: legY + lH - 0.22, w: 3.2, h: 0.1,
-              fill: { color: C.border }, line: { color: C.border }, rectRadius: 0.05,
-            });
-            const barW4 = Math.max((pct / 100) * 3.2, 0.08);
-            s4.addShape('roundRect', {
-              x: legX + 0.44, y: legY + lH - 0.22, w: barW4, h: 0.1,
-              fill: { color: cc }, line: { color: cc }, rectRadius: 0.05,
-            });
+          s4.addShape('roundRect', { x: legX, y: legY, w: 4.45, h: lH - 0.06, fill: { color: C.white }, line: { color: C.gray2 }, rectRadius: 0.07, shadow: { type: 'outer', blur: 4, offset: 1, angle: 90, color: 'CCCCCC', opacity: 0.3 } });
+          s4.addShape('roundRect', { x: legX + 0.1, y: legY + lH * 0.22, w: 0.2, h: 0.2, fill: { color: cc }, line: { color: cc }, rectRadius: 0.04 });
+          s4.addText(cat, { x: legX + 0.4, y: legY + 0.05, w: 2.4, h: 0.24, fontSize: 9, color: C.gray3, fontFace: 'Calibri', bold: true });
+          s4.addText(`${cur} ${fmt(val)}`, { x: legX + 0.4, y: legY + 0.26, w: 2.4, h: 0.26, fontSize: 11, color: C.navy, fontFace: 'Calibri', bold: true });
+          s4.addText(`${pct.toFixed(1)}%`, { x: legX + 3.75, y: legY + 0.08, w: 0.6, h: lH - 0.18, fontSize: 13, color: cc, fontFace: 'Calibri', bold: true, align: 'right', valign: 'middle' });
+          if (lH > 0.56) {
+            s4.addShape('roundRect', { x: legX + 0.4, y: legY + lH - 0.2, w: 3.3, h: 0.1, fill: { color: C.gray2 }, line: { color: C.gray2 }, rectRadius: 0.05 });
+            const bW4 = Math.max((pct / 100) * 3.3, 0.07);
+            s4.addShape('roundRect', { x: legX + 0.4, y: legY + lH - 0.2, w: bW4, h: 0.1, fill: { color: cc }, line: { color: cc }, rectRadius: 0.05 });
           }
           legY += lH;
         });
 
-        addFooter(s4, docTitle, sc, TOTAL);
+        // ── Slide 6: Category Horizontal Bar Ranking ─────────────────────
+        ++sc;
+        const s4b = pres.addSlide();
+        addHeader(s4b, 'CATEGORY SPENDING RANKING', `Ranked by outflow amount  |  ${catData.length} categories`);
+        addFooter(s4b, docTitle, sc, TOTAL);
+
+        const hbarData = [{ name: 'Spending (INR)', labels: [...catData].reverse().map(([c]) => c), values: [...catData].reverse().map(([,v]) => parseFloat(v.toFixed(2))) }];
+        s4b.addChart(pres.ChartType.bar, hbarData, {
+          x: 0.35, y: 1.25, w: 9.3, h: 3.95,
+          barDir: 'bar',
+          chartColors: [...C.chart].reverse().slice(0, catData.length),
+          showLegend: false,
+          showValue: true, dataLabelFontSize: 10, dataLabelPosition: 'outEnd', dataLabelColor: C.navy,
+          catAxisLabelFontSize: 11, catAxisLabelColor: C.navy,
+          valAxisLabelFontSize: 8.5, valAxisLabelColor: C.gray3,
+          catGridLine: { style: 'none' },
+          valGridLine: { style: 'dash', color: C.gray2, size: 0.5 },
+          showTitle: true, title: 'Category Spending (Descending)', titleFontSize: 11, titleColor: C.navy,
+        });
       }
 
-      // ── Slide 5: Transaction Table ─────────────────────────────────────
+      // ── Slide 7: Transaction Table ─────────────────────────────────────
       ++sc;
       const s5 = pres.addSlide();
-      s5.background = { color: C.bgLight };
-
-      s5.addShape('roundRect', { x: 0, y: 0, w: 10, h: 1.2, fill: { color: C.bgDark }, line: { color: C.bgDark }, rectRadius: 0 });
-      s5.addText('Transaction Details', {
-        x: 0.4, y: 0.2, w: 7, h: 0.7,
-        fontSize: 24, color: C.textLight, bold: true, fontFace: 'Cambria', valign: 'middle',
-      });
-      s5.addText(`Showing top 15 of ${txs.length} transactions`, {
-        x: 0.4, y: 0.76, w: 7, h: 0.33,
-        fontSize: 11, color: 'A0C4E0', fontFace: 'Calibri',
-      });
-
-      // Summary chips in header
-      const chipData = [
-        { label: 'Total', val: String(txs.length), color: C.accent },
-        { label: 'Anomalies', val: String(A.anomalyCount || 0), color: A.anomalyCount > 0 ? C.amber : C.green },
-      ];
-      chipData.forEach((chip, i) => {
-        const cx5 = 7.8 + i * 1.05;
-        s5.addShape('roundRect', {
-          x: cx5, y: 0.28, w: 0.95, h: 0.55,
-          fill: { color: chip.color, transparency: 80 }, line: { color: chip.color, transparency: 50 }, rectRadius: 0.08,
-        });
-        s5.addText(chip.val, {
-          x: cx5, y: 0.28, w: 0.95, h: 0.3,
-          fontSize: 13, color: C.textLight, bold: true, fontFace: 'Cambria', align: 'center', valign: 'middle',
-        });
-        s5.addText(chip.label, {
-          x: cx5, y: 0.56, w: 0.95, h: 0.22,
-          fontSize: 7.5, color: C.textLight, fontFace: 'Calibri', align: 'center',
-        });
-      });
-
-      // Table
-      const tCols5 = [
-        { x: 0.15, w: 1.1  },  // Date
-        { x: 1.3,  w: 3.65 },  // Description
-        { x: 5.0,  w: 1.55 },  // Category
-        { x: 6.6,  w: 1.55 },  // Debit
-        { x: 8.2,  w: 1.65 },  // Credit
-      ];
-      const tHeaders5 = ['DATE', 'DESCRIPTION', 'CATEGORY', 'DEBIT', 'CREDIT'];
-
-      // Header row
-      s5.addShape('roundRect', {
-        x: 0.15, y: 1.3, w: 9.7, h: 0.38,
-        fill: { color: C.bgDark }, line: { color: C.bgDark }, rectRadius: 0.04,
-      });
-      tHeaders5.forEach((h, i) => {
-        s5.addText(h, {
-          x: tCols5[i].x + 0.06, y: 1.32, w: tCols5[i].w - 0.12, h: 0.34,
-          fontSize: 8.5, color: C.accent, bold: true, fontFace: 'Calibri', charSpacing: 0.5, valign: 'middle',
-        });
-      });
-
-      const topTx5 = txs.slice(0, 15);
-      const rowH5 = 3.6 / Math.max(topTx5.length, 1);
-
-      topTx5.forEach((t, ri) => {
-        const ry = 1.72 + ri * rowH5;
-        s5.addShape('roundRect', {
-          x: 0.15, y: ry, w: 9.7, h: rowH5 - 0.03,
-          fill: { color: ri % 2 === 1 ? C.bgMid : C.card }, line: { color: C.border }, rectRadius: 0.04,
-        });
-        if (t.isAnomaly) {
-          s5.addShape('roundRect', {
-            x: 0.15, y: ry, w: 9.7, h: rowH5 - 0.03,
-            fill: { color: 'FFF7ED' }, line: { color: C.amber, transparency: 50 }, rectRadius: 0.04,
-          });
-        }
-        const cells5 = [
-          t.date || '',
-          (t.description || '').slice(0, 42),
-          (t.category || '').slice(0, 16),
-          t.debit != null ? fmt(t.debit) : '',
-          t.credit != null ? fmt(t.credit) : '',
-        ];
-        const textColors = [C.textMuted, C.textDark, C.textMuted, C.red, C.green];
-        cells5.forEach((cell, ci) => {
-          s5.addText(cell, {
-            x: tCols5[ci].x + 0.06, y: ry + 0.03, w: tCols5[ci].w - 0.12, h: rowH5 - 0.08,
-            fontSize: 7.5, color: textColors[ci], fontFace: 'Calibri', valign: 'middle',
-          });
-        });
-      });
-
+      addHeader(s5, 'TRANSACTION DETAILS', `Top 15 of ${txs.length} transactions  •  ${A.anomalyCount || 0} anomalies detected`);
       addFooter(s5, docTitle, sc, TOTAL);
 
-      // ── Slide 6: Anomaly Detection ─────────────────────────────────────
+      const tCols = [
+        { x: 0.2, w: 1.18 },   // Date
+        { x: 1.42, w: 3.6  },  // Description
+        { x: 5.06, w: 1.5  },  // Category
+        { x: 6.6,  w: 1.55 },  // Debit
+        { x: 8.19, w: 1.61 },  // Credit
+      ];
+      const tHeaders = ['DATE', 'DESCRIPTION', 'CATEGORY', 'DEBIT', 'CREDIT'];
+
+      // Header row
+      s5.addShape('roundRect', { x: 0.2, y: 1.27, w: 9.6, h: 0.38, fill: { color: C.navy }, line: { color: C.navy }, rectRadius: 0.04 });
+      tHeaders.forEach((h, i) => {
+        s5.addText(h, {
+          x: tCols[i].x + 0.07, y: 1.28, w: tCols[i].w - 0.1, h: 0.36,
+          fontSize: 9, color: C.gold, bold: true, fontFace: 'Calibri', charSpacing: 0.5, valign: 'middle',
+          align: i >= 3 ? 'right' : 'left',
+        });
+      });
+
+      const topTxs = txs.slice(0, 15);
+      const rowH5 = 3.65 / Math.max(topTxs.length, 1);
+
+      topTxs.forEach((t, ri) => {
+        const ry = 1.68 + ri * rowH5;
+        const bgColor = t.isAnomaly ? 'FFF3E0' : ri % 2 === 0 ? C.white : C.gray1;
+        const bdrColor = t.isAnomaly ? C.gold : C.gray2;
+        s5.addShape('rect', { x: 0.2, y: ry, w: 9.6, h: rowH5, fill: { color: bgColor }, line: { color: bdrColor } });
+        const cells = [
+          t.date || '',
+          (t.description || '').slice(0, 44),
+          (t.category || '').slice(0, 16),
+          t.debit  != null ? fmt(t.debit)  : '—',
+          t.credit != null ? fmt(t.credit) : '—',
+        ];
+        const textColors = [C.gray3, C.navy, C.gray3, C.red, C.teal];
+        cells.forEach((cell, ci) => {
+          s5.addText(cell, {
+            x: tCols[ci].x + 0.07, y: ry + 0.02, w: tCols[ci].w - 0.1, h: rowH5 - 0.04,
+            fontSize: 8, color: textColors[ci], fontFace: 'Calibri', valign: 'middle',
+            align: ci >= 3 ? 'right' : 'left',
+          });
+        });
+      });
+
+      // ── Slide 8: Anomaly Detection ─────────────────────────────────────
       if ((A.anomalyCount || 0) > 0) {
         ++sc;
         const anomalies = (A.anomalies || []).slice(0, 6);
         const s6 = pres.addSlide();
-        s6.background = { color: C.bgLight };
-
-        s6.addShape('roundRect', { x: 0, y: 0, w: 10, h: 1.2, fill: { color: C.bgDark }, line: { color: C.bgDark }, rectRadius: 0 });
-        s6.addText('Anomaly Detection', {
-          x: 0.4, y: 0.2, w: 7.5, h: 0.7,
-          fontSize: 24, color: C.textLight, bold: true, fontFace: 'Cambria', valign: 'middle',
-        });
-        s6.addText(`${A.anomalyCount} unusual transactions flagged for review`, {
-          x: 0.4, y: 0.76, w: 7.5, h: 0.33,
-          fontSize: 11, color: 'A0C4E0', fontFace: 'Calibri',
-        });
-
-        // Anomaly count badge
-        s6.addShape('roundRect', {
-          x: 8.3, y: 0.22, w: 1.4, h: 0.65,
-          fill: { color: C.amber, transparency: 75 }, line: { color: C.amber, transparency: 50 }, rectRadius: 0.1,
-        });
-        s6.addText(`${A.anomalyCount}`, {
-          x: 8.3, y: 0.22, w: 1.4, h: 0.4,
-          fontSize: 18, color: C.amber, bold: true, fontFace: 'Cambria', align: 'center', valign: 'middle',
-        });
-        s6.addText('FLAGGED', {
-          x: 8.3, y: 0.58, w: 1.4, h: 0.2,
-          fontSize: 7.5, color: C.amber, fontFace: 'Calibri', align: 'center', bold: true,
-        });
+        addHeader(s6, 'ANOMALY DETECTION', `${A.anomalyCount} unusual transaction(s) flagged for review`);
+        addFooter(s6, docTitle, sc, TOTAL);
 
         const cols6 = anomalies.length <= 3 ? 1 : 2;
         const rows6 = Math.ceil(anomalies.length / cols6);
-        const gap6 = 0.2;
+        const gap6 = 0.22;
         const cW6 = cols6 === 1 ? 9.4 : (9.4 - gap6) / 2;
-        const cH6 = Math.min((3.95 - gap6 * (rows6 - 1)) / rows6, 1.55);
+        const cH6 = Math.min((3.9 - gap6 * (rows6 - 1)) / rows6, 1.6);
 
         anomalies.forEach((a, i) => {
           const col6 = i % cols6, row6 = Math.floor(i / cols6);
           const x6 = 0.3 + col6 * (cW6 + gap6);
           const y6 = 1.3 + row6 * (cH6 + gap6);
-          s6.addShape('roundRect', {
-            x: x6, y: y6, w: cW6, h: cH6,
-            fill: { color: 'FFF7ED' }, line: { color: 'FED7AA' }, rectRadius: 0.1,
-          });
-          s6.addText(`${a.date || ''}  \u2014  ${(a.description || '').slice(0, 38)}`, {
-            x: x6 + 0.18, y: y6 + 0.08, w: cW6 - 0.36, h: 0.3,
-            fontSize: 9.5, color: 'C2410C', bold: true, fontFace: 'Calibri',
-          });
-          s6.addText(a.reason || 'Unusual transaction pattern', {
-            x: x6 + 0.18, y: y6 + 0.38, w: cW6 - 1.2, h: cH6 - 0.55,
-            fontSize: 9, color: C.textMuted, fontFace: 'Calibri', valign: 'top',
-          });
+          s6.addShape('roundRect', { x: x6, y: y6, w: cW6, h: cH6, fill: { color: 'FFF8E1' }, line: { color: 'FFD54F' }, rectRadius: 0.1 });
+          s6.addShape('rect', { x: x6, y: y6, w: cW6, h: 0.07, fill: { color: C.gold }, line: { color: C.gold } });
+          s6.addText(`⚠️  ${a.date || ''}  —  ${(a.description || '').slice(0, 42)}`, { x: x6 + 0.15, y: y6 + 0.12, w: cW6 - 0.3, h: 0.3, fontSize: 9.5, color: 'B45309', bold: true, fontFace: 'Calibri' });
+          s6.addText(a.reason || 'Unusual transaction pattern', { x: x6 + 0.15, y: y6 + 0.44, w: cW6 - (a.amount != null ? 1.5 : 0.3), h: cH6 - 0.58, fontSize: 9, color: C.gray3, fontFace: 'Calibri', valign: 'top' });
           if (a.amount != null) {
-            s6.addText(`${cur} ${fmt(a.amount)}`, {
-              x: x6 + cW6 - 1.3, y: y6 + 0.38, w: 1.1, h: cH6 - 0.55,
-              fontSize: 13, color: 'C2410C', bold: true, fontFace: 'Cambria', align: 'right', valign: 'top',
-            });
+            s6.addText(`${cur} ${fmt(a.amount)}`, { x: x6 + cW6 - 1.4, y: y6 + 0.44, w: 1.2, h: cH6 - 0.58, fontSize: 13, color: 'B45309', bold: true, fontFace: 'Calibri', align: 'right', valign: 'top' });
           }
         });
-
-        addFooter(s6, docTitle, sc, TOTAL);
       }
 
-      // ── Slide 7: AI Executive Summary ──────────────────────────────────
+      // ── Slide 9: AI Executive Summary (4-card grid) ──────────────────
       if (doc.summary) {
         ++sc;
         const s7 = pres.addSlide();
-        s7.background = { color: C.bgLight };
-
-        s7.addShape('roundRect', { x: 0, y: 0, w: 10, h: 1.2, fill: { color: C.bgDark }, line: { color: C.bgDark }, rectRadius: 0 });
-        s7.addText('AI Executive Summary', {
-          x: 0.4, y: 0.2, w: 8, h: 0.7,
-          fontSize: 24, color: C.textLight, bold: true, fontFace: 'Cambria', valign: 'middle',
-        });
-        s7.addText('AI-generated analysis of your financial document', {
-          x: 0.4, y: 0.76, w: 8, h: 0.33,
-          fontSize: 11, color: 'A0C4E0', fontFace: 'Calibri',
-        });
-
-        // Parse summary into bullet sections
-        const cleaned7 = doc.summary
-          .replace(/#{1,6}\s+/g, '\u2756 ')
-          .replace(/\*\*/g, '')
-          .replace(/\*/g, '')
-          .slice(0, 2000);
-
-        const lines7 = cleaned7.split('\n').map(l => l.trim()).filter(Boolean);
-        const bulletItems7 = lines7.map((line, i) => {
-          const isSectionHeader = line.startsWith('\u2756');
-          return {
-            text: line.replace('\u2756 ', ''),
-            options: {
-              bullet: isSectionHeader ? false : { code: '25CF', color: C.accent },
-              breakLine: i < lines7.length - 1,
-              fontSize: isSectionHeader ? 12 : 11,
-              bold: isSectionHeader,
-              color: isSectionHeader ? C.accentAlt : C.textDark,
-              paraSpaceAfter: isSectionHeader ? 6 : 3,
-              paraSpaceBefore: isSectionHeader ? 8 : 0,
-            },
-          };
-        });
-
-        s7.addShape('roundRect', {
-          x: 0.3, y: 1.3, w: 9.4, h: 3.9,
-          fill: { color: C.card }, line: { color: C.border }, rectRadius: 0.1,
-          shadow: { type: 'outer', color: '000000', blur: 8, offset: 2, angle: 45, opacity: 0.06 },
-        });
-        s7.addText(bulletItems7, {
-          x: 0.5, y: 1.42, w: 9.0, h: 3.66,
-          fontFace: 'Calibri', valign: 'top',
-        });
-
+        addHeader(s7, 'AI EXECUTIVE SUMMARY', 'AI-generated analysis of your financial document');
         addFooter(s7, docTitle, sc, TOTAL);
+
+        // Split summary into 4 insight blocks
+        const summaryText = (doc.summary || '').replace(/#{1,6}\s+/g, '').replace(/\*\*/g, '').replace(/\*/g, '');
+        const paragraphs = summaryText.split(/\n{2,}/).map(p => p.trim()).filter(p => p.length > 20).slice(0, 4);
+        const insightTitles = ['Overall Health', 'Spending Patterns', 'Risk & Anomalies', 'Recommendations'];
+        const insightIcons = ['📊', '💳', '✅', '💡'];
+
+        while (paragraphs.length < 4) paragraphs.push('No additional details available for this section.');
+
+        paragraphs.forEach((para, i) => {
+          const col = i % 2, row = Math.floor(i / 2);
+          const x7 = 0.28 + col * 4.87;
+          const y7 = 1.28 + row * 1.95;
+          s7.addShape('roundRect', { x: x7, y: y7, w: 4.65, h: 1.82, rectRadius: 0.08, fill: { color: C.white }, line: { color: C.gray2 }, shadow: { type: 'outer', blur: 5, offset: 2, angle: 90, color: 'BBBBBB', opacity: 0.28 } });
+          s7.addShape('rect', { x: x7, y: y7, w: 4.65, h: 0.07, fill: { color: C.blue }, line: { color: C.blue } });
+          s7.addText(insightIcons[i], { x: x7, y: y7 + 0.1, w: 0.58, h: 0.4, fontSize: 19, align: 'center' });
+          s7.addText(insightTitles[i], { x: x7 + 0.54, y: y7 + 0.1, w: 4.0, h: 0.4, fontSize: 12.5, bold: true, color: C.navy, fontFace: 'Calibri', valign: 'middle' });
+          s7.addText(para.slice(0, 280), { x: x7 + 0.15, y: y7 + 0.55, w: 4.35, h: 1.2, fontSize: 9.5, color: '37474F', fontFace: 'Calibri', valign: 'top' });
+        });
       }
 
-      // ── Slide 8: Closing ───────────────────────────────────────────────
+      // ── Slide 10: Closing ─────────────────────────────────────────────
       ++sc;
       const s8 = pres.addSlide();
-      s8.background = { color: C.bgDark };
+      s8.background = { color: C.navy };
 
-      s8.addShape(pres.shapes.OVAL, { x: -1.2, y: 2.2, w: 4.0, h: 4.0, fill: { color: C.accent, transparency: 82 }, line: { color: C.accent, transparency: 82 } });
-      s8.addShape(pres.shapes.OVAL, { x: 8.6, y: -0.6, w: 2.8, h: 2.8, fill: { color: C.accentAlt, transparency: 80 }, line: { color: C.accentAlt, transparency: 80 } });
-      s8.addShape(pres.shapes.OVAL, { x: 4.2, y: 1.8, w: 1.5, h: 1.5, fill: { color: C.green, transparency: 85 }, line: { color: C.green, transparency: 85 } });
+      s8.addShape('rect', { x: 0, y: 4.5, w: 10, h: 1.125, fill: { color: C.blue }, line: { color: C.blue } });
+      s8.addShape('rect', { x: 0, y: 4.5, w: 10, h: 0.07, fill: { color: C.gold }, line: { color: C.gold } });
 
-      s8.addText('Analysis Complete', {
-        x: 1, y: 1.4, w: 8, h: 1.1,
-        fontSize: 42, color: C.textLight, bold: true, fontFace: 'Cambria', align: 'center',
+      s8.addText('✅', { x: 0, y: 1.0, w: 10, h: 0.9, fontSize: 50, align: 'center' });
+      s8.addText('ANALYSIS COMPLETE', { x: 0.5, y: 1.9, w: 9, h: 0.72, fontSize: 34, bold: true, color: C.gold, align: 'center', fontFace: 'Calibri' });
+      s8.addText('All transactions successfully processed and reviewed', { x: 1, y: 2.65, w: 8, h: 0.42, fontSize: 15, color: 'B0C4DE', align: 'center', fontFace: 'Calibri' });
+
+      const statItems = [
+        { label: 'Transactions\nAnalysed', val: String(A.transactionCount || 0) },
+        { label: 'Anomalies\nFound', val: String(A.anomalyCount || 0) },
+        { label: 'Spending\nCategories', val: String(catData.length) },
+      ];
+      statItems.forEach((stat, i) => {
+        const sx = 1.5 + i * 2.5;
+        s8.addShape('roundRect', { x: sx, y: 3.2, w: 2.1, h: 1.0, rectRadius: 0.07, fill: { color: '0D2E5C' }, line: { color: '1A4A80' } });
+        s8.addText(stat.val, { x: sx, y: 3.24, w: 2.1, h: 0.5, fontSize: 26, bold: true, color: C.gold, align: 'center', fontFace: 'Calibri' });
+        s8.addText(stat.label, { x: sx, y: 3.72, w: 2.1, h: 0.38, fontSize: 8.5, color: '7A9FC0', align: 'center', fontFace: 'Calibri' });
       });
 
-      const statLine8 = [
-        `${A.transactionCount || 0} transactions analysed`,
-        `${A.anomalyCount || 0} anomalies found`,
-        `${catData.length} spending categories`,
-      ].join('  \u2022  ');
-      s8.addText(statLine8, {
-        x: 1, y: 2.55, w: 8, h: 0.45,
-        fontSize: 13, color: 'A0C4E0', align: 'center', fontFace: 'Calibri',
+      s8.addText(`Generated by AI Document Summarizer  •  ${today}  •  Confidential`, {
+        x: 0.5, y: 4.58, w: 9, h: 0.5, fontSize: 11, color: C.white, align: 'center', fontFace: 'Calibri',
       });
 
-      s8.addShape(pres.shapes.RECTANGLE, {
-        x: 2.5, y: 3.15, w: 5.0, h: 0.04,
-        fill: { color: C.accent, transparency: 55 }, line: { color: C.accent, transparency: 55 },
-      });
-
-      s8.addText('Generated by AI Document Summarizer', {
-        x: 1, y: 3.3, w: 8, h: 0.35,
-        fontSize: 10, color: '5A7A9A', align: 'center', fontFace: 'Calibri',
-      });
-      s8.addText(today, {
-        x: 1, y: 3.65, w: 8, h: 0.3,
-        fontSize: 10, color: '5A7A9A', align: 'center', fontFace: 'Calibri',
-      });
-
-      const fs = require('fs');
-      const path = require('path');
-      const os = require('os');
-      const tmpFile = path.join(os.tmpdir(), `${safeName}_report_${Date.now()}.pptx`);
+      // ── Write file ─────────────────────────────────────────────────────
+      const fsm = require('fs');
+      const pathm = require('path');
+      const osm = require('os');
+      const tmpFile = pathm.join(osm.tmpdir(), `${safeName}_report_${Date.now()}.pptx`);
       await pres.writeFile({ fileName: tmpFile });
       res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.presentationml.presentation');
       res.setHeader('Content-Disposition', `attachment; filename="${safeName}_report.pptx"`);
-      const fileBuffer = fs.readFileSync(tmpFile);
-      fs.unlinkSync(tmpFile);
+      const fileBuffer = fsm.readFileSync(tmpFile);
+      fsm.unlinkSync(tmpFile);
       return res.send(fileBuffer);
     }
 
