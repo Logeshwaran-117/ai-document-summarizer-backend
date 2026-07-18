@@ -64,7 +64,7 @@ app.use(cors({
     ? process.env.FRONTEND_URL
     : ["http://localhost:5173", "http://localhost:5174"],
   credentials: true,
-  exposedHeaders: ["Content-Disposition", "X-Presentation-Id"],
+  exposedHeaders: ["Content-Disposition", "X-Presentation-Id", "X-Slide-Count"],
 }));
 
 app.use("/api/billing/webhook", express.raw({ type: "application/json" }));
@@ -90,7 +90,7 @@ app.use('/auth', authRoutes);
 app.use("/api/history", historyRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api", summarizeRoutes);
-app.use("/api", pptRoutes);
+app.use("/api/ppt", pptRoutes);
 app.use('/auth', settingsRoutes);
 app.use("/api", tableRoutes);
 app.use("/api/admin", adminRoutes);

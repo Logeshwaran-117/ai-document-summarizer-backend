@@ -6,6 +6,15 @@ const fs = require("fs");
 const os = require("os");
 const Presentation = require("../models/Presentation");
 
+// ── NEW: AI Presentation Engine (reads original doc, no summary dependency) ───
+const { generatePresentationPlan } = require("../services/presentationAiService");
+const { uploadAndExtract } = require("../controllers/pptController");
+const upload = require("../middleware/upload");
+const Document = require("../models/Document");
+
+// ── POST /upload-and-extract  — upload doc, extract text, save to history ─────
+router.post("/upload-and-extract", upload.single("file"), uploadAndExtract);
+
 // ── Theme palettes ───────────────────────────────────────────────────────────
 const THEMES = {
   navyGold: {
@@ -1416,6 +1425,336 @@ router.delete("/presentations/:id", async (req, res) => {
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ message: "Failed to delete presentation" });
+  }
+});
+
+// ── AI Presentation Theme Mapper ──────────────────────────────────────────────
+const WIZARD_THEME_MAP = {
+  "Modern":           "midnightBlue",
+  "Glassmorphism":    "midnightBlue",
+  "Minimal":          "tealSlate",
+  "Apple":            "tealSlate",
+  "Microsoft Fluent": "navyGold",
+  "Google Material":  "tealSlate",
+  "Dark":             "charcoalRuby",
+  "Corporate":        "navyGold",
+  "Luxury":           "charcoalRuby",
+  "Professional":     "navyGold",
+  "Creative":         "forestGreen",
+  "AI Futuristic":    "midnightBlue",
+  "Startup":          "forestGreen",
+  "Finance":          "navyGold",
+  "Healthcare":       "tealSlate",
+  "Education":        "forestGreen",
+};
+
+// ── Build deck from AI-generated slides ───────────────────────────────────────
+function buildAIDeck({ aiSlides, strategy, docTitle, heroTitle, themeKey, wizardOptions }) {
+  const COLORS = resolveTheme(WIZARD_THEME_MAP[themeKey] || themeKey || "navyGold");
+  const includeNotes = wizardOptions.speakerNotes !== "No";
+  const totalSlides = aiSlides.length;
+  const today = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+
+  const pres = new pptxgen();
+  pres.layout = "LAYOUT_16x9";
+  pres.title = docTitle;
+
+  let slideCounter = 0;
+
+  for (const slide of aiSlides) {
+    const s = pres.addSlide();
+    slideCounter++;
+
+    // ── COVER SLIDE ──────────────────────────────────────────────────────────
+    if (slide.isCover || slide.slideType === "cover") {
+      s.background = { color: COLORS.bgDark };
+      s.addShape(pres.shapes.OVAL, { x: 7.8, y: -1.0, w: 3.5, h: 3.5, fill: { color: COLORS.accent, transparency: 75 }, line: { color: COLORS.accent, transparency: 75 } });
+      s.addShape(pres.shapes.OVAL, { x: -0.5, y: 4.0, w: 2.0, h: 2.0, fill: { color: COLORS.teal, transparency: 80 }, line: { color: COLORS.teal, transparency: 80 } });
+      s.addShape(pres.shapes.OVAL, { x: 4.5, y: 3.5, w: 1.2, h: 1.2, fill: { color: COLORS.chart3, transparency: 85 }, line: { color: COLORS.chart3, transparency: 85 } });
+      s.addShape(pres.shapes.RECTANGLE, { x: 0.6, y: 2.8, w: 1.6, h: 0.05, fill: { color: COLORS.accent }, line: { color: COLORS.accent } });
+      s.addText(wizardOptions.presentationType?.toUpperCase() || "PRESENTATION", { x: 0.6, y: 1.35, w: 8.8, h: 0.5, fontSize: 11, color: COLORS.accent, bold: true, charSpacing: 4, fontFace: "Calibri" });
+      s.addText(heroTitle, { x: 0.6, y: 1.82, w: 8.8, h: 1.15, fontSize: 34, color: COLORS.textLight, bold: true, fontFace: "Cambria", lineSpacing: 40 });
+      if (slide.subtitle) {
+        s.addText(slide.subtitle, { x: 0.6, y: 3.05, w: 8.8, h: 0.45, fontSize: 13, color: "A0B0D0", fontFace: "Calibri" });
+      }
+      s.addText(`${today}  •  For: ${wizardOptions.audience || "All"}  •  AI-Generated`, { x: 0.6, y: 4.75, w: 8.8, h: 0.42, fontSize: 11, color: "6A80A8", fontFace: "Calibri" });
+      if (includeNotes) s.addNotes(slide.speakerNotes || `Cover slide: ${heroTitle}`);
+      continue;
+    }
+
+    // ── CLOSING SLIDE ────────────────────────────────────────────────────────
+    if (slide.isClosing || slide.slideType === "closing") {
+      s.background = { color: COLORS.bgDark };
+      s.addShape(pres.shapes.OVAL, { x: -1.0, y: 2.5, w: 4.0, h: 4.0, fill: { color: COLORS.accent, transparency: 82 }, line: { color: COLORS.accent, transparency: 82 } });
+      s.addShape(pres.shapes.OVAL, { x: 8.5, y: -0.5, w: 2.5, h: 2.5, fill: { color: COLORS.teal, transparency: 78 }, line: { color: COLORS.teal, transparency: 78 } });
+      s.addShape(pres.shapes.RECTANGLE, { x: 2.5, y: 2.9, w: 5.0, h: 0.04, fill: { color: COLORS.accent, transparency: 60 }, line: { color: COLORS.accent, transparency: 60 } });
+      s.addText(slide.title || "Thank You", { x: 1, y: 1.5, w: 8, h: 1.2, fontSize: 46, color: COLORS.textLight, bold: true, fontFace: "Cambria", align: "center" });
+      s.addText(slide.body || strategy?.keyMessages?.[0] || "AI-generated Presentation", { x: 1, y: 3.0, w: 8, h: 0.9, fontSize: 14, color: "7A90B8", align: "center", fontFace: "Calibri" });
+      s.addText(today, { x: 1, y: 3.9, w: 8, h: 0.35, fontSize: 11, color: "5A6A8A", align: "center", fontFace: "Calibri" });
+      if (includeNotes) s.addNotes(slide.speakerNotes || "Closing slide.");
+      continue;
+    }
+
+    // ── SECTION DIVIDER ──────────────────────────────────────────────────────
+    if (slide.isSection || slide.slideType === "section") {
+      s.background = { color: COLORS.bgDark };
+      s.addShape(pres.shapes.OVAL, { x: 7.5, y: -1.0, w: 4.0, h: 4.0, fill: { color: COLORS.accent, transparency: 88 }, line: { color: COLORS.accent, transparency: 88 } });
+      s.addShape(pres.shapes.OVAL, { x: 6.5, y: 3.8, w: 2.5, h: 2.5, fill: { color: COLORS.teal, transparency: 85 }, line: { color: COLORS.teal, transparency: 85 } });
+      s.addText("SECTION", { x: 0.6, y: 1.5, w: 8.5, h: 0.4, fontSize: 11, color: COLORS.accent, bold: true, charSpacing: 5, fontFace: "Calibri" });
+      s.addShape(pres.shapes.RECTANGLE, { x: 0.6, y: 1.98, w: 5.0, h: 0.03, fill: { color: COLORS.accent, transparency: 50 }, line: { color: COLORS.accent, transparency: 50 } });
+      s.addText((slide.title || "Section").slice(0, 60), { x: 0.6, y: 2.05, w: 7.8, h: 1.3, fontSize: 34, color: COLORS.textLight, bold: true, fontFace: "Cambria", valign: "top" });
+      if (slide.subtitle) {
+        s.addText(slide.subtitle.slice(0, 180), { x: 0.6, y: 3.5, w: 7.2, h: 0.9, fontSize: 13, color: "8099C0", fontFace: "Calibri", italic: true, valign: "top" });
+      }
+      addFooter(s, COLORS, docTitle, slideCounter, totalSlides);
+      if (includeNotes) s.addNotes(slide.speakerNotes || `Section: ${slide.title}`);
+      continue;
+    }
+
+    // ── All other slides share a header ─────────────────────────────────────
+    s.background = { color: COLORS.bgLight };
+    addSlideHeader(s, pres, COLORS, slide.title || "Slide", slide.icon || "📄");
+
+    const SAFE_Y = 1.45;
+    const SAFE_H = 3.72;
+
+    // ── QUOTE SLIDE ──────────────────────────────────────────────────────────
+    if (slide.slideType === "quote" && slide.quote) {
+      s.addShape(pres.shapes.OVAL, { x: -0.5, y: 3.0, w: 2.5, h: 2.5, fill: { color: COLORS.accent, transparency: 88 }, line: { color: COLORS.accent, transparency: 88 } });
+      s.addText("\u201C", { x: 0.4, y: 1.5, w: 1.2, h: 1.2, fontSize: 80, color: COLORS.accent, fontFace: "Cambria", bold: true, transparency: 30 });
+      s.addText(slide.quote.text.slice(0, 300), { x: 1.2, y: 2.0, w: 7.6, h: 2.0, fontSize: 18, color: COLORS.textDark, fontFace: "Cambria", italic: true, valign: "middle", lineSpacing: 28 });
+      if (slide.quote.attribution) {
+        s.addText(`— ${slide.quote.attribution}`, { x: 1.2, y: 4.1, w: 7.6, h: 0.4, fontSize: 12, color: COLORS.textMuted, fontFace: "Calibri", align: "right" });
+      }
+
+    // ── SWOT SLIDE ───────────────────────────────────────────────────────────
+    } else if (slide.slideType === "swot" && slide.swotData) {
+      const sw = slide.swotData;
+      const quadrants = [
+        { label: "STRENGTHS", items: sw.strengths || [], color: COLORS.chart6, x: 0.3, y: SAFE_Y },
+        { label: "WEAKNESSES", items: sw.weaknesses || [], color: COLORS.chart4, x: 5.05, y: SAFE_Y },
+        { label: "OPPORTUNITIES", items: sw.opportunities || [], color: COLORS.chart2, x: 0.3, y: SAFE_Y + SAFE_H / 2 + 0.05 },
+        { label: "THREATS", items: sw.threats || [], color: COLORS.chart7, x: 5.05, y: SAFE_Y + SAFE_H / 2 + 0.05 },
+      ];
+      const qW = 4.65; const qH = SAFE_H / 2 - 0.08;
+      quadrants.forEach(q => {
+        s.addShape("roundRect", { x: q.x, y: q.y, w: qW, h: qH, fill: { color: COLORS.cardBg }, line: { color: q.color }, rectRadius: 0.08 });
+        s.addText(q.label, { x: q.x + 0.15, y: q.y + 0.1, w: qW - 0.3, h: 0.3, fontSize: 9, color: q.color, bold: true, fontFace: "Calibri", charSpacing: 1 });
+        const bullets = q.items.slice(0, 4).map((b, i) => ({ text: b.slice(0, 60), options: { bullet: { code: "2022", color: q.color }, breakLine: i < q.items.length - 1, fontSize: 11, color: COLORS.textDark, paraSpaceAfter: 4 } }));
+        if (bullets.length) s.addText(bullets, { x: q.x + 0.15, y: q.y + 0.44, w: qW - 0.3, h: qH - 0.54, fontFace: "Calibri", valign: "top" });
+      });
+
+    // ── CHART SLIDE ──────────────────────────────────────────────────────────
+    } else if (slide.slideType === "chart" && slide.chartData && slide.chartData.labels?.length) {
+      const cd = slide.chartData;
+      const chartType = cd.type || "bar";
+      const labels = cd.labels.slice(0, 10);
+      const values = cd.values.slice(0, 10);
+      const chartColors = [COLORS.chart1, COLORS.chart2, COLORS.chart3, COLORS.chart4, COLORS.chart5, COLORS.chart6, COLORS.chart7, COLORS.chart8];
+
+      try {
+        if (chartType === "pie" || chartType === "donut") {
+          const pieData = [{ name: cd.title || slide.title, labels, values }];
+          s.addChart(pres.ChartType.doughnut, pieData, {
+            x: 0.5, y: SAFE_Y, w: 5.5, h: SAFE_H,
+            chartColors: chartColors.slice(0, labels.length),
+            showLegend: true, legendPos: "r", legendFontSize: 9,
+            showValue: true, dataLabelFontSize: 9, dataLabelColor: COLORS.textLight,
+            holeSize: chartType === "donut" ? 50 : 0,
+          });
+        } else if (chartType === "line" || chartType === "area") {
+          const lineData = [{ name: cd.title || slide.title, labels, values }];
+          s.addChart(pres.ChartType.line, lineData, {
+            x: 0.3, y: SAFE_Y, w: 9.4, h: SAFE_H,
+            chartColors: [COLORS.chart2],
+            showLegend: false, showValue: false,
+            lineDataSymbol: "circle", lineDataSymbolSize: 6,
+            catAxisLabelFontSize: 9, valAxisLabelFontSize: 9,
+            valGridLine: { style: "dash", color: COLORS.border },
+          });
+        } else {
+          // Default: bar chart
+          const barData = [{ name: cd.title || slide.title, labels, values }];
+          s.addChart(pres.ChartType.bar, barData, {
+            x: 0.3, y: SAFE_Y, w: 9.4, h: SAFE_H,
+            barDir: "col",
+            chartColors: chartColors.slice(0, labels.length),
+            showLegend: false, showValue: true,
+            dataLabelFontSize: 8, dataLabelPosition: "inEnd", dataLabelColor: COLORS.textLight,
+            catAxisLabelFontSize: 8, valAxisLabelFontSize: 8,
+            catGridLine: { style: "none" },
+            valGridLine: { style: "dash", color: COLORS.border },
+          });
+        }
+      } catch (chartErr) {
+        console.warn("Chart rendering error:", chartErr.message);
+        // Fallback to text
+        if (slide.bullets?.length) {
+          const bulletItems = slide.bullets.slice(0, 7).map((b, i) => ({ text: b.slice(0, 130), options: { bullet: { code: "2022", color: COLORS.teal }, breakLine: i < slide.bullets.length - 1, fontSize: 13, color: COLORS.textDark, paraSpaceAfter: 8 } }));
+          s.addText(bulletItems, { x: 0.5, y: SAFE_Y + 0.2, w: 9.0, h: SAFE_H - 0.3, fontFace: "Calibri", valign: "top" });
+        }
+      }
+
+    // ── KPI DASHBOARD ─────────────────────────────────────────────────────────
+    } else if (slide.slideType === "kpi" && slide.metrics?.length) {
+      addMetricsGrid(s, COLORS, slide.metrics.slice(0, 6).map(m => ({ label: m.label, value: String(m.value) })), SAFE_Y, SAFE_H);
+
+    // ── TWO COLUMN SLIDE ──────────────────────────────────────────────────────
+    } else if (slide.slideType === "twoColumn" && slide.twoColumns) {
+      const tc = slide.twoColumns;
+      const colW = 4.55; const gap = 0.3;
+      [
+        { data: tc.left,  x: 0.3 },
+        { data: tc.right, x: 0.3 + colW + gap },
+      ].forEach(col => {
+        s.addShape("roundRect", { x: col.x, y: SAFE_Y, w: colW, h: SAFE_H, fill: { color: COLORS.cardBg }, line: { color: COLORS.border }, rectRadius: 0.1 });
+        s.addText(col.data.title || "", { x: col.x + 0.15, y: SAFE_Y + 0.1, w: colW - 0.3, h: 0.35, fontSize: 12, color: COLORS.accent, bold: true, fontFace: "Calibri" });
+        s.addShape(pres.shapes.RECTANGLE, { x: col.x + 0.15, y: SAFE_Y + 0.48, w: colW - 0.3, h: 0.02, fill: { color: COLORS.border }, line: { color: COLORS.border } });
+        if (col.data.bullets?.length) {
+          const items = col.data.bullets.slice(0, 6).map((b, i) => ({ text: b.slice(0, 90), options: { bullet: { code: "2022", color: COLORS.teal }, breakLine: i < col.data.bullets.length - 1, fontSize: 12, color: COLORS.textDark, paraSpaceAfter: 8 } }));
+          s.addText(items, { x: col.x + 0.15, y: SAFE_Y + 0.55, w: colW - 0.3, h: SAFE_H - 0.65, fontFace: "Calibri", valign: "top" });
+        }
+      });
+
+    // ── TIMELINE SLIDE ────────────────────────────────────────────────────────
+    } else if (slide.slideType === "timeline" && slide.timeline?.length) {
+      const events = slide.timeline.slice(0, 6);
+      const itemW = Math.min(9.0 / events.length, 2.0);
+      const lineY = SAFE_Y + SAFE_H * 0.38;
+      s.addShape(pres.shapes.RECTANGLE, { x: 0.4, y: lineY, w: 9.2, h: 0.04, fill: { color: COLORS.teal }, line: { color: COLORS.teal } });
+      events.forEach((evt, i) => {
+        const cx = 0.4 + i * (9.2 / events.length) + itemW * 0.3;
+        s.addShape(pres.shapes.OVAL, { x: cx - 0.12, y: lineY - 0.12, w: 0.24, h: 0.24, fill: { color: COLORS.accent }, line: { color: COLORS.accent } });
+        s.addText(evt.date || `${i + 1}`, { x: cx - itemW / 2, y: lineY - 0.75, w: itemW, h: 0.3, fontSize: 9, color: COLORS.accent, bold: true, align: "center", fontFace: "Calibri" });
+        s.addText(evt.event?.slice(0, 50) || "", { x: cx - itemW / 2, y: lineY + 0.2, w: itemW, h: 0.5, fontSize: 10, color: COLORS.textDark, bold: true, align: "center", fontFace: "Calibri" });
+        if (evt.detail) s.addText(evt.detail.slice(0, 80), { x: cx - itemW / 2, y: lineY + 0.74, w: itemW, h: 0.7, fontSize: 9, color: COLORS.textMuted, align: "center", fontFace: "Calibri" });
+      });
+
+    // ── BULLETS SLIDE (default) ───────────────────────────────────────────────
+    } else {
+      const hasBullets = slide.bullets?.length > 0;
+      const hasBody = slide.body && slide.body.length > 20;
+      const hasMetrics = slide.metrics?.length >= 2;
+
+      if (hasMetrics) {
+        addMetricsGrid(s, COLORS, slide.metrics.slice(0, 6).map(m => ({ label: m.label, value: String(m.value) })), SAFE_Y, SAFE_H);
+      } else if (hasBullets && hasBody) {
+        s.addShape("roundRect", { x: 0.3, y: SAFE_Y, w: 5.5, h: SAFE_H, fill: { color: COLORS.cardBg }, line: { color: COLORS.border }, rectRadius: 0.1 });
+        const bItems = slide.bullets.slice(0, 7).map((b, i) => ({ text: b.slice(0, 120), options: { bullet: { code: "2022", color: COLORS.teal }, breakLine: i < slide.bullets.length - 1, fontSize: 12.5, color: COLORS.textDark, paraSpaceAfter: 7 } }));
+        s.addText(bItems, { x: 0.5, y: SAFE_Y + 0.15, w: 5.1, h: SAFE_H - 0.3, fontFace: "Calibri", valign: "top" });
+        s.addShape("roundRect", { x: 6.05, y: SAFE_Y, w: 3.65, h: SAFE_H, fill: { color: COLORS.cardAlt }, line: { color: COLORS.border }, rectRadius: 0.1 });
+        s.addText("KEY INSIGHT", { x: 6.2, y: SAFE_Y + 0.14, w: 3.35, h: 0.3, fontSize: 9.5, color: COLORS.accent, bold: true, fontFace: "Calibri", charSpacing: 1 });
+        s.addShape(pres.shapes.RECTANGLE, { x: 6.2, y: SAFE_Y + 0.48, w: 3.35, h: 0.02, fill: { color: COLORS.accent, transparency: 70 }, line: { color: COLORS.accent, transparency: 70 } });
+        s.addText(slide.body.slice(0, 350), { x: 6.2, y: SAFE_Y + 0.55, w: 3.35, h: SAFE_H - 0.65, fontSize: 11.5, color: COLORS.textDark, fontFace: "Calibri", valign: "top" });
+      } else if (hasBullets) {
+        s.addShape("roundRect", { x: 0.3, y: SAFE_Y, w: 9.4, h: SAFE_H, fill: { color: COLORS.cardBg }, line: { color: COLORS.border }, rectRadius: 0.1 });
+        const bullets = slide.bullets.slice(0, 8);
+        const cols2 = bullets.length > 5 ? 2 : 1;
+        if (cols2 === 2) {
+          const half = Math.ceil(bullets.length / 2);
+          const mkItems = (arr) => arr.map((b, i) => ({ text: b.slice(0, 110), options: { bullet: { code: "2022", color: COLORS.teal }, breakLine: i < arr.length - 1, fontSize: 12.5, color: COLORS.textDark, paraSpaceAfter: 8 } }));
+          s.addText(mkItems(bullets.slice(0, half)), { x: 0.5, y: SAFE_Y + 0.15, w: 4.35, h: SAFE_H - 0.3, fontFace: "Calibri", valign: "top" });
+          s.addShape(pres.shapes.RECTANGLE, { x: 5.0, y: SAFE_Y + 0.18, w: 0.02, h: SAFE_H - 0.38, fill: { color: COLORS.border }, line: { color: COLORS.border } });
+          s.addText(mkItems(bullets.slice(half)), { x: 5.12, y: SAFE_Y + 0.15, w: 4.35, h: SAFE_H - 0.3, fontFace: "Calibri", valign: "top" });
+        } else {
+          const bItems = bullets.map((b, i) => ({ text: b.slice(0, 150), options: { bullet: { code: "2022", color: COLORS.teal }, breakLine: i < bullets.length - 1, fontSize: 13.5, color: COLORS.textDark, paraSpaceAfter: 10 } }));
+          s.addText(bItems, { x: 0.5, y: SAFE_Y + 0.18, w: 9.0, h: SAFE_H - 0.3, fontFace: "Calibri", valign: "top" });
+        }
+      } else if (hasBody) {
+        s.addShape("roundRect", { x: 0.3, y: SAFE_Y, w: 9.4, h: SAFE_H, fill: { color: COLORS.cardBg }, line: { color: COLORS.border }, rectRadius: 0.1 });
+        s.addShape(pres.shapes.RECTANGLE, { x: 0.3, y: SAFE_Y, w: 0.05, h: SAFE_H, fill: { color: COLORS.accent }, line: { color: COLORS.accent } });
+        s.addText(slide.body.slice(0, 700), { x: 0.52, y: SAFE_Y + 0.15, w: 9.1, h: SAFE_H - 0.28, fontSize: 13.5, color: COLORS.textDark, fontFace: "Calibri", valign: "top", lineSpacing: 22 });
+      }
+    }
+
+    addFooter(s, COLORS, docTitle, slideCounter, totalSlides);
+    if (includeNotes && slide.speakerNotes) s.addNotes(slide.speakerNotes);
+  }
+
+  return { pres, slideCount: totalSlides };
+}
+
+
+// ══════════════════════════════════════════════════════════════════════════════
+// POST /generate-ppt-ai  — NEW AI-powered endpoint with Wizard support
+// ══════════════════════════════════════════════════════════════════════════════
+router.post("/generate-ppt-ai", async (req, res) => {
+  try {
+    if (!req.user) return res.status(401).json({ message: "Not authenticated" });
+
+    const {
+      documentId,
+      documentText: rawDocText,
+      filename = "Document",
+      wizardOptions = {},
+    } = req.body;
+
+    // ── Resolve document text ──────────────────────────────────────────────
+    let documentText = rawDocText || "";
+
+    if (!documentText && documentId) {
+      // Try to load from DB if stored
+      const doc = await Document.findOne({ _id: documentId, userId: req.user._id });
+      if (doc && doc.extractedText) {
+        documentText = doc.extractedText;
+      }
+    }
+
+    if (!documentText || documentText.trim().length < 50) {
+      return res.status(400).json({
+        message: "Document text is required. Please summarize the document first or provide extracted text.",
+      });
+    }
+
+    const docTitle = (wizardOptions.title || filename).replace(/\.[^/.]+$/, "");
+    const heroTitle = wizardOptions.title || docTitle;
+
+    // ── Run AI pipeline ────────────────────────────────────────────────────
+    const { strategy, outline, slides } = await generatePresentationPlan(documentText, wizardOptions);
+
+    // ── Build PPTX ─────────────────────────────────────────────────────────
+    const { pres, slideCount } = buildAIDeck({
+      aiSlides: slides,
+      strategy,
+      docTitle,
+      heroTitle,
+      themeKey: wizardOptions.theme || "Professional",
+      wizardOptions,
+    });
+
+    const tmpFile = require("path").join(require("os").tmpdir(), `ai-pres-${Date.now()}.pptx`);
+    await pres.writeFile({ fileName: tmpFile });
+    const buffer = require("fs").readFileSync(tmpFile);
+    require("fs").unlink(tmpFile, () => {});
+
+    // ── Save to DB ─────────────────────────────────────────────────────────
+    const saved = await Presentation.create({
+      userId: req.user._id,
+      documentId: documentId || null,
+      filename: `${docTitle}.pptx`,
+      sourceFilename: filename,
+      theme: wizardOptions.theme || "Professional",
+      detailLevel: wizardOptions.contentDensity || "Balanced",
+      chartDensity: wizardOptions.chartType || "auto",
+      includeAgenda: (wizardOptions.sections || []).includes("Agenda"),
+      includeNotes: wizardOptions.speakerNotes !== "No",
+      slideCount,
+      sizeBytes: buffer.length,
+      data: buffer,
+      generatedBy: "claude-ai",
+      wizardOptions,
+    });
+
+    const safeFilename = docTitle.replace(/[^a-zA-Z0-9\-_. ]/g, "_");
+    res.setHeader("Content-Disposition", `attachment; filename="${safeFilename}.pptx"`);
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.presentationml.presentation");
+    res.setHeader("X-Presentation-Id", saved._id.toString());
+    res.setHeader("X-Slide-Count", String(slideCount));
+    res.send(buffer);
+
+  } catch (err) {
+    console.error("AI PPT generation error:", err);
+    res.status(500).json({ message: err.message || "Failed to generate AI presentation" });
   }
 });
 

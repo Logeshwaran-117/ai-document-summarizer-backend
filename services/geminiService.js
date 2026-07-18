@@ -1,6 +1,11 @@
 /**
  * geminiService.js  (with usage tracking integrated)
  *
+ * MODEL: gemini-3.5-flash (free tier, GA May 2026)
+ *   ✗ gemini-2.5-flash — PAID-ONLY since April 1 2026 (was causing 429s)
+ *   ✗ gemini-2.0-flash — SHUT DOWN June 1 2026
+ *   ✗ gemini-1.5-*    — SHUT DOWN
+ *
  * CHANGES vs original:
  *  1. Imports usageTrackingService
  *  2. callGeminiREST now receives the active keyIndex and calls
@@ -44,7 +49,7 @@ function rotateKey() {
 }
 
 // ── Groq fallback ─────────────────────────────────────────────────────────────
-const GROQ_MODEL = process.env.GROQ_MODEL || "openai/gpt-oss-120b";
+const GROQ_MODEL = process.env.GROQ_MODEL || "llama-3.3-70b-versatile";
 
 let groqClient = null;
 let groqClientChecked = false;
@@ -86,16 +91,20 @@ async function callGroqFallback(parts, maxOutputTokens) {
         );
     }
 
-    const MAX_INPUT_CHARS = 26000;
+    // llama-3.3-70b-versatile supports ~128k context; keep headroom for the prompt wrapper
+    const MAX_INPUT_CHARS = 90000;
+    let truncated = false;
     if (promptText.length > MAX_INPUT_CHARS) {
         console.warn(`⚠️  Groq input too large (${promptText.length} chars) — truncating to ${MAX_INPUT_CHARS} chars`);
-        promptText = promptText.slice(0, MAX_INPUT_CHARS) + "\n\n[... document truncated for fallback model ...]";
+        promptText = promptText.slice(0, MAX_INPUT_CHARS) + "\n\n[... document truncated — content beyond this point was omitted ...]";
+        truncated = true;
     }
 
+    // Groq supports up to 32,768 output tokens on llama-3.3-70b; cap at 8192 to match Gemini default
     const completion = await client.chat.completions.create({
         model: GROQ_MODEL,
         messages: [{ role: "user", content: promptText }],
-        max_tokens: Math.min(maxOutputTokens, 1500),
+        max_tokens: Math.min(maxOutputTokens, 8192),
     });
 
     return completion.choices?.[0]?.message?.content ?? "";
@@ -119,7 +128,7 @@ const BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models";
  * @param {Function|null} onUsage  - legacy callback passed by controllers
  * @param {string}   feature       - "summarize"|"banking"|"table" for breakdown
  */
-async function callGeminiREST(parts, maxOutputTokens = 8192, model = "gemini-2.5-flash", onUsage = null, feature = "summarize") {
+async function callGeminiREST(parts, maxOutputTokens = 8192, model = "gemini-3.5-flash", onUsage = null, feature = "summarize") {
     const activeIndex = currentKeyIndex;
     const key = getCurrentKey();
     const url = `${BASE_URL}/${model}:generateContent?key=${key}`;
@@ -206,7 +215,7 @@ function parseRetryAfter(error) {
  * @param {Function|null} onUsage   - legacy token callback from controllers
  * @param {string}   feature        - "summarize"|"banking"|"table"
  */
-async function callWithRotation(buildParts, maxOutputTokens = 8192, model = "gemini-2.5-flash", onUsage = null, feature = "summarize") {
+async function callWithRotation(buildParts, maxOutputTokens = 8192, model = "gemini-3.5-flash", onUsage = null, feature = "summarize") {
     let keysTriedCount = 0;
 
     while (keysTriedCount < GEMINI_KEYS.length) {
@@ -401,13 +410,21 @@ ${text}
 
 // ── Long-document map-reduce summarization ────────────────────────────────────
 const SUMMARY_CHUNK_THRESHOLD = 15000;
-const SUMMARY_CHUNK_SIZE = 6000;
+const SUMMARY_CHUNK_SIZE = 10000;   // raised from 6000 — fewer splits = fewer boundary losses
 const SUMMARY_CHUNK_BATCH_SIZE = 3;
+const SUMMARY_CHUNK_OVERLAP = 300;  // chars of overlap carried from previous chunk to next
 
 const CHUNK_EXTRACT_PROMPT = (chunk, index, total) => `
-You are extracting the key facts from part ${index} of ${total} of a larger document. These notes will be combined with the other parts and summarized as a whole later — this is a note-taking pass, not the final summary.
+You are extracting ALL key facts from part ${index} of ${total} of a larger financial document. These notes will be combined with notes from other parts for a final summary — this is a thorough note-taking pass.
 
-Return the concrete facts, points, figures, names, dates, and important statements from this excerpt as clear bullet points. Be thorough and specific. Do not write narrative commentary like "this section discusses..." — just the extracted facts themselves. Do not add headers or markdown formatting beyond simple bullets.
+RULES:
+- Extract EVERY transaction: date, description, withdrawal amount, deposit amount, and resulting balance.
+- Preserve all currency amounts EXACTLY as written (e.g. "INR 3,32,827.00", not "3.3 lakh").
+- Capture account details, opening/closing balances, IFSC, MICR, branch, account holder name, period.
+- Flag any balance that drops below INR 100, any single transaction above INR 10,000, any fees or charges.
+- Do NOT summarize or paraphrase numbers — copy them exactly.
+- Do NOT write narrative commentary. Return bullet points only.
+- If this chunk contains no transactions (e.g. regulatory notices), summarize those notices briefly.
 
 Excerpt (part ${index} of ${total}):
 ${chunk}
@@ -415,13 +432,20 @@ ${chunk}
 
 async function extractChunkNotes(chunk, index, total, onUsage = null, feature = "summarize") {
     const prompt = CHUNK_EXTRACT_PROMPT(chunk, index, total);
-    return callWithRotation(() => [{ text: prompt }], 2048, "gemini-2.5-flash", onUsage, feature);
+    return callWithRotation(() => [{ text: prompt }], 4096, "gemini-3.5-flash", onUsage, feature);
 }
 
 async function generateSummaryChunked(text, isBanking, onUsage = null) {
-    const chunks = chunkText(text, SUMMARY_CHUNK_SIZE);
+    // Build overlapping chunks: each chunk carries the last SUMMARY_CHUNK_OVERLAP chars
+    // of the previous chunk so table rows that span a boundary are never lost.
+    const rawChunks = chunkText(text, SUMMARY_CHUNK_SIZE);
+    const chunks = rawChunks.map((chunk, i) => {
+        if (i === 0) return chunk;
+        const prevTail = rawChunks[i - 1].slice(-SUMMARY_CHUNK_OVERLAP);
+        return prevTail + "\n" + chunk;
+    });
     const feature = isBanking ? "banking" : "summarize";
-    console.log(`📚 Long document (${text.length} chars, ${chunks.length} chunks) — running map-reduce summarization...`);
+    console.log(`📚 Long document (${text.length} chars, ${chunks.length} chunks, overlap=${SUMMARY_CHUNK_OVERLAP}) — running map-reduce summarization...`);
 
     const notesParts = [];
     for (let b = 0; b < chunks.length; b += SUMMARY_CHUNK_BATCH_SIZE) {
@@ -441,7 +465,7 @@ async function generateSummaryChunked(text, isBanking, onUsage = null) {
     console.log(`📝 Combined notes: ${combinedNotes.length} chars. Generating final summary...`);
 
     const prompt = isBanking ? BANKING_PROMPT(combinedNotes) : GENERAL_PROMPT(combinedNotes);
-    return callWithRotation(() => [{ text: prompt }], 8192, "gemini-2.5-flash", onUsage, feature);
+    return callWithRotation(() => [{ text: prompt }], 8192, "gemini-3.5-flash", onUsage, feature);
 }
 
 // ── Public: summarize text document ──────────────────────────────────────────
@@ -455,7 +479,7 @@ async function generateSummary(text, onUsage) {
     }
 
     const prompt = isBanking ? BANKING_PROMPT(text) : GENERAL_PROMPT(text);
-    return callWithRotation(() => [{ text: prompt }], 8192, "gemini-2.5-flash", onUsage, feature);
+    return callWithRotation(() => [{ text: prompt }], 8192, "gemini-3.5-flash", onUsage, feature);
 }
 
 // ── Public: summarize image ───────────────────────────────────────────────────
@@ -489,7 +513,7 @@ RULES:
     return callWithRotation(() => [
         { text: prompt },
         { inline_data: { mime_type: mimeType, data: base64Data } },
-    ], 8192, "gemini-2.5-flash", onUsage, "summarize");
+    ], 8192, "gemini-3.5-flash", onUsage, "summarize");
 }
 
 // ── Table extraction helpers ──────────────────────────────────────────────────
@@ -593,7 +617,7 @@ Rebuild and return ONLY the valid JSON array using exactly those keys. No commen
 Text:
 ${previousRaw}
 `;
-    return callWithRotation(() => [{ text: prompt }], 8192, "gemini-2.5-flash", onUsage, "table");
+    return callWithRotation(() => [{ text: prompt }], 8192, "gemini-3.5-flash", onUsage, "table");
 }
 
 function cleanTableText(rawText) {
@@ -628,7 +652,7 @@ async function extractTableData(text, fields, onUsage) {
 
     if (cleanedText.length <= 8000) {
         const prompt = buildTablePrompt(cleanedText, fields);
-        const raw = await callWithRotation(() => [{ text: prompt }], 16384, "gemini-2.5-flash", onUsage, "table");
+        const raw = await callWithRotation(() => [{ text: prompt }], 16384, "gemini-3.5-flash", onUsage, "table");
         try {
             return parseTableJSON(raw, fields);
         } catch {
@@ -651,7 +675,7 @@ async function extractTableData(text, fields, onUsage) {
         const batchResults = await Promise.all(
             batch.map(async (chunk, i) => {
                 const prompt = buildTablePrompt(chunk, fields);
-                const raw = await callWithRotation(() => [{ text: prompt }], 16384, "gemini-2.5-flash", onUsage, "table");
+                const raw = await callWithRotation(() => [{ text: prompt }], 16384, "gemini-3.5-flash", onUsage, "table");
                 try {
                     return parseTableJSON(raw, fields);
                 } catch {
@@ -693,7 +717,7 @@ async function extractTableFromImage(base64Data, mimeType, fields, onUsage) {
     const raw = await callWithRotation(() => [
         { text: prompt },
         { inline_data: { mime_type: mimeType, data: base64Data } },
-    ], 8192, "gemini-2.5-flash", onUsage, "table");
+    ], 8192, "gemini-3.5-flash", onUsage, "table");
     try {
         return parseTableJSON(raw, fields);
     } catch {
@@ -727,7 +751,7 @@ RULES:
 Document excerpts:
 ${snippet}`;
 
-    const raw = await callWithRotation(() => [{ text: prompt }], 512, "gemini-2.5-flash");
+    const raw = await callWithRotation(() => [{ text: prompt }], 512, "gemini-3.5-flash");
     try {
         const clean = raw.replace(/```json/gi, "").replace(/```/g, "").trim();
         const parsed = JSON.parse(clean);
@@ -743,7 +767,7 @@ async function extractTextFromImage(base64Data, mimeType, onUsage) {
     return callWithRotation(() => [
         { text: prompt },
         { inline_data: { mime_type: mimeType, data: base64Data } },
-    ], 4096, "gemini-2.5-flash", onUsage, "summarize");
+    ], 4096, "gemini-3.5-flash", onUsage, "summarize");
 }
 
 async function suggestTableFieldsFromImage(base64Data, mimeType) {
@@ -759,7 +783,7 @@ Example: ["Name", "Date", "Amount", "Description"]`;
     const raw = await callWithRotation(() => [
         { text: prompt },
         { inline_data: { mime_type: mimeType, data: base64Data } },
-    ], 512, "gemini-2.5-flash");
+    ], 512, "gemini-3.5-flash");
     try {
         const clean = raw.replace(/```json/gi, "").replace(/```/g, "").trim();
         const parsed = JSON.parse(clean);

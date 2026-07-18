@@ -51,9 +51,14 @@ function isEmptyContent(extracted) {
  */
 function isScannedPdf(text, pageCount) {
   if (!text || text.trim().length === 0) return true;
-  const avgCharsPerPage = text.trim().length / Math.max(pageCount || 1, 1);
-  // Real text PDFs: 300-3000+ chars/page. Scanned images: < 100.
-  return avgCharsPerPage < 100;
+  const trimmed = text.trim();
+  // If total extracted text is very short regardless of page count, treat as scanned
+  if (trimmed.length < 50) return true;
+  const avgCharsPerPage = trimmed.length / Math.max(pageCount || 1, 1);
+  // Real text PDFs (including table-heavy bank statements): typically 200–3000+ chars/page.
+  // Pure image/scanned PDFs with no text layer: < 50 chars/page.
+  // Threshold raised from 100 → 50 to avoid falsely OCR-ing digital PDFs with sparse tables.
+  return avgCharsPerPage < 50;
 }
 
 // ── OCR via Gemini Vision ─────────────────────────────────────────────────────
