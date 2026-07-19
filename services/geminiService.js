@@ -312,6 +312,15 @@ function isBankingDocument(text) {
         "pan number", "gst number", "form 26as", "tds certificate",
         "neft", "rtgs", "imps", "upi", "nach", "ecs", "micr",
         "cif", "kyc", "nbfc", "rbi",
+        // financial statements / microfinance / accounting
+        "balance sheet", "income statement", "statement of income", "net income",
+        "gross loans", "loan loss reserve", "loans outstanding", "provision for loan",
+        "financial income", "financial costs", "financial margin", "operating expenses",
+        "total assets", "total liabilities", "total equity", "retained surplus",
+        "cash flow", "sources of funds", "uses of funds", "loan fund capital",
+        "microfinance", "credit programme", "credit program", "concessional",
+        "past-due", "restructured loan", "write-off", "excess of income",
+        "grant revenue", "operational self-sufficiency",
     ];
     const matches = bankingKeywords.filter(kw => lower.includes(kw));
     return matches.length >= 3;
@@ -338,7 +347,7 @@ Return the summary in clean Markdown, following this exact structure and nothing
 Write 2-4 well-structured paragraphs giving a clear overview of what the document is about, its purpose, scope, and main takeaways. A reader who only reads this section should understand the essence of the entire document.
 
 ## Key Points
-List the 4-8 most important points from the document as bullet points. Each point should be a complete, standalone insight — not a fragment. Prioritize points that carry decisions, findings, requirements, or critical information over minor details.
+List the most important points from the document as bullet points — use as many bullets as needed to cover all significant findings (minimum 4, no artificial cap). Each point should be a complete, standalone insight — not a fragment. For financial or statistical documents, include every named figure, ratio, and year-over-year comparison. Prioritize points that carry decisions, findings, requirements, or critical information over minor details.
 
 ## Important Information
 Call out any of the following if present in the document: specific numbers, statistics, dates, deadlines, names of people or organizations, technical specifications, requirements, risks, or warnings. If the document contains none of these, write "No additional critical details beyond the key points above." Do not fabricate this section if it doesn't apply.
@@ -390,10 +399,10 @@ List every headline financial figure present. Use "**Label:** Value" on its own 
 3–4 paragraphs covering how the balance moved during the period.
 
 ## Transaction Breakdown
-List categories with total amounts if available.
+List every transaction category with total amounts. If the document contains prior-year or comparative figures, include them as sub-items (e.g. "1995: X | 1994: Y | Change: +Z%"). Do not omit any line item that has a figure attached.
 
 ## Key Transactions
-List 6–12 most significant transactions.
+List ALL transactions above INR 10,000 (or 10% of the opening balance, whichever is lower). For documents with fewer than 30 transactions, list every single one. For high-volume statements (30+ transactions), list all large inflows, all large outflows, all fees/charges, and any transaction that caused the balance to drop below INR 500. Format each as: "**Date | Description | Amount | Balance after**".
 
 ## Fees, Charges & Taxes
 List every fee, charge, penalty, and tax.

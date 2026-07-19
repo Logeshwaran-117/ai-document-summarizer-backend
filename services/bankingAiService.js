@@ -247,9 +247,11 @@ async function extractTransactions(text, onUsage) {
    // Clean pdf-parse artifacts first
   const cleanedText = cleanTableText(text);
   const CHUNK_SIZE = 7000;
+  const OVERLAP    = 500;   // carry last 500 chars of each chunk into the next
   const chunks = [];
   for (let i = 0; i < cleanedText.length; i += CHUNK_SIZE) {
-    chunks.push(cleanedText.slice(i, i + CHUNK_SIZE));
+    const start = i === 0 ? 0 : i - OVERLAP;
+    chunks.push(cleanedText.slice(start, i + CHUNK_SIZE));
   }
 
   const allTransactions = [];
@@ -362,16 +364,21 @@ async function categoriseTransactions(transactions) {
 async function detectAnomalies(transactions) {
   if (transactions.length < 3) return transactions;
 
-  const summary = transactions.slice(0, 60).map((t, i) =>
-    `${i}: ${t.date} | ${t.description} | debit:${t.debit ?? ''} credit:${t.credit ?? ''}`
-  ).join('\n');
+  const ANOMALY_BATCH = 80;
+  const allFlagged = new Map();
 
-  const prompt = `You are a fraud analyst. Review these bank transactions and identify anomalies.
+  for (let i = 0; i < transactions.length; i += ANOMALY_BATCH) {
+    const batch = transactions.slice(i, i + ANOMALY_BATCH);
+    const summary = batch.map((t, bi) =>
+      `${i + bi}: ${t.date} | ${t.description} | debit:${t.debit ?? ''} credit:${t.credit ?? ''}`
+    ).join('\n');
+
+    const prompt = `You are a fraud analyst. Review these bank transactions and identify anomalies.
 
 An anomaly is: unusually large amount, duplicate charge, odd timing, suspicious description, round-number large transfers, or a payment that seems out of pattern.
 
 Return ONLY a JSON array of objects with:
-- index (number)
+- index (number — use the global index shown, not position within this batch)
 - reason (string — short 1-sentence explanation)
 
 If no anomalies, return []. Return raw JSON only.
@@ -379,19 +386,19 @@ If no anomalies, return []. Return raw JSON only.
 Transactions:
 ${summary}`;
 
-  try {
-    const raw = await callWithRotation(() => [{ text: prompt }], 1024);
-    const clean = raw.replace(/```json/gi, '').replace(/```/g, '').trim();
-    const anomalies = JSON.parse(clean);
-    const flagged = new Map(anomalies.map(a => [a.index, a.reason]));
-    return transactions.map((t, i) => ({
-      ...t,
-      isAnomaly: flagged.has(i),
-      anomalyReason: flagged.get(i) || null,
-    }));
-  } catch {
-    return transactions;
+    try {
+      const raw = await callWithRotation(() => [{ text: prompt }], 1024);
+      const clean = raw.replace(/```json/gi, '').replace(/```/g, '').trim();
+      const anomalies = JSON.parse(clean);
+      for (const a of anomalies) allFlagged.set(a.index, a.reason);
+    } catch { /* non-fatal — batch skipped */ }
   }
+
+  return transactions.map((t, i) => ({
+    ...t,
+    isAnomaly: allFlagged.has(i),
+    anomalyReason: allFlagged.get(i) || null,
+  }));
 }
 
 // ── Executive summary ─────────────────────────────────────────────────────────
@@ -410,7 +417,7 @@ Key Statistics:
 ${statsBlock}
 
 Document Content:
-${text.slice(0, 6000)}
+${text.slice(0, 20000)}
 
 Write your summary using Markdown with these sections:
 ## Executive Summary
@@ -431,7 +438,7 @@ async function answerBankingQuestion(extractedText, transactions, question, chat
     .map(m => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.text}`)
     .join('\n');
 
-  const txSample = transactions.slice(0, 30)
+  const txSample = transactions.slice(0, 100)
     .map(t => `${t.date} | ${t.description} | D:${t.debit ?? '-'} C:${t.credit ?? '-'} | ${t.category}`)
     .join('\n');
 
@@ -445,7 +452,7 @@ Rules:
 ${historyText ? `Previous conversation:\n${historyText}\n` : ''}
 
 Document text (excerpt):
-${extractedText?.slice(0, 3000) || ''}
+${extractedText?.slice(0, 8000) || ''}
 
 Transaction sample (${transactions.length} total):
 ${txSample || 'No structured transactions extracted — use raw document text above.'}
@@ -456,17 +463,7 @@ Answer:`;
   return callWithRotation(() => [{ text: prompt }], 1500, "gemini-2.5-flash", onUsage);
 }
 
-// Updated exports
-module.exports = {
-  detectDocumentType,
-  normaliseDocType,
-  extractMetadata,
-  extractTransactions,
-  categoriseTransactions,
-  detectAnomalies,
-  generateBankingSummary,
-  answerBankingQuestion,
-};
+// (exports consolidated below with extractTransactionsFromPdfVision)
 
 // ── Direct Gemini Vision extraction for scanned PDFs ─────────────────────────
 /**

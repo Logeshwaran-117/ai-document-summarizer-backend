@@ -101,28 +101,37 @@ function round2(n) {
   return Math.round((n + Number.EPSILON) * 100) / 100;
 }
 
+const MONTH_NAMES = {
+  jan:1,feb:2,mar:3,apr:4,may:5,jun:6,
+  jul:7,aug:8,sep:9,oct:10,nov:11,dec:12,
+};
+
 function extractMonthKey(dateStr) {
   if (!dateStr) return null;
-  // Try various date formats
-  const patterns = [
-    /(\d{4})-(\d{2})-\d{2}/,          // 2024-01-15
-    /(\d{2})\/(\d{2})\/(\d{4})/,      // 15/01/2024 or 01/15/2024
-    /([A-Za-z]+)\s+\d+,?\s+(\d{4})/,  // Jan 15, 2024
-  ];
 
-  for (const p of patterns) {
-    const m = dateStr.match(p);
-    if (m) {
-      try {
-        const d = new Date(dateStr);
-        if (!isNaN(d)) {
-          const yr = d.getFullYear();
-          const mo = String(d.getMonth() + 1).padStart(2, '0');
-          return `${yr}-${mo}`;
-        }
-      } catch { /* skip */ }
-    }
+  // "27 Jun 2026" or "27 Jun 2026" — Indian bank format
+  const indianMatch = dateStr.match(/(\d{1,2})\s+([A-Za-z]{3,})\s+(\d{4})/);
+  if (indianMatch) {
+    const mo = MONTH_NAMES[indianMatch[2].toLowerCase().slice(0, 3)];
+    if (mo) return `${indianMatch[3]}-${String(mo).padStart(2, '0')}`;
   }
+
+  // ISO: 2024-01-15
+  const isoMatch = dateStr.match(/(\d{4})-(\d{2})-\d{2}/);
+  if (isoMatch) return `${isoMatch[1]}-${isoMatch[2]}`;
+
+  // DD/MM/YYYY
+  const dmyMatch = dateStr.match(/(\d{2})\/(\d{2})\/(\d{4})/);
+  if (dmyMatch) return `${dmyMatch[3]}-${dmyMatch[2]}`;
+
+  // Fallback to Date constructor
+  try {
+    const d = new Date(dateStr);
+    if (!isNaN(d)) {
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    }
+  } catch { /* skip */ }
+
   return null;
 }
 

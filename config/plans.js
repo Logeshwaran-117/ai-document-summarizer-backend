@@ -5,10 +5,11 @@ const PLANS = {
     name: 'Free',
     price: { monthly: 0, yearly: 0 },
     limits: {
-      summarize: 5,    // per day
-      tables: 5,       // per day
-      fileSize: 10,    // MB
-      historyDays: 30, // days to keep history
+      summarize: 5,       // per day
+      tables: 5,          // per day
+      fileSize: 10,       // MB
+      historyDays: 30,    // days to keep history
+      tokenLimit: 50000,  // lifetime token budget before upgrade prompt
     },
     features: [
       '5 document summaries / day',
@@ -27,10 +28,11 @@ const PLANS = {
     name: 'Pro',
     price: { monthly: 499, yearly: 4499 }, // INR
     limits: {
-      summarize: 15,   // per day
-      tables: 15,      // per day
+      summarize: 15,        // per day
+      tables: 15,           // per day
       fileSize: 50,
       historyDays: 365,
+      tokenLimit: 2000000,  // 2M tokens/month
     },
     features: [
       '15 document summaries / day',
@@ -65,10 +67,11 @@ const PLANS = {
     name: 'Enterprise',
     price: { monthly: 1999, yearly: 17999 },
     limits: {
-      summarize: -1,   // -1 = unlimited
+      summarize: -1,        // -1 = unlimited
       tables: -1,
       fileSize: 200,
       historyDays: -1,
+      tokenLimit: -1,       // unlimited
     },
     features: [
       'Unlimited summaries & tables',

@@ -59,10 +59,27 @@ connectDB();
 app.set('trust proxy', 1);
 
 // CORS Configuration
+// Production: ALLOWED_ORIGINS is a comma-separated list of allowed origins,
+// e.g. "https://precisqo.com,https://www.precisqo.com,https://staging.precisqo.com"
+// Falls back to FRONTEND_URL for single-origin setups.
+const buildAllowedOrigins = () => {
+  if (process.env.NODE_ENV !== "production") {
+    return ["http://localhost:5173", "http://localhost:5174"];
+  }
+  if (process.env.ALLOWED_ORIGINS) {
+    return process.env.ALLOWED_ORIGINS.split(",").map((o) => o.trim()).filter(Boolean);
+  }
+  return [process.env.FRONTEND_URL].filter(Boolean);
+};
+const ALLOWED_ORIGINS = buildAllowedOrigins();
+
 app.use(cors({
-  origin: process.env.NODE_ENV === "production"
-    ? process.env.FRONTEND_URL
-    : ["http://localhost:5173", "http://localhost:5174"],
+  origin: (origin, callback) => {
+    // Allow server-to-server / curl requests (no Origin header)
+    if (!origin) return callback(null, true);
+    if (ALLOWED_ORIGINS.includes(origin)) return callback(null, true);
+    callback(new Error(`CORS: origin '${origin}' not allowed`));
+  },
   credentials: true,
   exposedHeaders: ["Content-Disposition", "X-Presentation-Id", "X-Slide-Count"],
 }));

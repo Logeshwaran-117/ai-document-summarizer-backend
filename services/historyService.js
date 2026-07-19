@@ -1,8 +1,3 @@
-const fs = require("fs");
-const path = require("path");
-
-const historyPath = path.join(__dirname, "../data/history.json");
-
 const Document = require('../models/Document');
 
 async function saveHistory(userId, record) {
@@ -17,9 +12,4 @@ async function deleteHistory(id, userId) {
   return await Document.findOneAndDelete({ _id: id, userId });
 }
 
-module.exports = {
-    saveHistory,
-    getHistory,
-    deleteHistory
-};
-
+module.exports = { saveHistory, getHistory, deleteHistory };

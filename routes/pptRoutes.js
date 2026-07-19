@@ -1429,31 +1429,98 @@ router.delete("/presentations/:id", async (req, res) => {
 });
 
 // ── AI Presentation Theme Mapper ──────────────────────────────────────────────
+// ── AI Presentation Theme Mapper ──────────────────────────────────────────────
 const WIZARD_THEME_MAP = {
+  "Professional":     "navyGold",
   "Modern":           "midnightBlue",
-  "Glassmorphism":    "midnightBlue",
   "Minimal":          "tealSlate",
+  "Corporate":        "corporatePurple",
+  "Creative":         "forestGreen",
+  "Dark":             "charcoalRuby",
+  "Finance":          "financeGold",
+  "Healthcare":       "healthcareMint",
+  // backwards compat
+  "Glassmorphism":    "midnightBlue",
   "Apple":            "tealSlate",
   "Microsoft Fluent": "navyGold",
   "Google Material":  "tealSlate",
-  "Dark":             "charcoalRuby",
-  "Corporate":        "navyGold",
   "Luxury":           "charcoalRuby",
-  "Professional":     "navyGold",
-  "Creative":         "forestGreen",
   "AI Futuristic":    "midnightBlue",
   "Startup":          "forestGreen",
-  "Finance":          "navyGold",
-  "Healthcare":       "tealSlate",
   "Education":        "forestGreen",
 };
 
+// ── Upgraded 8-theme palette ──────────────────────────────────────────────────
+const AI_THEMES = {
+  navyGold: {
+    label: "Professional", bgDark: "1E2761", bgLight: "F7F9FC", bgMid: "EEF4FF",
+    accent: "C9A84C", teal: "2FA4A0", textLight: "FFFFFF", textDark: "1A1A2E",
+    textMuted: "5A6A8A", cardBg: "FFFFFF", cardAlt: "EEF4FF", border: "E0E8F0",
+    chart1:"1E2761",chart2:"C9A84C",chart3:"2FA4A0",chart4:"E74C3C",chart5:"8E44AD",
+    chart6:"2ECC71",chart7:"E67E22",chart8:"1ABC9C",gradient1:"1E2761",gradient2:"2A3A9E",
+  },
+  midnightBlue: {
+    label: "Modern", bgDark: "0D1B2A", bgLight: "F0F6FF", bgMid: "E0EEFF",
+    accent: "00B4D8", teal: "0077B6", textLight: "FFFFFF", textDark: "0D1B2A",
+    textMuted: "4A6080", cardBg: "FFFFFF", cardAlt: "E0EEFF", border: "C8DCFF",
+    chart1:"0D1B2A",chart2:"00B4D8",chart3:"0077B6",chart4:"E63946",chart5:"2A9D8F",
+    chart6:"E9C46A",chart7:"F4A261",chart8:"264653",gradient1:"0D1B2A",gradient2:"143055",
+  },
+  tealSlate: {
+    label: "Minimal", bgDark: "0F3D3E", bgLight: "F5FAFA", bgMid: "E6F5F3",
+    accent: "3FBFAE", teal: "1F7A72", textLight: "FFFFFF", textDark: "17302F",
+    textMuted: "4E6E6C", cardBg: "FFFFFF", cardAlt: "E6F5F3", border: "D6EAE8",
+    chart1:"0F3D3E",chart2:"3FBFAE",chart3:"F39C12",chart4:"E74C3C",chart5:"8E44AD",
+    chart6:"2ECC71",chart7:"E67E22",chart8:"1ABC9C",gradient1:"0F3D3E",gradient2:"1A5F60",
+  },
+  corporatePurple: {
+    label: "Corporate", bgDark: "1A1A2E", bgLight: "F8F7FF", bgMid: "EEE8FF",
+    accent: "7C3AED", teal: "6D28D9", textLight: "FFFFFF", textDark: "1A1A2E",
+    textMuted: "5A5080", cardBg: "FFFFFF", cardAlt: "EEE8FF", border: "DDD0FF",
+    chart1:"1A1A2E",chart2:"7C3AED",chart3:"06B6D4",chart4:"EF4444",chart5:"10B981",
+    chart6:"F59E0B",chart7:"EC4899",chart8:"14B8A6",gradient1:"1A1A2E",gradient2:"2D1B6B",
+  },
+  forestGreen: {
+    label: "Creative", bgDark: "1B4332", bgLight: "F6FDF9", bgMid: "E8F5EE",
+    accent: "F4A261", teal: "40916C", textLight: "FFFFFF", textDark: "1B4332",
+    textMuted: "4A7C59", cardBg: "FFFFFF", cardAlt: "E8F5EE", border: "C8E6D4",
+    chart1:"1B4332",chart2:"F4A261",chart3:"40916C",chart4:"E63946",chart5:"457B9D",
+    chart6:"E9C46A",chart7:"2A9D8F",chart8:"264653",gradient1:"1B4332",gradient2:"2D6A4F",
+  },
+  charcoalRuby: {
+    label: "Dark", bgDark: "0F0F0F", bgLight: "F9F7F7", bgMid: "F0E8E8",
+    accent: "C0392B", teal: "8B4513", textLight: "FFFFFF", textDark: "0F0F0F",
+    textMuted: "5A4A48", cardBg: "FFFFFF", cardAlt: "F0E8E8", border: "E0D0CE",
+    chart1:"0F0F0F",chart2:"C0392B",chart3:"E67E22",chart4:"27AE60",chart5:"2980B9",
+    chart6:"8E44AD",chart7:"F39C12",chart8:"1ABC9C",gradient1:"0F0F0F",gradient2:"2C0A0A",
+  },
+  financeGold: {
+    label: "Finance", bgDark: "0A2342", bgLight: "F8F6EE", bgMid: "EEE8D4",
+    accent: "D4AF37", teal: "B8960C", textLight: "FFFFFF", textDark: "0A2342",
+    textMuted: "4A5068", cardBg: "FFFFFF", cardAlt: "EEE8D4", border: "DDD0A0",
+    chart1:"0A2342",chart2:"D4AF37",chart3:"C0A030",chart4:"C0392B",chart5:"2E86AB",
+    chart6:"27AE60",chart7:"E67E22",chart8:"8E44AD",gradient1:"0A2342",gradient2:"143060",
+  },
+  healthcareMint: {
+    label: "Healthcare", bgDark: "1B3A4B", bgLight: "F4FBF8", bgMid: "E0F2EC",
+    accent: "52B788", teal: "40916C", textLight: "FFFFFF", textDark: "1B3A4B",
+    textMuted: "456070", cardBg: "FFFFFF", cardAlt: "E0F2EC", border: "C0E0D4",
+    chart1:"1B3A4B",chart2:"52B788",chart3:"40916C",chart4:"E76F51",chart5:"457B9D",
+    chart6:"E9C46A",chart7:"2A9D8F",chart8:"264653",gradient1:"1B3A4B",gradient2:"264C60",
+  },
+};
+
+function resolveAITheme(key) {
+  return AI_THEMES[WIZARD_THEME_MAP[key] || key] || AI_THEMES.navyGold;
+}
+
 // ── Build deck from AI-generated slides ───────────────────────────────────────
 function buildAIDeck({ aiSlides, strategy, docTitle, heroTitle, themeKey, wizardOptions }) {
-  const COLORS = resolveTheme(WIZARD_THEME_MAP[themeKey] || themeKey || "navyGold");
+  const COLORS = resolveAITheme(themeKey);
   const includeNotes = wizardOptions.speakerNotes !== "No";
   const totalSlides = aiSlides.length;
   const today = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+  const CARD_PALETTE = [COLORS.chart2, COLORS.chart3, COLORS.chart4, COLORS.chart5, COLORS.chart1, COLORS.teal, COLORS.chart6, COLORS.chart7];
 
   const pres = new pptxgen();
   pres.layout = "LAYOUT_16x9";
@@ -1466,37 +1533,63 @@ function buildAIDeck({ aiSlides, strategy, docTitle, heroTitle, themeKey, wizard
     slideCounter++;
 
     // ── COVER SLIDE ──────────────────────────────────────────────────────────
-    if (slide.isCover || slide.slideType === "cover") {
+    if (slide.slideType === "cover") {
       s.background = { color: COLORS.bgDark };
+
+      // Grid pattern overlay (subtle)
+      for (let gx = 0; gx < 10; gx += 0.8) {
+        s.addShape(pres.shapes.RECTANGLE, { x: gx, y: 0, w: 0.01, h: 5.63, fill: { color: COLORS.accent, transparency: 96 }, line: { color: COLORS.accent, transparency: 96 } });
+      }
+      for (let gy = 0; gy < 5.63; gy += 0.7) {
+        s.addShape(pres.shapes.RECTANGLE, { x: 0, y: gy, w: 10, h: 0.01, fill: { color: COLORS.accent, transparency: 96 }, line: { color: COLORS.accent, transparency: 96 } });
+      }
+
+      // Decorative circles
       s.addShape(pres.shapes.OVAL, { x: 7.8, y: -1.0, w: 3.5, h: 3.5, fill: { color: COLORS.accent, transparency: 75 }, line: { color: COLORS.accent, transparency: 75 } });
       s.addShape(pres.shapes.OVAL, { x: -0.5, y: 4.0, w: 2.0, h: 2.0, fill: { color: COLORS.teal, transparency: 80 }, line: { color: COLORS.teal, transparency: 80 } });
       s.addShape(pres.shapes.OVAL, { x: 4.5, y: 3.5, w: 1.2, h: 1.2, fill: { color: COLORS.chart3, transparency: 85 }, line: { color: COLORS.chart3, transparency: 85 } });
-      s.addShape(pres.shapes.RECTANGLE, { x: 0.6, y: 2.8, w: 1.6, h: 0.05, fill: { color: COLORS.accent }, line: { color: COLORS.accent } });
-      s.addText(wizardOptions.presentationType?.toUpperCase() || "PRESENTATION", { x: 0.6, y: 1.35, w: 8.8, h: 0.5, fontSize: 11, color: COLORS.accent, bold: true, charSpacing: 4, fontFace: "Calibri" });
-      s.addText(heroTitle, { x: 0.6, y: 1.82, w: 8.8, h: 1.15, fontSize: 34, color: COLORS.textLight, bold: true, fontFace: "Cambria", lineSpacing: 40 });
+
+      // Document type badge
+      const docLabel = (slide.documentTypeLabel || wizardOptions.presentationType || strategy?.documentType || "PRESENTATION").replace(/_/g, " ").toUpperCase();
+      s.addShape("roundRect", { x: 0.6, y: 1.1, w: Math.min(docLabel.length * 0.11 + 0.4, 4.5), h: 0.3, fill: { color: COLORS.accent, transparency: 80 }, line: { color: COLORS.accent, transparency: 60 }, rectRadius: 0.04 });
+      s.addText(docLabel, { x: 0.7, y: 1.1, w: 4.5, h: 0.3, fontSize: 9, color: COLORS.accent, bold: true, charSpacing: 3, fontFace: "Calibri" });
+
+      s.addShape(pres.shapes.RECTANGLE, { x: 0.6, y: 1.52, w: 1.6, h: 0.04, fill: { color: COLORS.accent }, line: { color: COLORS.accent } });
+      s.addText(heroTitle, { x: 0.6, y: 1.6, w: 8.0, h: 1.3, fontSize: 34, color: COLORS.textLight, bold: true, fontFace: "Cambria", lineSpacing: 42 });
       if (slide.subtitle) {
-        s.addText(slide.subtitle, { x: 0.6, y: 3.05, w: 8.8, h: 0.45, fontSize: 13, color: "A0B0D0", fontFace: "Calibri" });
+        s.addText(slide.subtitle, { x: 0.6, y: 3.05, w: 8.2, h: 0.55, fontSize: 13, color: "A0B0D0", fontFace: "Calibri" });
       }
-      s.addText(`${today}  •  For: ${wizardOptions.audience || "All"}  •  AI-Generated`, { x: 0.6, y: 4.75, w: 8.8, h: 0.42, fontSize: 11, color: "6A80A8", fontFace: "Calibri" });
+      s.addText(`${today}  •  ${wizardOptions.audience || "All Stakeholders"}`, { x: 0.6, y: 4.85, w: 8.8, h: 0.38, fontSize: 10, color: "6A80A8", fontFace: "Calibri" });
       if (includeNotes) s.addNotes(slide.speakerNotes || `Cover slide: ${heroTitle}`);
       continue;
     }
 
     // ── CLOSING SLIDE ────────────────────────────────────────────────────────
-    if (slide.isClosing || slide.slideType === "closing") {
+    if (slide.slideType === "closing") {
       s.background = { color: COLORS.bgDark };
       s.addShape(pres.shapes.OVAL, { x: -1.0, y: 2.5, w: 4.0, h: 4.0, fill: { color: COLORS.accent, transparency: 82 }, line: { color: COLORS.accent, transparency: 82 } });
       s.addShape(pres.shapes.OVAL, { x: 8.5, y: -0.5, w: 2.5, h: 2.5, fill: { color: COLORS.teal, transparency: 78 }, line: { color: COLORS.teal, transparency: 78 } });
-      s.addShape(pres.shapes.RECTANGLE, { x: 2.5, y: 2.9, w: 5.0, h: 0.04, fill: { color: COLORS.accent, transparency: 60 }, line: { color: COLORS.accent, transparency: 60 } });
-      s.addText(slide.title || "Thank You", { x: 1, y: 1.5, w: 8, h: 1.2, fontSize: 46, color: COLORS.textLight, bold: true, fontFace: "Cambria", align: "center" });
-      s.addText(slide.body || strategy?.keyMessages?.[0] || "AI-generated Presentation", { x: 1, y: 3.0, w: 8, h: 0.9, fontSize: 14, color: "7A90B8", align: "center", fontFace: "Calibri" });
-      s.addText(today, { x: 1, y: 3.9, w: 8, h: 0.35, fontSize: 11, color: "5A6A8A", align: "center", fontFace: "Calibri" });
+      s.addShape(pres.shapes.RECTANGLE, { x: 2.5, y: 2.6, w: 5.0, h: 0.04, fill: { color: COLORS.accent, transparency: 60 }, line: { color: COLORS.accent, transparency: 60 } });
+      s.addText(slide.title || "Thank You", { x: 1, y: 1.2, w: 8, h: 1.1, fontSize: 44, color: COLORS.textLight, bold: true, fontFace: "Cambria", align: "center" });
+      s.addText(slide.body || strategy?.mostImportantInsight || strategy?.keyMessages?.[0] || "AI-Generated Presentation", { x: 1.5, y: 2.4, w: 7, h: 0.55, fontSize: 13, color: "7A90B8", align: "center", fontFace: "Calibri" });
+
+      // Key messages on closing slide
+      const closingMessages = slide.keyMessages || strategy?.keyMessages?.slice(0, 3) || [];
+      if (closingMessages.length > 0) {
+        let msgY = 3.1;
+        closingMessages.slice(0, 3).forEach(msg => {
+          s.addShape(pres.shapes.OVAL, { x: 1.2, y: msgY + 0.04, w: 0.12, h: 0.12, fill: { color: COLORS.accent }, line: { color: COLORS.accent } });
+          s.addText(msg.slice(0, 100), { x: 1.42, y: msgY, w: 7.2, h: 0.28, fontSize: 10, color: "8A9FC0", fontFace: "Calibri" });
+          msgY += 0.33;
+        });
+      }
+      s.addText(today, { x: 1, y: 5.05, w: 8, h: 0.28, fontSize: 9.5, color: "5A6A8A", align: "center", fontFace: "Calibri" });
       if (includeNotes) s.addNotes(slide.speakerNotes || "Closing slide.");
       continue;
     }
 
     // ── SECTION DIVIDER ──────────────────────────────────────────────────────
-    if (slide.isSection || slide.slideType === "section") {
+    if (slide.slideType === "section") {
       s.background = { color: COLORS.bgDark };
       s.addShape(pres.shapes.OVAL, { x: 7.5, y: -1.0, w: 4.0, h: 4.0, fill: { color: COLORS.accent, transparency: 88 }, line: { color: COLORS.accent, transparency: 88 } });
       s.addShape(pres.shapes.OVAL, { x: 6.5, y: 3.8, w: 2.5, h: 2.5, fill: { color: COLORS.teal, transparency: 85 }, line: { color: COLORS.teal, transparency: 85 } });
@@ -1506,20 +1599,95 @@ function buildAIDeck({ aiSlides, strategy, docTitle, heroTitle, themeKey, wizard
       if (slide.subtitle) {
         s.addText(slide.subtitle.slice(0, 180), { x: 0.6, y: 3.5, w: 7.2, h: 0.9, fontSize: 13, color: "8099C0", fontFace: "Calibri", italic: true, valign: "top" });
       }
-      addFooter(s, COLORS, docTitle, slideCounter, totalSlides);
+      addAIFooter(s, COLORS, docTitle, slideCounter, totalSlides);
       if (includeNotes) s.addNotes(slide.speakerNotes || `Section: ${slide.title}`);
       continue;
     }
 
-    // ── All other slides share a header ─────────────────────────────────────
+    // ── All content slides share a dark header ───────────────────────────────
     s.background = { color: COLORS.bgLight };
-    addSlideHeader(s, pres, COLORS, slide.title || "Slide", slide.icon || "📄");
+    addAISlideHeader(s, pres, COLORS, slide.title || "Slide", slide.icon || "📄");
 
     const SAFE_Y = 1.45;
     const SAFE_H = 3.72;
 
+    // ── PROCESS SLIDE ─────────────────────────────────────────────────────────
+    if (slide.slideType === "process" && Array.isArray(slide.steps) && slide.steps.length > 0) {
+      const steps = slide.steps.slice(0, 6);
+      const count = steps.length;
+      const spineY = SAFE_Y + SAFE_H * 0.38;
+      const stepSpan = 9.0;
+      const stepW = stepSpan / count;
+
+      // Horizontal spine
+      s.addShape(pres.shapes.RECTANGLE, { x: 0.4, y: spineY, w: stepSpan, h: 0.04, fill: { color: COLORS.teal, transparency: 60 }, line: { color: COLORS.teal, transparency: 60 } });
+
+      steps.forEach((step, i) => {
+        const cx = 0.4 + i * stepW + stepW * 0.5;
+        const isAbove = i % 2 === 0 || count <= 3;
+        const cc = CARD_PALETTE[i % CARD_PALETTE.length];
+
+        // Circle on spine
+        s.addShape(pres.shapes.OVAL, { x: cx - 0.22, y: spineY - 0.22, w: 0.44, h: 0.44, fill: { color: cc, transparency: 75 }, line: { color: cc, transparency: 50 } });
+        s.addShape(pres.shapes.OVAL, { x: cx - 0.14, y: spineY - 0.14, w: 0.28, h: 0.28, fill: { color: cc }, line: { color: cc } });
+        s.addText(String(step.number || i + 1), { x: cx - 0.14, y: spineY - 0.14, w: 0.28, h: 0.28, fontSize: 8, color: COLORS.textLight, bold: true, align: "center", valign: "middle", fontFace: "Calibri" });
+
+        const titleY = isAbove ? spineY - 0.75 : spineY + 0.35;
+        const descY = isAbove ? spineY - 1.45 : spineY + 0.68;
+
+        s.addText((step.icon || "") + " " + (step.title || `Step ${i + 1}`).slice(0, 30), {
+          x: cx - stepW * 0.42, y: titleY, w: stepW * 0.84, h: 0.28,
+          fontSize: 9.5, color: cc, bold: true, align: "center", fontFace: "Calibri",
+        });
+        if (step.description) {
+          s.addText(step.description.slice(0, 80), {
+            x: cx - stepW * 0.42, y: descY, w: stepW * 0.84, h: 0.55,
+            fontSize: 8.5, color: COLORS.textMuted, align: "center", fontFace: "Calibri",
+          });
+        }
+      });
+
+    // ── SCORECARD SLIDE ───────────────────────────────────────────────────────
+    } else if (slide.slideType === "scorecard" && Array.isArray(slide.items) && slide.items.length > 0) {
+      const items = slide.items.slice(0, 8);
+      const useTwoCols = items.length > 4;
+      const cols = useTwoCols ? 2 : 1;
+      const colW = useTwoCols ? 4.55 : 9.2;
+      const gap = 0.2;
+      const rowH = Math.min((SAFE_H - gap * (Math.ceil(items.length / cols) - 1)) / Math.ceil(items.length / cols), 0.82);
+
+      const statusColor = { good: "27AE60", warning: "F39C12", critical: "E74C3C" };
+
+      items.forEach((item, i) => {
+        const col = useTwoCols ? i % 2 : 0;
+        const row = useTwoCols ? Math.floor(i / 2) : i;
+        const x = 0.3 + col * (colW + gap);
+        const y = SAFE_Y + row * (rowH + gap);
+        const sc = statusColor[item.status] || statusColor.warning;
+        const pct = item.maxScore > 0 ? Math.min((item.score / item.maxScore) * 100, 100) : 0;
+
+        s.addShape("roundRect", { x, y, w: colW, h: rowH, fill: { color: COLORS.cardBg }, line: { color: COLORS.border }, rectRadius: 0.07 });
+        // Status pill
+        s.addShape("roundRect", { x: x + colW - 1.1, y: y + rowH * 0.15, w: 0.9, h: 0.26, fill: { color: sc, transparency: 82 }, line: { color: sc, transparency: 60 }, rectRadius: 0.13 });
+        s.addText(item.status?.toUpperCase() || "?", { x: x + colW - 1.1, y: y + rowH * 0.15, w: 0.9, h: 0.26, fontSize: 7.5, color: sc, bold: true, align: "center", valign: "middle", fontFace: "Calibri" });
+        // Category
+        s.addText(item.category?.slice(0, 30) || "", { x: x + 0.15, y: y + 0.06, w: colW - 1.35, h: 0.26, fontSize: 10, color: COLORS.textDark, bold: true, fontFace: "Calibri" });
+        // Score fraction
+        s.addText(`${item.score}/${item.maxScore}`, { x: x + 0.15, y: y + 0.32, w: 1.0, h: 0.22, fontSize: 9, color: sc, bold: true, fontFace: "Cambria" });
+        // Progress bar
+        const barX = x + 1.3;
+        const barW = colW - 1.6;
+        s.addShape("roundRect", { x: barX, y: y + 0.37, w: barW, h: 0.1, fill: { color: COLORS.border }, line: { color: COLORS.border }, rectRadius: 0.05 });
+        const fillW = Math.max((pct / 100) * barW, 0.05);
+        s.addShape("roundRect", { x: barX, y: y + 0.37, w: fillW, h: 0.1, fill: { color: sc }, line: { color: sc }, rectRadius: 0.05 });
+        // Comment
+        if (item.comment && rowH > 0.6) {
+          s.addText(item.comment.slice(0, 55), { x: x + 0.15, y: y + rowH - 0.25, w: colW - 0.3, h: 0.22, fontSize: 8, color: COLORS.textMuted, fontFace: "Calibri" });
+        }
+      });
+
     // ── QUOTE SLIDE ──────────────────────────────────────────────────────────
-    if (slide.slideType === "quote" && slide.quote) {
+    } else if (slide.slideType === "quote" && slide.quote) {
       s.addShape(pres.shapes.OVAL, { x: -0.5, y: 3.0, w: 2.5, h: 2.5, fill: { color: COLORS.accent, transparency: 88 }, line: { color: COLORS.accent, transparency: 88 } });
       s.addText("\u201C", { x: 0.4, y: 1.5, w: 1.2, h: 1.2, fontSize: 80, color: COLORS.accent, fontFace: "Cambria", bold: true, transparency: 30 });
       s.addText(slide.quote.text.slice(0, 300), { x: 1.2, y: 2.0, w: 7.6, h: 2.0, fontSize: 18, color: COLORS.textDark, fontFace: "Cambria", italic: true, valign: "middle", lineSpacing: 28 });
@@ -1530,33 +1698,56 @@ function buildAIDeck({ aiSlides, strategy, docTitle, heroTitle, themeKey, wizard
     // ── SWOT SLIDE ───────────────────────────────────────────────────────────
     } else if (slide.slideType === "swot" && slide.swotData) {
       const sw = slide.swotData;
-      const quadrants = [
-        { label: "STRENGTHS", items: sw.strengths || [], color: COLORS.chart6, x: 0.3, y: SAFE_Y },
-        { label: "WEAKNESSES", items: sw.weaknesses || [], color: COLORS.chart4, x: 5.05, y: SAFE_Y },
-        { label: "OPPORTUNITIES", items: sw.opportunities || [], color: COLORS.chart2, x: 0.3, y: SAFE_Y + SAFE_H / 2 + 0.05 },
-        { label: "THREATS", items: sw.threats || [], color: COLORS.chart7, x: 5.05, y: SAFE_Y + SAFE_H / 2 + 0.05 },
-      ];
       const qW = 4.65; const qH = SAFE_H / 2 - 0.08;
+      const quadrants = [
+        { label: "💪  STRENGTHS", items: sw.strengths || [], color: "27AE60", x: 0.3, y: SAFE_Y },
+        { label: "⚠️  WEAKNESSES", items: sw.weaknesses || [], color: "E74C3C", x: 5.05, y: SAFE_Y },
+        { label: "🚀  OPPORTUNITIES", items: sw.opportunities || [], color: COLORS.chart2, x: 0.3, y: SAFE_Y + qH + 0.1 },
+        { label: "🛡️  THREATS", items: sw.threats || [], color: "E67E22", x: 5.05, y: SAFE_Y + qH + 0.1 },
+      ];
       quadrants.forEach(q => {
-        s.addShape("roundRect", { x: q.x, y: q.y, w: qW, h: qH, fill: { color: COLORS.cardBg }, line: { color: q.color }, rectRadius: 0.08 });
-        s.addText(q.label, { x: q.x + 0.15, y: q.y + 0.1, w: qW - 0.3, h: 0.3, fontSize: 9, color: q.color, bold: true, fontFace: "Calibri", charSpacing: 1 });
-        const bullets = q.items.slice(0, 4).map((b, i) => ({ text: b.slice(0, 60), options: { bullet: { code: "2022", color: q.color }, breakLine: i < q.items.length - 1, fontSize: 11, color: COLORS.textDark, paraSpaceAfter: 4 } }));
-        if (bullets.length) s.addText(bullets, { x: q.x + 0.15, y: q.y + 0.44, w: qW - 0.3, h: qH - 0.54, fontFace: "Calibri", valign: "top" });
+        s.addShape("roundRect", { x: q.x, y: q.y, w: qW, h: qH, fill: { color: COLORS.cardBg }, line: { color: q.color, transparency: 40 }, rectRadius: 0.08 });
+        // Colored header band
+        s.addShape("roundRect", { x: q.x, y: q.y, w: qW, h: 0.32, fill: { color: q.color, transparency: 85 }, line: { color: q.color, transparency: 70 }, rectRadius: 0.08 });
+        s.addText(q.label, { x: q.x + 0.12, y: q.y + 0.04, w: qW - 0.2, h: 0.24, fontSize: 8.5, color: q.color, bold: true, fontFace: "Calibri" });
+        const bullets = q.items.slice(0, 4).map((b, i) => ({
+          text: b.slice(0, 65),
+          options: { bullet: { code: "2022", color: q.color }, breakLine: i < q.items.length - 1, fontSize: 10.5, color: COLORS.textDark, paraSpaceAfter: 4 },
+        }));
+        if (bullets.length) s.addText(bullets, { x: q.x + 0.15, y: q.y + 0.36, w: qW - 0.3, h: qH - 0.46, fontFace: "Calibri", valign: "top" });
       });
 
     // ── CHART SLIDE ──────────────────────────────────────────────────────────
-    } else if (slide.slideType === "chart" && slide.chartData && slide.chartData.labels?.length) {
+    } else if (slide.slideType === "chart" && slide.chartData && slide.chartData.labels?.length >= 2) {
       const cd = slide.chartData;
       const chartType = cd.type || "bar";
       const labels = cd.labels.slice(0, 10);
-      const values = cd.values.slice(0, 10);
+      const values = cd.values.slice(0, 10).map(v => (typeof v === "number" ? v : parseFloat(v) || 0));
       const chartColors = [COLORS.chart1, COLORS.chart2, COLORS.chart3, COLORS.chart4, COLORS.chart5, COLORS.chart6, COLORS.chart7, COLORS.chart8];
+
+      // Mini stat pills above chart
+      const total = values.reduce((a, b) => a + b, 0);
+      const maxV = Math.max(...values);
+      const minV = Math.min(...values);
+      const statPills = [
+        { label: "MAX", val: String(maxV), color: COLORS.chart2 },
+        { label: "MIN", val: String(minV), color: COLORS.chart4 },
+        { label: "TOTAL", val: total >= 1000 ? `${(total/1000).toFixed(1)}K` : String(total), color: COLORS.teal },
+      ];
+      statPills.forEach((pill, pi) => {
+        const px = 0.3 + pi * 3.13;
+        s.addShape("roundRect", { x: px, y: SAFE_Y, w: 3.0, h: 0.34, fill: { color: pill.color, transparency: 90 }, line: { color: pill.color, transparency: 70 }, rectRadius: 0.08 });
+        s.addText(`${pill.label}  ${pill.val}`, { x: px + 0.1, y: SAFE_Y, w: 2.8, h: 0.34, fontSize: 9, color: pill.color, bold: true, fontFace: "Calibri", valign: "middle" });
+      });
+
+      const chartY = SAFE_Y + 0.42;
+      const chartH = SAFE_H - 0.42;
 
       try {
         if (chartType === "pie" || chartType === "donut") {
           const pieData = [{ name: cd.title || slide.title, labels, values }];
           s.addChart(pres.ChartType.doughnut, pieData, {
-            x: 0.5, y: SAFE_Y, w: 5.5, h: SAFE_H,
+            x: 0.5, y: chartY, w: 5.5, h: chartH,
             chartColors: chartColors.slice(0, labels.length),
             showLegend: true, legendPos: "r", legendFontSize: 9,
             showValue: true, dataLabelFontSize: 9, dataLabelColor: COLORS.textLight,
@@ -1565,7 +1756,7 @@ function buildAIDeck({ aiSlides, strategy, docTitle, heroTitle, themeKey, wizard
         } else if (chartType === "line" || chartType === "area") {
           const lineData = [{ name: cd.title || slide.title, labels, values }];
           s.addChart(pres.ChartType.line, lineData, {
-            x: 0.3, y: SAFE_Y, w: 9.4, h: SAFE_H,
+            x: 0.3, y: chartY, w: 9.4, h: chartH,
             chartColors: [COLORS.chart2],
             showLegend: false, showValue: false,
             lineDataSymbol: "circle", lineDataSymbolSize: 6,
@@ -1573,10 +1764,10 @@ function buildAIDeck({ aiSlides, strategy, docTitle, heroTitle, themeKey, wizard
             valGridLine: { style: "dash", color: COLORS.border },
           });
         } else {
-          // Default: bar chart
+          // Bar (default)
           const barData = [{ name: cd.title || slide.title, labels, values }];
           s.addChart(pres.ChartType.bar, barData, {
-            x: 0.3, y: SAFE_Y, w: 9.4, h: SAFE_H,
+            x: 0.3, y: chartY, w: 9.4, h: chartH,
             barDir: "col",
             chartColors: chartColors.slice(0, labels.length),
             showLegend: false, showValue: true,
@@ -1587,97 +1778,179 @@ function buildAIDeck({ aiSlides, strategy, docTitle, heroTitle, themeKey, wizard
           });
         }
       } catch (chartErr) {
-        console.warn("Chart rendering error:", chartErr.message);
-        // Fallback to text
-        if (slide.bullets?.length) {
-          const bulletItems = slide.bullets.slice(0, 7).map((b, i) => ({ text: b.slice(0, 130), options: { bullet: { code: "2022", color: COLORS.teal }, breakLine: i < slide.bullets.length - 1, fontSize: 13, color: COLORS.textDark, paraSpaceAfter: 8 } }));
-          s.addText(bulletItems, { x: 0.5, y: SAFE_Y + 0.2, w: 9.0, h: SAFE_H - 0.3, fontFace: "Calibri", valign: "top" });
-        }
+        console.warn("AI chart rendering error:", chartErr.message);
+        const fallback = (slide.bullets || []).slice(0, 7).map((b, i) => ({
+          text: b.slice(0, 130),
+          options: { bullet: { code: "2022", color: COLORS.teal }, breakLine: i < slide.bullets.length - 1, fontSize: 13, color: COLORS.textDark, paraSpaceAfter: 8 },
+        }));
+        if (fallback.length) s.addText(fallback, { x: 0.5, y: SAFE_Y + 0.5, w: 9.0, h: SAFE_H - 0.5, fontFace: "Calibri", valign: "top" });
       }
 
     // ── KPI DASHBOARD ─────────────────────────────────────────────────────────
     } else if (slide.slideType === "kpi" && slide.metrics?.length) {
-      addMetricsGrid(s, COLORS, slide.metrics.slice(0, 6).map(m => ({ label: m.label, value: String(m.value) })), SAFE_Y, SAFE_H);
+      const items = slide.metrics.slice(0, 6);
+      const cols = items.length <= 2 ? 2 : items.length <= 4 ? 2 : 3;
+      const rows = Math.ceil(items.length / cols);
+      const gap = 0.18;
+      const totalW = 9.4;
+      const cardW = (totalW - gap * (cols - 1)) / cols;
+      const cardH = Math.min(Math.max((SAFE_H - gap * (rows - 1)) / rows, 1.1), 1.65);
+
+      items.forEach((m, i) => {
+        const col = i % cols;
+        const row = Math.floor(i / cols);
+        const x = 0.3 + col * (cardW + gap);
+        const y = SAFE_Y + row * (cardH + gap);
+        const cc = CARD_PALETTE[i % CARD_PALETTE.length];
+
+        s.addShape("roundRect", {
+          x, y, w: cardW, h: cardH,
+          fill: { color: COLORS.cardBg }, line: { color: cc, transparency: 60 }, rectRadius: 0.1,
+          shadow: { type: "outer", color: "000000", blur: 6, offset: 2, angle: 45, opacity: 0.06 },
+        });
+        // Colored top strip (3px)
+        s.addShape("rect", { x, y, w: cardW, h: 0.05, fill: { color: cc }, line: { color: cc } });
+        // Label
+        s.addText(String(m.label || "").toUpperCase().slice(0, 28), {
+          x: x + 0.15, y: y + 0.1, w: cardW - 0.3, h: 0.26,
+          fontSize: 8, color: COLORS.textMuted, bold: true, fontFace: "Calibri", charSpacing: 0.3,
+        });
+        // Value
+        const valText = String(m.value || "").slice(0, 32);
+        const valSize = valText.length > 20 ? 13 : cardH > 1.3 ? 19 : 16;
+        s.addText(valText, {
+          x: x + 0.15, y: y + 0.40, w: cardW - 0.28, h: cardH - 0.52,
+          fontSize: valSize, color: cc, bold: true, fontFace: "Cambria", valign: "top", autoFit: true,
+        });
+        // Trend arrow if applicable
+        const trend = m.trend;
+        if (trend === "up" || trend === "down") {
+          const arrow = trend === "up" ? "↑" : "↓";
+          const arrowColor = trend === "up" ? "27AE60" : "E74C3C";
+          s.addText(arrow, { x: x + cardW - 0.4, y: y + 0.38, w: 0.3, h: 0.3, fontSize: 14, color: arrowColor, bold: true, align: "right", fontFace: "Calibri" });
+        }
+      });
 
     // ── TWO COLUMN SLIDE ──────────────────────────────────────────────────────
     } else if (slide.slideType === "twoColumn" && slide.twoColumns) {
       const tc = slide.twoColumns;
-      const colW = 4.55; const gap = 0.3;
+      const colW = 4.45; const gap = 0.3;
+
       [
-        { data: tc.left,  x: 0.3 },
-        { data: tc.right, x: 0.3 + colW + gap },
+        { data: tc.left,  x: 0.3, borderColor: COLORS.chart2 },
+        { data: tc.right, x: 0.3 + colW + gap + 0.2, borderColor: COLORS.chart3 },
       ].forEach(col => {
         s.addShape("roundRect", { x: col.x, y: SAFE_Y, w: colW, h: SAFE_H, fill: { color: COLORS.cardBg }, line: { color: COLORS.border }, rectRadius: 0.1 });
-        s.addText(col.data.title || "", { x: col.x + 0.15, y: SAFE_Y + 0.1, w: colW - 0.3, h: 0.35, fontSize: 12, color: COLORS.accent, bold: true, fontFace: "Calibri" });
-        s.addShape(pres.shapes.RECTANGLE, { x: col.x + 0.15, y: SAFE_Y + 0.48, w: colW - 0.3, h: 0.02, fill: { color: COLORS.border }, line: { color: COLORS.border } });
-        if (col.data.bullets?.length) {
-          const items = col.data.bullets.slice(0, 6).map((b, i) => ({ text: b.slice(0, 90), options: { bullet: { code: "2022", color: COLORS.teal }, breakLine: i < col.data.bullets.length - 1, fontSize: 12, color: COLORS.textDark, paraSpaceAfter: 8 } }));
+        s.addShape("rect", { x: col.x, y: SAFE_Y, w: colW, h: 0.04, fill: { color: col.borderColor }, line: { color: col.borderColor } });
+        s.addText(col.data?.title || "", { x: col.x + 0.15, y: SAFE_Y + 0.08, w: colW - 0.3, h: 0.35, fontSize: 12, color: col.borderColor, bold: true, fontFace: "Calibri" });
+        s.addShape(pres.shapes.RECTANGLE, { x: col.x + 0.15, y: SAFE_Y + 0.47, w: colW - 0.3, h: 0.02, fill: { color: COLORS.border }, line: { color: COLORS.border } });
+        if (col.data?.bullets?.length) {
+          const items = col.data.bullets.slice(0, 6).map((b, i) => ({
+            text: b.slice(0, 90),
+            options: { bullet: { code: "25AA", color: col.borderColor }, breakLine: i < col.data.bullets.length - 1, fontSize: 11.5, color: COLORS.textDark, paraSpaceAfter: 8 },
+          }));
           s.addText(items, { x: col.x + 0.15, y: SAFE_Y + 0.55, w: colW - 0.3, h: SAFE_H - 0.65, fontFace: "Calibri", valign: "top" });
         }
       });
 
+      // VS badge / arrow in center
+      const midX = 0.3 + colW + gap * 0.5 - 0.22;
+      s.addShape(pres.shapes.OVAL, { x: midX, y: SAFE_Y + SAFE_H / 2 - 0.22, w: 0.44, h: 0.44, fill: { color: COLORS.bgDark }, line: { color: COLORS.bgDark } });
+      s.addText("→", { x: midX, y: SAFE_Y + SAFE_H / 2 - 0.22, w: 0.44, h: 0.44, fontSize: 13, color: COLORS.accent, bold: true, align: "center", valign: "middle", fontFace: "Calibri" });
+
     // ── TIMELINE SLIDE ────────────────────────────────────────────────────────
     } else if (slide.slideType === "timeline" && slide.timeline?.length) {
-      const events = slide.timeline.slice(0, 6);
-      const itemW = Math.min(9.0 / events.length, 2.0);
-      const lineY = SAFE_Y + SAFE_H * 0.38;
+      const events = slide.timeline.slice(0, 7);
+      const count = events.length;
+      const itemW = 9.0 / count;
+      const lineY = SAFE_Y + SAFE_H * 0.42;
       s.addShape(pres.shapes.RECTANGLE, { x: 0.4, y: lineY, w: 9.2, h: 0.04, fill: { color: COLORS.teal }, line: { color: COLORS.teal } });
+
       events.forEach((evt, i) => {
-        const cx = 0.4 + i * (9.2 / events.length) + itemW * 0.3;
-        s.addShape(pres.shapes.OVAL, { x: cx - 0.12, y: lineY - 0.12, w: 0.24, h: 0.24, fill: { color: COLORS.accent }, line: { color: COLORS.accent } });
-        s.addText(evt.date || `${i + 1}`, { x: cx - itemW / 2, y: lineY - 0.75, w: itemW, h: 0.3, fontSize: 9, color: COLORS.accent, bold: true, align: "center", fontFace: "Calibri" });
-        s.addText(evt.event?.slice(0, 50) || "", { x: cx - itemW / 2, y: lineY + 0.2, w: itemW, h: 0.5, fontSize: 10, color: COLORS.textDark, bold: true, align: "center", fontFace: "Calibri" });
-        if (evt.detail) s.addText(evt.detail.slice(0, 80), { x: cx - itemW / 2, y: lineY + 0.74, w: itemW, h: 0.7, fontSize: 9, color: COLORS.textMuted, align: "center", fontFace: "Calibri" });
+        const cx = 0.4 + i * (9.2 / count) + itemW * 0.42;
+        const isAbove = i % 2 === 0;
+        const cc = CARD_PALETTE[i % CARD_PALETTE.length];
+
+        // Node: outer ring + inner dot
+        s.addShape(pres.shapes.OVAL, { x: cx - 0.16, y: lineY - 0.16, w: 0.32, h: 0.32, fill: { color: cc, transparency: 70 }, line: { color: cc, transparency: 50 } });
+        s.addShape(pres.shapes.OVAL, { x: cx - 0.09, y: lineY - 0.09, w: 0.18, h: 0.18, fill: { color: cc }, line: { color: cc } });
+
+        if (isAbove) {
+          s.addText(evt.date || `${i + 1}`, { x: cx - itemW * 0.44, y: lineY - 0.7, w: itemW * 0.88, h: 0.26, fontSize: 8.5, color: cc, bold: true, align: "center", fontFace: "Calibri" });
+          s.addText((evt.event || "").slice(0, 40), { x: cx - itemW * 0.44, y: lineY - 0.42, w: itemW * 0.88, h: 0.34, fontSize: 9, color: COLORS.textDark, bold: true, align: "center", fontFace: "Calibri" });
+          if (evt.detail) s.addText(evt.detail.slice(0, 70), { x: cx - itemW * 0.44, y: SAFE_Y, w: itemW * 0.88, h: lineY - SAFE_Y - 0.48, fontSize: 8, color: COLORS.textMuted, align: "center", fontFace: "Calibri", valign: "bottom" });
+        } else {
+          s.addText(evt.date || `${i + 1}`, { x: cx - itemW * 0.44, y: lineY + 0.24, w: itemW * 0.88, h: 0.26, fontSize: 8.5, color: cc, bold: true, align: "center", fontFace: "Calibri" });
+          s.addText((evt.event || "").slice(0, 40), { x: cx - itemW * 0.44, y: lineY + 0.50, w: itemW * 0.88, h: 0.34, fontSize: 9, color: COLORS.textDark, bold: true, align: "center", fontFace: "Calibri" });
+          if (evt.detail) s.addText(evt.detail.slice(0, 70), { x: cx - itemW * 0.44, y: lineY + 0.85, w: itemW * 0.88, h: 0.7, fontSize: 8, color: COLORS.textMuted, align: "center", fontFace: "Calibri" });
+        }
       });
 
     // ── BULLETS SLIDE (default) ───────────────────────────────────────────────
     } else {
       const hasBullets = slide.bullets?.length > 0;
       const hasBody = slide.body && slide.body.length > 20;
-      const hasMetrics = slide.metrics?.length >= 2;
 
-      if (hasMetrics) {
-        addMetricsGrid(s, COLORS, slide.metrics.slice(0, 6).map(m => ({ label: m.label, value: String(m.value) })), SAFE_Y, SAFE_H);
-      } else if (hasBullets && hasBody) {
+      if (hasBullets && hasBody) {
         s.addShape("roundRect", { x: 0.3, y: SAFE_Y, w: 5.5, h: SAFE_H, fill: { color: COLORS.cardBg }, line: { color: COLORS.border }, rectRadius: 0.1 });
-        const bItems = slide.bullets.slice(0, 7).map((b, i) => ({ text: b.slice(0, 120), options: { bullet: { code: "2022", color: COLORS.teal }, breakLine: i < slide.bullets.length - 1, fontSize: 12.5, color: COLORS.textDark, paraSpaceAfter: 7 } }));
+        const bItems = slide.bullets.slice(0, 7).map((b, i) => ({
+          text: b.slice(0, 120),
+          options: { bullet: { code: "25AA", color: CARD_PALETTE[i % CARD_PALETTE.length] }, breakLine: i < slide.bullets.length - 1, fontSize: 12, color: COLORS.textDark, paraSpaceAfter: 8 },
+        }));
         s.addText(bItems, { x: 0.5, y: SAFE_Y + 0.15, w: 5.1, h: SAFE_H - 0.3, fontFace: "Calibri", valign: "top" });
         s.addShape("roundRect", { x: 6.05, y: SAFE_Y, w: 3.65, h: SAFE_H, fill: { color: COLORS.cardAlt }, line: { color: COLORS.border }, rectRadius: 0.1 });
-        s.addText("KEY INSIGHT", { x: 6.2, y: SAFE_Y + 0.14, w: 3.35, h: 0.3, fontSize: 9.5, color: COLORS.accent, bold: true, fontFace: "Calibri", charSpacing: 1 });
-        s.addShape(pres.shapes.RECTANGLE, { x: 6.2, y: SAFE_Y + 0.48, w: 3.35, h: 0.02, fill: { color: COLORS.accent, transparency: 70 }, line: { color: COLORS.accent, transparency: 70 } });
-        s.addText(slide.body.slice(0, 350), { x: 6.2, y: SAFE_Y + 0.55, w: 3.35, h: SAFE_H - 0.65, fontSize: 11.5, color: COLORS.textDark, fontFace: "Calibri", valign: "top" });
+        s.addText("KEY INSIGHT", { x: 6.2, y: SAFE_Y + 0.14, w: 3.35, h: 0.3, fontSize: 9, color: COLORS.accent, bold: true, fontFace: "Calibri", charSpacing: 1 });
+        s.addShape(pres.shapes.RECTANGLE, { x: 6.2, y: SAFE_Y + 0.47, w: 3.35, h: 0.02, fill: { color: COLORS.accent, transparency: 70 }, line: { color: COLORS.accent, transparency: 70 } });
+        s.addText(slide.body.slice(0, 350), { x: 6.2, y: SAFE_Y + 0.54, w: 3.35, h: SAFE_H - 0.65, fontSize: 11, color: COLORS.textDark, fontFace: "Calibri", valign: "top", lineSpacing: 18 });
       } else if (hasBullets) {
-        s.addShape("roundRect", { x: 0.3, y: SAFE_Y, w: 9.4, h: SAFE_H, fill: { color: COLORS.cardBg }, line: { color: COLORS.border }, rectRadius: 0.1 });
         const bullets = slide.bullets.slice(0, 8);
-        const cols2 = bullets.length > 5 ? 2 : 1;
+        const cols2 = bullets.length >= 5 ? 2 : 1;
+        s.addShape("roundRect", { x: 0.3, y: SAFE_Y, w: 9.4, h: SAFE_H, fill: { color: COLORS.cardBg }, line: { color: COLORS.border }, rectRadius: 0.1 });
         if (cols2 === 2) {
           const half = Math.ceil(bullets.length / 2);
-          const mkItems = (arr) => arr.map((b, i) => ({ text: b.slice(0, 110), options: { bullet: { code: "2022", color: COLORS.teal }, breakLine: i < arr.length - 1, fontSize: 12.5, color: COLORS.textDark, paraSpaceAfter: 8 } }));
-          s.addText(mkItems(bullets.slice(0, half)), { x: 0.5, y: SAFE_Y + 0.15, w: 4.35, h: SAFE_H - 0.3, fontFace: "Calibri", valign: "top" });
-          s.addShape(pres.shapes.RECTANGLE, { x: 5.0, y: SAFE_Y + 0.18, w: 0.02, h: SAFE_H - 0.38, fill: { color: COLORS.border }, line: { color: COLORS.border } });
-          s.addText(mkItems(bullets.slice(half)), { x: 5.12, y: SAFE_Y + 0.15, w: 4.35, h: SAFE_H - 0.3, fontFace: "Calibri", valign: "top" });
+          const mkItems = (arr, startIdx) => arr.map((b, i) => ({
+            text: b.slice(0, 110),
+            options: { bullet: { code: "25AA", color: CARD_PALETTE[(startIdx + i) % CARD_PALETTE.length] }, breakLine: i < arr.length - 1, fontSize: 12, color: COLORS.textDark, paraSpaceAfter: 9 },
+          }));
+          s.addText(mkItems(bullets.slice(0, half), 0), { x: 0.5, y: SAFE_Y + 0.15, w: 4.35, h: SAFE_H - 0.3, fontFace: "Calibri", valign: "top" });
+          s.addShape(pres.shapes.RECTANGLE, { x: 5.05, y: SAFE_Y + 0.18, w: 0.02, h: SAFE_H - 0.38, fill: { color: COLORS.border }, line: { color: COLORS.border } });
+          s.addText(mkItems(bullets.slice(half), half), { x: 5.2, y: SAFE_Y + 0.15, w: 4.35, h: SAFE_H - 0.3, fontFace: "Calibri", valign: "top" });
         } else {
-          const bItems = bullets.map((b, i) => ({ text: b.slice(0, 150), options: { bullet: { code: "2022", color: COLORS.teal }, breakLine: i < bullets.length - 1, fontSize: 13.5, color: COLORS.textDark, paraSpaceAfter: 10 } }));
+          const bItems = bullets.map((b, i) => ({
+            text: b.slice(0, 150),
+            options: { bullet: { code: "25AA", color: CARD_PALETTE[i % CARD_PALETTE.length] }, breakLine: i < bullets.length - 1, fontSize: 13, color: COLORS.textDark, paraSpaceAfter: 11 },
+          }));
           s.addText(bItems, { x: 0.5, y: SAFE_Y + 0.18, w: 9.0, h: SAFE_H - 0.3, fontFace: "Calibri", valign: "top" });
         }
       } else if (hasBody) {
         s.addShape("roundRect", { x: 0.3, y: SAFE_Y, w: 9.4, h: SAFE_H, fill: { color: COLORS.cardBg }, line: { color: COLORS.border }, rectRadius: 0.1 });
         s.addShape(pres.shapes.RECTANGLE, { x: 0.3, y: SAFE_Y, w: 0.05, h: SAFE_H, fill: { color: COLORS.accent }, line: { color: COLORS.accent } });
-        s.addText(slide.body.slice(0, 700), { x: 0.52, y: SAFE_Y + 0.15, w: 9.1, h: SAFE_H - 0.28, fontSize: 13.5, color: COLORS.textDark, fontFace: "Calibri", valign: "top", lineSpacing: 22 });
+        s.addText(slide.body.slice(0, 700), { x: 0.52, y: SAFE_Y + 0.15, w: 9.1, h: SAFE_H - 0.28, fontSize: 13, color: COLORS.textDark, fontFace: "Calibri", valign: "top", lineSpacing: 22 });
       }
     }
 
-    addFooter(s, COLORS, docTitle, slideCounter, totalSlides);
+    addAIFooter(s, COLORS, docTitle, slideCounter, totalSlides);
     if (includeNotes && slide.speakerNotes) s.addNotes(slide.speakerNotes);
   }
 
   return { pres, slideCount: totalSlides };
 }
 
+// ── Shared helpers for AI deck ────────────────────────────────────────────────
+function addAIFooter(s, COLORS, docTitle, idx, total) {
+  s.addText(docTitle.slice(0, 50), { x: 0.3, y: 5.28, w: 7.5, h: 0.27, fontSize: 8.5, color: COLORS.textMuted, fontFace: "Calibri" });
+  s.addShape("roundRect", { x: 8.8, y: 5.25, w: 0.9, h: 0.3, fill: { color: COLORS.bgDark }, line: { color: COLORS.bgDark }, rectRadius: 0.15 });
+  s.addText(`${idx} / ${total}`, { x: 8.8, y: 5.25, w: 0.9, h: 0.3, fontSize: 8.5, color: COLORS.textLight, align: "center", valign: "middle", fontFace: "Calibri", bold: true });
+}
 
-// ══════════════════════════════════════════════════════════════════════════════
-// POST /generate-ppt-ai  — NEW AI-powered endpoint with Wizard support
-// ══════════════════════════════════════════════════════════════════════════════
+function addAISlideHeader(s, pres, COLORS, title, icon) {
+  s.addShape(pres.shapes.RECTANGLE, { x: 0, y: 0, w: 10, h: 1.3, fill: { color: COLORS.bgDark }, line: { color: COLORS.bgDark } });
+  s.addShape(pres.shapes.RECTANGLE, { x: 0, y: 1.3, w: 10, h: 0.04, fill: { color: COLORS.accent }, line: { color: COLORS.accent } });
+  s.addShape(pres.shapes.OVAL, { x: 8.6, y: -0.6, w: 1.8, h: 1.8, fill: { color: COLORS.accent, transparency: 88 }, line: { color: COLORS.accent, transparency: 88 } });
+  s.addText(icon, { x: 0.35, y: 0.28, w: 0.65, h: 0.65, fontSize: 24, align: "center", valign: "middle" });
+  s.addText(title, { x: 1.08, y: 0.2, w: 8.2, h: 0.88, fontSize: 22, color: COLORS.textLight, bold: true, fontFace: "Cambria", valign: "middle", margin: 0, autoFit: false });
+}
+
 router.post("/generate-ppt-ai", async (req, res) => {
   try {
     if (!req.user) return res.status(401).json({ message: "Not authenticated" });

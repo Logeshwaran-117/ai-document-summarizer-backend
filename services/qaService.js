@@ -1,13 +1,27 @@
 const { callWithRotation } = require("./geminiService");
 
+// Max chars of document to include in a Q&A prompt.
+// Keeps total prompt under ~30k tokens while leaving room for the answer.
+const QA_DOC_LIMIT = 40000;
+
 async function answerQuestion(documentText, question, chatHistory = []) {
   const historyText = chatHistory
     .slice(-6)
     .map(m => `${m.role === "user" ? "User" : "Assistant"}: ${m.text}`)
     .join("\n");
 
+  // Truncate from the middle so both header and tail content are preserved
+  let docSlice = documentText || "";
+  if (docSlice.length > QA_DOC_LIMIT) {
+    const half = Math.floor(QA_DOC_LIMIT / 2);
+    docSlice =
+      docSlice.slice(0, half) +
+      "\n\n[... middle of document omitted for context window ...]\n\n" +
+      docSlice.slice(-half);
+  }
+
   const prompt = `
-You are a helpful assistant answering questions strictly about the document provided below. 
+You are a helpful assistant answering questions strictly about the document provided below.
 
 RULES:
 - Answer ONLY using information found in the document. Do not use outside knowledge.
@@ -20,17 +34,14 @@ RULES:
 ${historyText ? `Previous conversation:\n${historyText}\n` : ""}
 
 Document:
-${documentText}
+${docSlice}
 
 Question: ${question}
 
 Answer:
 `;
 
-  // callWithRotation handles key rotation + retry automatically
-  return callWithRotation(() => [
-    { text: prompt }   // ✅ correct — just plain parts array
-  ], 2048);
+  return callWithRotation(() => [{ text: prompt }], 2048);
 }
 
 module.exports = answerQuestion;

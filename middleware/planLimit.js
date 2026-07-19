@@ -1,5 +1,5 @@
 const User = require('../models/User');
-const { checkLimit } = require('../config/plans');
+const { checkLimit, PLANS } = require('../config/plans');
 
 // Factory: returns middleware for a given action ('summarize' or 'tables')
 function limitAction(action) {
@@ -32,7 +32,7 @@ function limitAction(action) {
       return res.status(429).json({
         success: false,
         limitReached: true,
-        message: `You've reached your ${action === 'summarize' ? 'summary' : 'table extraction'} limit for this month (${result.limit} on your ${user.plan} plan). Upgrade to continue.`,
+        message: `You've reached your ${action === 'summarize' ? 'summary' : 'table extraction'} limit for today (${result.limit} on your ${user.plan} plan). Your limit resets tomorrow — or upgrade to continue.`,
         plan: user.plan,
         limit: result.limit,
         used: result.used,
@@ -58,7 +58,10 @@ async function deductTokens(userId, tokensUsed) {
     if (!user) return null;
 
     if (user.tokensUsed === undefined) user.tokensUsed = 0;
-    if (!user.tokenLimit) user.tokenLimit = 1000000; 
+    if (!user.tokenLimit) {
+      const plan = PLANS[user.plan || 'free'];
+      user.tokenLimit = plan?.limits?.tokenLimit ?? PLANS.free.limits.tokenLimit ?? 50000;
+    }
     
     // Auto-reset if the date has passed
     if (!user.tokenResetDate || new Date() > user.tokenResetDate) {
