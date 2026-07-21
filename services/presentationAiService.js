@@ -351,6 +351,41 @@ ${docSample}
   };
 }
 
+// ── Outline sizing helper ──────────────────────────────────────────────────────
+// BUG FIX: previously, the hardcoded outlines for banking/financial_report/
+// healthcare_data were fixed-length arrays (8-9 items). `.slice(0, Math.min(targetTotal, N))`
+// can only ever return AT MOST N items when the array itself only has N items,
+// so requesting 12+ slides silently produced only 8-9. This helper makes the
+// hardcoded outlines actually honor the requested slide count in both directions:
+// trims if the pool is bigger than needed, and pads with extra analysis slides
+// (inserted before the closing slide) if the pool is smaller than requested.
+function fitOutlineToTarget(base, targetTotal) {
+  if (!Array.isArray(base) || base.length === 0) return base;
+  const closingIdx = base.findIndex(s => s.slideType === "closing");
+  const closing = closingIdx >= 0 ? base[closingIdx] : base[base.length - 1];
+  const core = closingIdx >= 0 ? base.slice(0, closingIdx) : base.slice(0, -1);
+
+  let result;
+  if (core.length + 1 >= targetTotal) {
+    result = [...core.slice(0, Math.max(targetTotal - 1, 1)), closing];
+  } else {
+    const fillers = [
+      { slideType: "bullets", title: "Additional Financial Observations", contentFocus: "Further insights from the document data", purpose: "Deep dive" },
+      { slideType: "chart", title: "Supplementary Data View", contentFocus: "Additional chart derived from document figures", purpose: "Extra visualization" },
+    ];
+    const extra = [];
+    let i = 0;
+    while (core.length + extra.length + 1 < targetTotal) {
+      const f = fillers[i % fillers.length];
+      const suffix = i >= fillers.length ? ` ${Math.floor(i / fillers.length) + 1}` : "";
+      extra.push({ ...f, title: `${f.title}${suffix}` });
+      i++;
+    }
+    result = [...core, ...extra, closing];
+  }
+  return result.map((s, idx) => ({ ...s, slideNumber: idx + 1 }));
+}
+
 // ── Step 3: Build slide outline ───────────────────────────────────────────────
 
 async function buildOutline(documentText, strategy, wizardOptions = {}) {
@@ -371,6 +406,7 @@ async function buildOutline(documentText, strategy, wizardOptions = {}) {
     educational_content: ["bullets","chart","quote","twoColumn","process"],
     government_report: ["kpi","chart","twoColumn","bullets","scorecard"],
     healthcare_data: ["kpi","chart","twoColumn","bullets","scorecard"],
+    government_report: ["kpi","chart","twoColumn","bullets","scorecard"],
     sales_report: ["kpi","chart","twoColumn","bullets","scorecard"],
     hr_document: ["kpi","chart","bullets","twoColumn"],
     marketing_report: ["kpi","chart","bullets","twoColumn"],
@@ -391,25 +427,36 @@ async function buildOutline(documentText, strategy, wizardOptions = {}) {
       { slideNumber:5, title:"Top Inflows vs Top Outflows", slideType:"twoColumn", contentFocus:"Left: 4 largest credits with amounts. Right: 4 largest debits with amounts", purpose:"Significant transactions" },
       { slideNumber:6, title:"Transaction Patterns & Observations", slideType:"bullets", contentFocus:"UPI count, NEFT count, recurring payees, cashback, balance trajectory", purpose:"Behavioral insights" },
       { slideNumber:7, title:"Financial Health Scorecard", slideType:"scorecard", contentFocus:"Savings Rate, Spending Discipline, Digital Adoption, Balance Stability, EMI Load", purpose:"Health summary" },
-      { slideNumber:8, title:"Key Takeaways & Recommendations", slideType:"closing", contentFocus:"Top 3 insights and action items", purpose:"Close" },
+      { slideNumber:8, title:"Multi-Dimension Spending Radar", slideType:"chart", contentFocus:"Radar chart: Savings Rate, Digital Adoption, Spending Discipline, Balance Stability, EMI Load — scored 0-100", purpose:"Holistic financial profile" },
+      { slideNumber:9, title:"Risk Analysis & Executive Insights", slideType:"riskCards", contentFocus:"Overdraft risk, high recurring debit risk, low balance buffer risk", purpose:"Risk flagging" },
+      { slideNumber:10, title:"Strategic Recommendations", slideType:"recommendations", contentFocus:"Immediate, short-term and long-term actions to improve financial health", purpose:"Action plan" },
+      { slideNumber:11, title:"Key Takeaways & Recommendations", slideType:"closing", contentFocus:"Top 3 insights and action items", purpose:"Close" },
     ];
-    return base.slice(0, Math.min(targetTotal, 10));
+    return fitOutlineToTarget(base, targetTotal);
   }
 
-  // Financial report: hardcoded reliable outline
+  // Financial report: hardcoded reliable outline — matches the "Executive P&L Review"
+  // reference structure (agenda → exec summary → revenue/cost analysis → full P&L
+  // detail → waterfall → scorecard → radar → risk cards → recommendations → close).
   if (strategy.documentType === "financial_report") {
     const base = [
-      { slideNumber:1, title:strategy.presentationTitle, slideType:"cover", contentFocus:"Company name, period, report type", purpose:"Introduction" },
-      { slideNumber:2, title:"Financial Highlights", slideType:"kpi", contentFocus:"Revenue, gross profit, net profit/loss, EBITDA, total assets, total liabilities — exact figures", purpose:"Key metrics snapshot" },
-      { slideNumber:3, title:"Revenue & Profitability", slideType:"chart", contentFocus:"Bar chart: revenue vs gross profit vs net profit", purpose:"Profitability visualization" },
-      { slideNumber:4, title:"P&L Statement Summary", slideType:"twoColumn", contentFocus:"Left: Income items with amounts. Right: Expense items with amounts", purpose:"P&L breakdown" },
-      { slideNumber:5, title:"Balance Sheet Overview", slideType:"twoColumn", contentFocus:"Left: Assets (current + non-current) with values. Right: Liabilities + Equity with values", purpose:"Financial position" },
-      { slideNumber:6, title:"Cost Structure Analysis", slideType:"chart", contentFocus:"Pie/donut chart of major expense categories", purpose:"Cost breakdown" },
-      { slideNumber:7, title:"Key Financial Observations", slideType:"bullets", contentFocus:"Margins, ratios, year-on-year trends, notable items from the statements", purpose:"Analysis" },
-      { slideNumber:8, title:"Financial Health Assessment", slideType:"scorecard", contentFocus:"Liquidity, Profitability, Solvency, Efficiency, Growth scores", purpose:"Health scorecard" },
-      { slideNumber:9, title:"Key Takeaways", slideType:"closing", contentFocus:"Top financial insights and recommendations", purpose:"Close" },
+      { slideNumber:1, title:strategy.presentationTitle, slideType:"cover", contentFocus:"Company name, period, report type, headline KPIs", purpose:"Introduction" },
+      { slideNumber:2, title:"Presentation Agenda", slideType:"agenda", contentFocus:"Executive Summary, Revenue Analysis, Cost Structure, P&L Detail, Waterfall, Health Assessment, Risk Analysis, Recommendations", purpose:"Roadmap" },
+      { slideNumber:3, title:"Executive Summary", slideType:"kpi", contentFocus:"Total income, total expenses, net profit, profit margin — exact figures with sub-labels (e.g. number of revenue streams)", purpose:"Key metrics snapshot" },
+      { slideNumber:4, title:"Revenue Analysis — Income Breakdown", slideType:"chart", contentFocus:"Bar chart: each income line item with amount and % of total income", purpose:"Revenue composition" },
+      { slideNumber:5, title:"Cost Structure Analysis — Expense Breakdown", slideType:"chart", contentFocus:"Bar or donut chart: each expense line item with amount and % of total expenses; call out the dominant cost driver", purpose:"Cost composition" },
+      { slideNumber:6, title:"P&L Statement — Full Line-by-Line Detail", slideType:"twoColumn", contentFocus:"Left: every income line item with amount and %. Right: every expense line item with amount and %", purpose:"Complete P&L breakdown" },
+      { slideNumber:7, title:"Balance Sheet Overview", slideType:"twoColumn", contentFocus:"Left: assets (current + non-current) with values, or note if not reported. Right: liabilities + equity with values", purpose:"Financial position" },
+      { slideNumber:8, title:"Revenue-to-Profit Waterfall Analysis", slideType:"chart", contentFocus:"Waterfall chart: starting from total income, subtracting each major expense category down to net profit", purpose:"Visualize how income converts to profit" },
+      { slideNumber:9, title:"Income vs Expense — Category Comparison", slideType:"chart", contentFocus:"Grouped bar or donut comparing total income vs total expenses by category", purpose:"Cash flow balance" },
+      { slideNumber:10, title:"Key Financial Observations", slideType:"bullets", contentFocus:"Margins, ratios, concentration risk, notable line items from the statements", purpose:"Analysis" },
+      { slideNumber:11, title:"Financial Health Assessment", slideType:"scorecard", contentFocus:"Net Profit Margin, Revenue Diversity, Cost Control, Liquidity, Solvency — scored with status (good/warning/critical) and a one-line comment each", purpose:"Health scorecard" },
+      { slideNumber:12, title:"Multi-Dimension Financial Performance Radar", slideType:"chart", contentFocus:"Radar chart: Net Margin, Revenue Diversity, Cost Control, Program/Core Revenue, Operating Buffer — each scored 0-100", purpose:"Holistic performance view" },
+      { slideNumber:13, title:"Risk Analysis & Executive Insights", slideType:"riskCards", contentFocus:"Top 3-4 financial risks (e.g. revenue concentration, thin margin, cost dominance) each with a severity level and a one-line explanation grounded in the document's numbers", purpose:"Risk flagging" },
+      { slideNumber:14, title:"Strategic Recommendations", slideType:"recommendations", contentFocus:"Grouped into Immediate / Short-Term / Long-Term actions, each tied to a specific figure from the document", purpose:"Action plan" },
+      { slideNumber:15, title:"Key Takeaways", slideType:"closing", contentFocus:"Top financial insights and recommendations", purpose:"Close" },
     ];
-    return base.slice(0, Math.min(targetTotal, 12));
+    return fitOutlineToTarget(base, targetTotal);
   }
 
   // Healthcare: hardcoded outline
@@ -417,15 +464,17 @@ async function buildOutline(documentText, strategy, wizardOptions = {}) {
     const base = [
       { slideNumber:1, title:strategy.presentationTitle, slideType:"cover", contentFocus:"Program name, district, period", purpose:"Introduction" },
       { slideNumber:2, title:"Programme Overview", slideType:"kpi", contentFocus:"Expected cases, confirmed cases, medically managed, surgeries needed, surgery done, pending", purpose:"District totals" },
-      { slideNumber:3, title:"Confirmed Cases by Condition", slideType:"chart", contentFocus:"Bar chart: cases confirmed per condition (CHD, RHD, Club Foot, Cleft Lip, Cataract, Deafness, NTD)", purpose:"Condition breakdown" },
+      { slideNumber:3, title:"Confirmed Cases by Condition", slideType:"chart", contentFocus:"Bar chart: cases confirmed per condition/disease, using every condition actually listed in the document's table (e.g. congenital heart disease, cleft lip, cataract, hearing/vision defects, neural tube defects — whichever appear)", purpose:"Condition breakdown" },
       { slideNumber:4, title:"Medical vs Surgical Management", slideType:"chart", contentFocus:"Grouped bar: medically managed vs surgery done per condition", purpose:"Management split" },
       { slideNumber:5, title:"Detection Gap Analysis", slideType:"twoColumn", contentFocus:"Left: Expected vs confirmed gap % per condition. Right: Surgery completion rate per condition", purpose:"Gap analysis" },
-      { slideNumber:6, title:"Block-wise Coverage", slideType:"chart", contentFocus:"Bar chart: expected vs confirmed cases per block (all 8 blocks)", purpose:"Geographic analysis" },
+      { slideNumber:6, title:"Block-wise Coverage", slideType:"chart", contentFocus:"Bar chart: expected vs confirmed cases per block/geographic area, using every block actually listed in the document", purpose:"Geographic analysis" },
       { slideNumber:7, title:"AWC Screening Performance", slideType:"twoColumn", contentFocus:"Left: Blindness — AWC identified vs RBSK confirmed. Right: Hearing — AWC identified vs RBSK confirmed", purpose:"AWC analysis" },
       { slideNumber:8, title:"Recommendations Scorecard", slideType:"scorecard", contentFocus:"Close detection gap, complete pending surgeries, focus Vellore Corporation, strengthen AWC referral", purpose:"Action priorities" },
-      { slideNumber:9, title:"Key Takeaways", slideType:"closing", contentFocus:"Top 3 findings and next steps", purpose:"Close" },
+      { slideNumber:9, title:"Risk Analysis & Executive Insights", slideType:"riskCards", contentFocus:"Highest-gap blocks/conditions flagged as risks with severity and rationale", purpose:"Risk flagging" },
+      { slideNumber:10, title:"Strategic Recommendations", slideType:"recommendations", contentFocus:"Immediate, short-term and long-term actions grouped by priority", purpose:"Action plan" },
+      { slideNumber:11, title:"Key Takeaways", slideType:"closing", contentFocus:"Top 3 findings and next steps", purpose:"Close" },
     ];
-    return base.slice(0, Math.min(targetTotal, 12));
+    return fitOutlineToTarget(base, targetTotal);
   }
 
   // All other types: structure-only prompt
@@ -493,14 +542,19 @@ async function buildSlideContent(documentText, outline, strategy, wizardOptions 
 - Total Assets, Total Liabilities, Equity: exact figures from Balance Sheet.
 - For P&L twoColumn: Left = all income line items with amounts, Right = all expense line items with amounts.
 - For Balance Sheet twoColumn: Left = assets breakdown, Right = liabilities + equity breakdown.
-- Chart values must be actual numbers from the document.`,
+- Chart values must be actual numbers from the document.
+- For the waterfall chart: chartData.type="waterfall", labels/values are ordered steps from total income down through each major expense to net profit (positive = adds, negative = subtracts).
+- For the radar chart: chartData.type="radar", 4-6 dimensions (e.g. Net Margin, Revenue Diversity, Cost Control, Operating Buffer) each scored 0-100 based on the actual figures.
+- For riskCards: 3-4 real risks grounded in the numbers (e.g. revenue concentration %, margin thinness), each with severity critical|high|medium|low.
+- For recommendations: group into immediate|short-term|long-term, each tied to a specific figure from the document.`,
 
-    healthcare_data: `HEALTHCARE RULES: Extract EXACT values only.
-- Expected, Confirmed, Medical Mgmt, Surgery Done: from district totals table.
-- Per-condition data: CHD(884,741), RHD(196,208), ClubFoot(196,109), CleftLip(91,81), Cataract(9,12), Deafness(393,45), NTD(393,12).
-- Block data: Anaicut(302 exp,198 conf), Gudiyatham(384,268), KV Kuppam(211,189), Kaniyambadi(179,114), Katpadi(178,103), Pernambut(131,75), Vellore(146 exp), VelloreCorp(596,66).
-- AWC Blindness: 7 identified, 12 RBSK confirmed. AWC Hearing: 62 identified, 106 confirmed.
-- Detection gap % = (Expected-Confirmed)/Expected*100.`,
+    healthcare_data: `HEALTHCARE RULES: Extract EXACT values only from the tables in THIS document — never reuse figures from any other report.
+- Expected Cases, Children Confirmed, Medically Managed, Surgery Done, Surgery Pending: read from the district/block totals table in this document.
+- Per-condition breakdown: extract each disease/condition row exactly as listed in this document's table (do not assume which conditions are present — use the condition names and figures actually in the data).
+- Per-block/geographic breakdown: extract each block/area row exactly as listed in this document's table.
+- Detection gap % = (Expected − Confirmed) / Expected × 100, computed from this document's own numbers.
+- Do NOT perform or show arithmetic verification, running totals, or step-by-step checking in the output — just extract the figures directly into the JSON fields. Any reasoning must happen silently; the response must be valid JSON only, with no explanatory text before, after, or between JSON objects.
+- If a number does not evenly sum to a total in the source table, use the figures as given rather than trying to reconcile the discrepancy.`,
   };
 
   const extraRules = domainRules[strategy.documentType] || "";
@@ -533,7 +587,10 @@ twoColumn: {"slideType":"twoColumn","title":"","icon":"","twoColumns":{"left":{"
 swot: {"slideType":"swot","title":"","icon":"🔍","swotData":{"strengths":[""],"weaknesses":[""],"opportunities":[""],"threats":[""]},"speakerNotes":""}
 timeline: {"slideType":"timeline","title":"","icon":"📅","timeline":[{"date":"","event":"","detail":""}],"speakerNotes":""}
 process: {"slideType":"process","title":"","icon":"⚙️","steps":[{"number":1,"title":"","description":"","icon":""}],"speakerNotes":""}
-scorecard: {"slideType":"scorecard","title":"","icon":"📋","items":[{"category":"","score":7,"maxScore":10,"status":"good|warning|critical","comment":""}],"speakerNotes":""}`;
+scorecard: {"slideType":"scorecard","title":"","icon":"📋","items":[{"category":"","score":7,"maxScore":10,"status":"good|warning|critical","comment":""}],"speakerNotes":""}
+agenda: {"slideType":"agenda","title":"","subtitle":"","sections":[{"icon":"","title":"","description":""}],"speakerNotes":""}
+riskCards: {"slideType":"riskCards","title":"","icon":"⚠️","risks":[{"severity":"critical|high|medium|low","title":"","description":""}],"speakerNotes":""}
+recommendations: {"slideType":"recommendations","title":"","icon":"🎯","items":[{"priority":"immediate|short-term|long-term","title":"","description":""}],"speakerNotes":""}`;
 
     const raw = await aiCall(prompt, 8192);
     try {
@@ -621,6 +678,32 @@ function validateAndRepairSlides(slides, strategy, docType) {
         maxScore: typeof item.maxScore === "number" ? item.maxScore : 10,
         status: ["good","warning","critical"].includes(item.status) ? item.status : "warning",
       }));
+    }
+    if (slide.slideType === "riskCards") {
+      if (!Array.isArray(slide.risks) || slide.risks.length === 0) {
+        slide.slideType = "bullets";
+        slide.bullets = strategy.topQuantitativeFindings?.length ? strategy.topQuantitativeFindings : ["See document for risk factors"];
+      } else {
+        slide.risks = slide.risks.slice(0, 5).map(r => ({
+          ...r,
+          severity: ["critical","high","medium","low"].includes(r.severity) ? r.severity : "medium",
+        }));
+      }
+    }
+    if (slide.slideType === "recommendations") {
+      if (!Array.isArray(slide.items) || slide.items.length === 0) {
+        slide.slideType = "bullets";
+        slide.bullets = strategy.keyMessages?.length ? strategy.keyMessages : ["See document for recommendations"];
+      } else {
+        slide.items = slide.items.slice(0, 6).map(it => ({
+          ...it,
+          priority: ["immediate","short-term","long-term"].includes(it.priority) ? it.priority : "short-term",
+        }));
+      }
+    }
+    if (slide.slideType === "agenda" && (!Array.isArray(slide.sections) || slide.sections.length === 0)) {
+      slide.slideType = "bullets";
+      slide.bullets = strategy.keyMessages?.length ? strategy.keyMessages : ["Overview", "Analysis", "Recommendations"];
     }
     return slide;
   }).filter(Boolean);

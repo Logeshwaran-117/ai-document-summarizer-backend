@@ -62,6 +62,15 @@ const THEMES = {
     chart6: "E9C46A", chart7: "2A9D8F", chart8: "264653",
     gradient1: "1B4332", gradient2: "2D6A4F",
   },
+  amberGrid: {
+    label: "Amber Grid",
+    bgDark: "1B2A52", bgLight: "FAFBFF", bgMid: "EEF2FF", accent: "F5A623", teal: "2FA4A0",
+    textLight: "FFFFFF", textDark: "0F1B38", textMuted: "4A5A7A",
+    cardBg: "FFFFFF", cardAlt: "F0F4FF", border: "DDE4F5",
+    chart1: "1B2A52", chart2: "F5A623", chart3: "2FA4A0", chart4: "E74C3C", chart5: "8E44AD",
+    chart6: "2ECC71", chart7: "E67E22", chart8: "1ABC9C",
+    gradient1: "1B2A52", gradient2: "263A6E",
+  },
 };
 
 const DETAIL_LEVELS = {
@@ -227,6 +236,19 @@ function addSlideHeader(s, pres, COLORS, title, icon) {
 function addSectionDivider(pres, COLORS, sectionTitle, sectionSubtitle, docTitle, slideCounter, totalSlides, includeNotes) {
   const s = pres.addSlide();
   s.background = { color: COLORS.bgDark };
+  // Grid overlay — RBSK amber style
+  for (let gx = 0; gx <= 10; gx += 0.72) {
+    s.addShape(pres.shapes.RECTANGLE, { x: gx, y: 0, w: 0.008, h: 5.63, fill: { color: COLORS.accent, transparency: 92 }, line: { color: COLORS.accent, transparency: 92 } });
+  }
+  for (let gy = 0; gy <= 5.63; gy += 0.63) {
+    s.addShape(pres.shapes.RECTANGLE, { x: 0, y: gy, w: 10, h: 0.008, fill: { color: COLORS.accent, transparency: 92 }, line: { color: COLORS.accent, transparency: 92 } });
+  }
+  // Large number watermark
+  s.addText(String(slideCounter), {
+    x: 6.0, y: -0.5, w: 4.0, h: 4.0,
+    fontSize: 180, color: COLORS.textLight, bold: true,
+    fontFace: "Cambria", transparency: 88, align: "right",
+  });
 
   // Background decorations only (no left bar to avoid overlap)
   s.addShape(pres.shapes.OVAL, { x: 7.5, y: -1.0, w: 4.0, h: 4.0, fill: { color: COLORS.accent, transparency: 88 }, line: { color: COLORS.accent, transparency: 88 } });
@@ -1439,6 +1461,9 @@ const WIZARD_THEME_MAP = {
   "Dark":             "charcoalRuby",
   "Finance":          "financeGold",
   "Healthcare":       "healthcareMint",
+  "Amber Grid":       "amberGrid",
+  "Government":       "amberGrid",
+  "Medical":          "amberGrid",
   // backwards compat
   "Glassmorphism":    "midnightBlue",
   "Apple":            "tealSlate",
@@ -1508,6 +1533,15 @@ const AI_THEMES = {
     chart1:"1B3A4B",chart2:"52B788",chart3:"40916C",chart4:"E76F51",chart5:"457B9D",
     chart6:"E9C46A",chart7:"2A9D8F",chart8:"264653",gradient1:"1B3A4B",gradient2:"264C60",
   },
+  amberGrid: {
+    label: "Amber Grid",
+    bgDark: "1B2A52", bgLight: "FAFBFF", bgMid: "EEF2FF",
+    accent: "F5A623", teal: "FAB10A", textLight: "FFFFFF", textDark: "0F1B38",
+    textMuted: "4A5A7A", cardBg: "FFFFFF", cardAlt: "F0F4FF", border: "DDE4F5",
+    chart1: "1B2A52", chart2: "F5A623", chart3: "2FA4A0", chart4: "E74C3C", chart5: "8E44AD",
+    chart6: "2ECC71", chart7: "E67E22", chart8: "1ABC9C",
+    gradient1: "1B2A52", gradient2: "263A6E",
+  },
 };
 
 function resolveAITheme(key) {
@@ -1537,12 +1571,22 @@ function buildAIDeck({ aiSlides, strategy, docTitle, heroTitle, themeKey, wizard
       s.background = { color: COLORS.bgDark };
 
       // Grid pattern overlay (subtle)
-      for (let gx = 0; gx < 10; gx += 0.8) {
-        s.addShape(pres.shapes.RECTANGLE, { x: gx, y: 0, w: 0.01, h: 5.63, fill: { color: COLORS.accent, transparency: 96 }, line: { color: COLORS.accent, transparency: 96 } });
-      }
-      for (let gy = 0; gy < 5.63; gy += 0.7) {
-        s.addShape(pres.shapes.RECTANGLE, { x: 0, y: gy, w: 10, h: 0.01, fill: { color: COLORS.accent, transparency: 96 }, line: { color: COLORS.accent, transparency: 96 } });
-      }
+     // Grid pattern overlay — denser, matches RBSK amber style
+    const gridColor = COLORS.accent;
+    for (let gx = 0; gx <= 10; gx += 0.72) {
+      s.addShape(pres.shapes.RECTANGLE, {
+        x: gx, y: 0, w: 0.008, h: 5.63,
+        fill: { color: gridColor, transparency: 92 },
+        line: { color: gridColor, transparency: 92 },
+      });
+    }
+    for (let gy = 0; gy <= 5.63; gy += 0.63) {
+      s.addShape(pres.shapes.RECTANGLE, {
+        x: 0, y: gy, w: 10, h: 0.008,
+        fill: { color: gridColor, transparency: 92 },
+        line: { color: gridColor, transparency: 92 },
+      });
+    }
 
       // Decorative circles
       s.addShape(pres.shapes.OVAL, { x: 7.8, y: -1.0, w: 3.5, h: 3.5, fill: { color: COLORS.accent, transparency: 75 }, line: { color: COLORS.accent, transparency: 75 } });
@@ -1591,6 +1635,19 @@ function buildAIDeck({ aiSlides, strategy, docTitle, heroTitle, themeKey, wizard
     // ── SECTION DIVIDER ──────────────────────────────────────────────────────
     if (slide.slideType === "section") {
       s.background = { color: COLORS.bgDark };
+      // Grid overlay — RBSK style
+      for (let gx = 0; gx <= 10; gx += 0.72) {
+        s.addShape(pres.shapes.RECTANGLE, { x: gx, y: 0, w: 0.008, h: 5.63, fill: { color: COLORS.accent, transparency: 92 }, line: { color: COLORS.accent, transparency: 92 } });
+      }
+      for (let gy = 0; gy <= 5.63; gy += 0.63) {
+        s.addShape(pres.shapes.RECTANGLE, { x: 0, y: gy, w: 10, h: 0.008, fill: { color: COLORS.accent, transparency: 92 }, line: { color: COLORS.accent, transparency: 92 } });
+      }
+      // Large section number (top-right corner watermark)
+      s.addText(String(slideCounter), {
+        x: 6.5, y: -0.8, w: 3.5, h: 4.5,
+        fontSize: 200, color: COLORS.textLight, bold: true,
+        fontFace: "Cambria", transparency: 88, align: "right",
+      });
       s.addShape(pres.shapes.OVAL, { x: 7.5, y: -1.0, w: 4.0, h: 4.0, fill: { color: COLORS.accent, transparency: 88 }, line: { color: COLORS.accent, transparency: 88 } });
       s.addShape(pres.shapes.OVAL, { x: 6.5, y: 3.8, w: 2.5, h: 2.5, fill: { color: COLORS.teal, transparency: 85 }, line: { color: COLORS.teal, transparency: 85 } });
       s.addText("SECTION", { x: 0.6, y: 1.5, w: 8.5, h: 0.4, fontSize: 11, color: COLORS.accent, bold: true, charSpacing: 5, fontFace: "Calibri" });
@@ -1717,6 +1774,62 @@ function buildAIDeck({ aiSlides, strategy, docTitle, heroTitle, themeKey, wizard
         if (bullets.length) s.addText(bullets, { x: q.x + 0.15, y: q.y + 0.36, w: qW - 0.3, h: qH - 0.46, fontFace: "Calibri", valign: "top" });
       });
 
+    // ── AGENDA SLIDE ─────────────────────────────────────────────────────────
+    } else if (slide.slideType === "agenda" && Array.isArray(slide.sections) && slide.sections.length > 0) {
+      const items = slide.sections.slice(0, 8);
+      const rowH = Math.min((SAFE_H - 0.1 * (items.length - 1)) / items.length, 0.62);
+      let ay = SAFE_Y;
+      items.forEach((sec, i) => {
+        const cc = CARD_PALETTE[i % CARD_PALETTE.length];
+        s.addShape("roundRect", { x: 0.3, y: ay, w: 9.4, h: rowH, fill: { color: COLORS.cardBg }, line: { color: COLORS.border }, rectRadius: 0.06 });
+        s.addShape(pres.shapes.OVAL, { x: 0.44, y: ay + rowH / 2 - 0.19, w: 0.38, h: 0.38, fill: { color: cc, transparency: 78 }, line: { color: cc, transparency: 50 } });
+        s.addText(String(i + 1).padStart(2, "0"), { x: 0.44, y: ay + rowH / 2 - 0.19, w: 0.38, h: 0.38, fontSize: 11, color: cc, bold: true, align: "center", valign: "middle", fontFace: "Calibri" });
+        s.addText((sec.title || "").slice(0, 45), { x: 1.0, y: ay + 0.06, w: 7.0, h: rowH * 0.55, fontSize: 13, color: COLORS.textDark, bold: true, fontFace: "Calibri", valign: "top" });
+        if (sec.description) {
+          s.addText(sec.description.slice(0, 90), { x: 1.0, y: ay + rowH * 0.5, w: 8.0, h: rowH * 0.45, fontSize: 9.5, color: COLORS.textMuted, fontFace: "Calibri", valign: "top" });
+        }
+        ay += rowH + 0.1;
+      });
+
+    // ── RISK CARDS SLIDE ─────────────────────────────────────────────────────
+    } else if (slide.slideType === "riskCards" && Array.isArray(slide.risks) && slide.risks.length > 0) {
+      const items = slide.risks.slice(0, 5);
+      const sevColor = { critical: "E74C3C", high: "E67E22", medium: "F39C12", low: "27AE60" };
+      const rowH = Math.min((SAFE_H - 0.14 * (items.length - 1)) / items.length, 0.86);
+      let ry = SAFE_Y;
+      items.forEach(risk => {
+        const sc = sevColor[risk.severity] || sevColor.medium;
+        s.addShape("roundRect", { x: 0.3, y: ry, w: 9.4, h: rowH, fill: { color: COLORS.cardBg }, line: { color: sc, transparency: 55 }, rectRadius: 0.07 });
+        s.addShape("rect", { x: 0.3, y: ry, w: 0.06, h: rowH, fill: { color: sc }, line: { color: sc } });
+        s.addShape("roundRect", { x: 9.4 - 1.05, y: ry + 0.1, w: 0.95, h: 0.28, fill: { color: sc, transparency: 80 }, line: { color: sc, transparency: 55 }, rectRadius: 0.14 });
+        s.addText((risk.severity || "medium").toUpperCase(), { x: 9.4 - 1.05, y: ry + 0.1, w: 0.95, h: 0.28, fontSize: 8, color: sc, bold: true, align: "center", valign: "middle", fontFace: "Calibri" });
+        s.addText((risk.title || "").slice(0, 55), { x: 0.5, y: ry + 0.08, w: 7.6, h: 0.3, fontSize: 12.5, color: COLORS.textDark, bold: true, fontFace: "Calibri" });
+        if (risk.description) {
+          s.addText(risk.description.slice(0, 130), { x: 0.5, y: ry + 0.4, w: 8.8, h: rowH - 0.46, fontSize: 10, color: COLORS.textMuted, fontFace: "Calibri", valign: "top" });
+        }
+        ry += rowH + 0.14;
+      });
+
+    // ── RECOMMENDATIONS SLIDE ────────────────────────────────────────────────
+    } else if (slide.slideType === "recommendations" && Array.isArray(slide.items) && slide.items.length > 0) {
+      const items = slide.items.slice(0, 6);
+      const prioColor = { immediate: "E74C3C", "short-term": "F39C12", "long-term": COLORS.chart2 };
+      const rowH = Math.min((SAFE_H - 0.12 * (items.length - 1)) / items.length, 0.72);
+      let ry2 = SAFE_Y;
+      items.forEach((it, i) => {
+        const pc = prioColor[it.priority] || prioColor["short-term"];
+        s.addShape("roundRect", { x: 0.3, y: ry2, w: 9.4, h: rowH, fill: { color: COLORS.cardBg }, line: { color: COLORS.border }, rectRadius: 0.07 });
+        s.addShape(pres.shapes.OVAL, { x: 0.44, y: ry2 + rowH / 2 - 0.18, w: 0.36, h: 0.36, fill: { color: pc }, line: { color: pc } });
+        s.addText(String(i + 1), { x: 0.44, y: ry2 + rowH / 2 - 0.18, w: 0.36, h: 0.36, fontSize: 11, color: COLORS.textLight, bold: true, align: "center", valign: "middle", fontFace: "Calibri" });
+        s.addShape("roundRect", { x: 0.94, y: ry2 + 0.09, w: 1.15, h: 0.24, fill: { color: pc, transparency: 82 }, line: { color: pc, transparency: 60 }, rectRadius: 0.12 });
+        s.addText((it.priority || "short-term").toUpperCase(), { x: 0.94, y: ry2 + 0.09, w: 1.15, h: 0.24, fontSize: 7, color: pc, bold: true, align: "center", valign: "middle", fontFace: "Calibri" });
+        s.addText((it.title || "").slice(0, 55), { x: 2.2, y: ry2 + 0.06, w: 7.3, h: 0.3, fontSize: 11.5, color: COLORS.textDark, bold: true, fontFace: "Calibri" });
+        if (it.description) {
+          s.addText(it.description.slice(0, 110), { x: 2.2, y: ry2 + 0.36, w: 7.3, h: rowH - 0.4, fontSize: 9.5, color: COLORS.textMuted, fontFace: "Calibri", valign: "top" });
+        }
+        ry2 += rowH + 0.12;
+      });
+
     // ── CHART SLIDE ──────────────────────────────────────────────────────────
     } else if (slide.slideType === "chart" && slide.chartData && slide.chartData.labels?.length >= 2) {
       const cd = slide.chartData;
@@ -1744,7 +1857,49 @@ function buildAIDeck({ aiSlides, strategy, docTitle, heroTitle, themeKey, wizard
       const chartH = SAFE_H - 0.42;
 
       try {
-        if (chartType === "pie" || chartType === "donut") {
+        if (chartType === "waterfall") {
+          // pptxgenjs has no native waterfall chart type — approximate with a
+          // stacked bar: an invisible "base" series carries each bar to its
+          // start height, and a visible "delta" series draws the actual step
+          // (green for increases, red for decreases), which is the standard
+          // waterfall workaround for this chart library.
+          let running = 0;
+          const bases = []; const deltas = [];
+          values.forEach(v => {
+            const start = running;
+            running += v;
+            bases.push(Math.min(start, running));
+            deltas.push(Math.abs(v));
+          });
+          const waterfallData = [
+            { name: "base", labels, values: bases },
+            { name: cd.title || slide.title, labels, values: deltas },
+          ];
+          s.addChart(pres.ChartType.bar, waterfallData, {
+            x: 0.3, y: chartY, w: 9.4, h: chartH,
+            barDir: "col", barGrouping: "stacked",
+            chartColors: ["FFFFFF", COLORS.chart2],
+            showLegend: false, showValue: true,
+            dataLabelFontSize: 8, dataLabelColor: COLORS.textLight,
+            catAxisLabelFontSize: 8, valAxisLabelFontSize: 8,
+            catGridLine: { style: "none" },
+            valGridLine: { style: "dash", color: COLORS.border },
+          });
+        } else if (chartType === "radar") {
+          const maxV = Math.max(...values, 1);
+          const radarData = [{
+            name: cd.title || slide.title,
+            labels: labels.slice(0, 8),
+            values: values.slice(0, 8).map(v => (v <= 1 ? Math.round(v * 100) : Math.round(v))),
+          }];
+          s.addChart(pres.ChartType.radar, radarData, {
+            x: 1.6, y: chartY, w: 6.7, h: chartH,
+            chartColors: [COLORS.chart2],
+            showLegend: false,
+            catAxisLabelFontSize: 9, catAxisLabelColor: COLORS.textDark,
+            plotAreaBorderColor: COLORS.border, chartAreaBorderColor: COLORS.border,
+          });
+        } else if (chartType === "pie" || chartType === "donut") {
           const pieData = [{ name: cd.title || slide.title, labels, values }];
           s.addChart(pres.ChartType.doughnut, pieData, {
             x: 0.5, y: chartY, w: 5.5, h: chartH,
