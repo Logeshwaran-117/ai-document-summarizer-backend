@@ -1544,13 +1544,27 @@ const AI_THEMES = {
   },
 };
 
-function resolveAITheme(key) {
+const DOC_TYPE_THEME_MAP = {
+  healthcare_data:   "amberGrid",
+  government_report: "amberGrid",
+  banking:           "financeGold",
+  financial_report:  "financeGold",
+  medical_report:    "healthcareMint",
+  annual_report:     "navyGold",
+  research_paper:    "midnightBlue",
+  business_proposal: "navyGold",
+};
+
+function resolveAITheme(key, docType) {
+  if (docType && DOC_TYPE_THEME_MAP[docType]) {
+    return AI_THEMES[DOC_TYPE_THEME_MAP[docType]] || AI_THEMES.navyGold;
+  }
   return AI_THEMES[WIZARD_THEME_MAP[key] || key] || AI_THEMES.navyGold;
 }
 
 // ── Build deck from AI-generated slides ───────────────────────────────────────
 function buildAIDeck({ aiSlides, strategy, docTitle, heroTitle, themeKey, wizardOptions }) {
-  const COLORS = resolveAITheme(themeKey);
+  const COLORS = resolveAITheme(themeKey, strategy?.documentType);
   const includeNotes = wizardOptions.speakerNotes !== "No";
   const totalSlides = aiSlides.length;
   const today = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
@@ -1943,6 +1957,11 @@ function buildAIDeck({ aiSlides, strategy, docTitle, heroTitle, themeKey, wizard
 
     // ── KPI DASHBOARD ─────────────────────────────────────────────────────────
     } else if (slide.slideType === "kpi" && slide.metrics?.length) {
+      // KPI slides: dark background with glowing amber cards — matches sample premium look
+      s.background = { color: COLORS.bgDark };
+      s.addShape(pres.shapes.OVAL, { x: 7.5, y: -0.8, w: 3.2, h: 3.2, fill: { color: COLORS.accent, transparency: 80 }, line: { color: COLORS.accent, transparency: 80 } });
+      s.addShape(pres.shapes.OVAL, { x: -0.5, y: 4.3, w: 2.0, h: 2.0, fill: { color: COLORS.teal, transparency: 85 }, line: { color: COLORS.teal, transparency: 85 } });
+
       const items = slide.metrics.slice(0, 6);
       const cols = items.length <= 2 ? 2 : items.length <= 4 ? 2 : 3;
       const rows = Math.ceil(items.length / cols);
@@ -1958,30 +1977,30 @@ function buildAIDeck({ aiSlides, strategy, docTitle, heroTitle, themeKey, wizard
         const y = SAFE_Y + row * (cardH + gap);
         const cc = CARD_PALETTE[i % CARD_PALETTE.length];
 
+        // Dark glass card with colored left accent
         s.addShape("roundRect", {
           x, y, w: cardW, h: cardH,
-          fill: { color: COLORS.cardBg }, line: { color: cc, transparency: 60 }, rectRadius: 0.1,
-          shadow: { type: "outer", color: "000000", blur: 6, offset: 2, angle: 45, opacity: 0.06 },
+          fill: { color: cc, transparency: 88 }, line: { color: cc, transparency: 50 }, rectRadius: 0.12,
         });
-        // Colored top strip (3px)
-        s.addShape("rect", { x, y, w: cardW, h: 0.05, fill: { color: cc }, line: { color: cc } });
-        // Label
+        s.addShape("rect", { x, y, w: 0.05, h: cardH, fill: { color: cc }, line: { color: cc } });
+        // Label — colored (matches card color, visible on dark bg)
         s.addText(String(m.label || "").toUpperCase().slice(0, 28), {
-          x: x + 0.15, y: y + 0.1, w: cardW - 0.3, h: 0.26,
-          fontSize: 8, color: COLORS.textMuted, bold: true, fontFace: "Calibri", charSpacing: 0.3,
+          x: x + 0.18, y: y + 0.1, w: cardW - 0.3, h: 0.26,
+          fontSize: 8.5, color: cc, bold: true, fontFace: "Calibri", charSpacing: 0.3,
         });
-        // Value
-        const valText = String(m.value || "").slice(0, 32);
-        const valSize = valText.length > 20 ? 13 : cardH > 1.3 ? 19 : 16;
+        // Value — white on dark
+        const valText = String(m.value || "").slice(0, 30);
+        const valSize = valText.length > 20 ? 12 : cardH > 1.3 ? 17 : 14;
         s.addText(valText, {
-          x: x + 0.15, y: y + 0.40, w: cardW - 0.28, h: cardH - 0.52,
-          fontSize: valSize, color: cc, bold: true, fontFace: "Cambria", valign: "top", autoFit: true,
+          x: x + 0.18, y: y + 0.42, w: cardW - 0.28, h: cardH - 0.56,
+          fontSize: valSize, color: COLORS.textLight, bold: true,
+          fontFace: "Cambria", valign: "top", autoFit: true,
         });
-        // Trend arrow if applicable
+        // Trend arrow
         const trend = m.trend;
         if (trend === "up" || trend === "down") {
           const arrow = trend === "up" ? "↑" : "↓";
-          const arrowColor = trend === "up" ? "27AE60" : "E74C3C";
+          const arrowColor = trend === "up" ? "2ECC71" : "E74C3C";
           s.addText(arrow, { x: x + cardW - 0.4, y: y + 0.38, w: 0.3, h: 0.3, fontSize: 14, color: arrowColor, bold: true, align: "right", fontFace: "Calibri" });
         }
       });

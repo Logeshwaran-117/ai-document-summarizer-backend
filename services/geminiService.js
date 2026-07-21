@@ -26,16 +26,64 @@ const GEMINI_KEYS = [
     process.env.GEMINI_KEY_2,
     process.env.GEMINI_KEY_3,
     process.env.GEMINI_KEY_4,
+    process.env.GEMINI_KEY_5,
+    process.env.GEMINI_KEY_6,
+    process.env.GEMINI_KEY_7,
+    process.env.GEMINI_KEY_8,
+    process.env.GEMINI_KEY_9,
+    process.env.GEMINI_KEY_10,
+    process.env.GEMINI_KEY_11,
+    process.env.GEMINI_KEY_12,
+    process.env.GEMINI_KEY_13,
 ].filter(Boolean);
 
 if (GEMINI_KEYS.length === 0) {
-    throw new Error("No Gemini API keys found. Set GEMINI_KEY_1 … GEMINI_KEY_4 in your .env");
+    throw new Error("No Gemini API keys found. Set GEMINI_KEY_1 … GEMINI_KEY_13 in your .env");
 }
 
 // Export so usageTrackingService can read total key count
 process.env.GEMINI_KEYS_COUNT = String(GEMINI_KEYS.length);
 
 let currentKeyIndex = 0;
+
+// ── Cooldown tracking ─────────────────────────────────────────────────────────
+// Free-tier Gemini: 5 RPM, 20 RPD per key.
+// We back off a key for KEY_COOLDOWN_MS after it's rate-limited so we never
+// hammer all keys in the same minute and exhaust them simultaneously.
+const KEY_COOLDOWN_MS = 62_000; // 62 s — just over 1 minute window
+const keyCooldowns = new Array(GEMINI_KEYS.length).fill(0); // timestamp of last rate-limit
+
+function isKeyCoolingDown(index) {
+    return Date.now() < keyCooldowns[index];
+}
+
+function markKeyCoolingDown(index) {
+    keyCooldowns[index] = Date.now() + KEY_COOLDOWN_MS;
+    const coolUntil = new Date(keyCooldowns[index]).toLocaleTimeString();
+    console.log(`🧊 Key ${index + 1} cooling down until ${coolUntil}`);
+}
+
+function getAvailableKeyIndex() {
+    // Try keys starting from currentKeyIndex, find first non-cooling one
+    for (let i = 0; i < GEMINI_KEYS.length; i++) {
+        const idx = (currentKeyIndex + i) % GEMINI_KEYS.length;
+        if (!isKeyCoolingDown(idx)) return idx;
+    }
+    // All keys cooling — find the one that will be ready soonest
+    let soonestIdx = 0;
+    let soonestTime = Infinity;
+    for (let i = 0; i < GEMINI_KEYS.length; i++) {
+        if (keyCooldowns[i] < soonestTime) {
+            soonestTime = keyCooldowns[i];
+            soonestIdx = i;
+        }
+    }
+    return soonestIdx; // caller must wait for it
+}
+
+function msUntilKeyReady(index) {
+    return Math.max(0, keyCooldowns[index] - Date.now());
+}
 
 function getCurrentKey() {
     return GEMINI_KEYS[currentKeyIndex];
@@ -216,56 +264,69 @@ function parseRetryAfter(error) {
  * @param {string}   feature        - "summarize"|"banking"|"table"
  */
 async function callWithRotation(buildParts, maxOutputTokens = 8192, model = "gemini-3.5-flash", onUsage = null, feature = "summarize") {
-    let keysTriedCount = 0;
+    const MAX_ATTEMPTS = GEMINI_KEYS.length * 2; // allow re-trying keys after cooldown expires
+    let attempts = 0;
+    let overloadRetries = 0;
+    const MAX_OVERLOAD_RETRIES = 8;
 
-    while (keysTriedCount < GEMINI_KEYS.length) {
+    while (attempts < MAX_ATTEMPTS) {
+        // ── Pick the best available key ───────────────────────────────────────
+        const chosenIdx = getAvailableKeyIndex();
+        const waitMs = msUntilKeyReady(chosenIdx);
+
+        if (waitMs > 0) {
+            console.log(`⏳ All keys cooling down. Best key ${chosenIdx + 1} ready in ${(waitMs / 1000).toFixed(1)}s — waiting...`);
+            await sleep(waitMs + 200); // tiny buffer
+        }
+
+        currentKeyIndex = chosenIdx;
+
         try {
             const parts = buildParts();
-            return await callGeminiREST(parts, maxOutputTokens, model, onUsage, feature);
+            const result = await callGeminiREST(parts, maxOutputTokens, model, onUsage, feature);
+            overloadRetries = 0; // reset on success
+            return result;
         } catch (error) {
             if (isRateLimitError(error)) {
-                const retryMs = parseRetryAfter(error);
-                console.log(`⚠️  Key ${currentKeyIndex + 1} rate limited. Rotating to next key...`);
-                const { from, to } = rotateKey();
-                usageTracking.recordRateLimit(from, to).catch(() => {});
-                keysTriedCount++;
-                await sleep(retryMs ? Math.min(retryMs, 15000) : 2000);
+                console.log(`⚠️  Key ${currentKeyIndex + 1} rate limited. Cooling it down for ${KEY_COOLDOWN_MS / 1000}s...`);
+                markKeyCoolingDown(currentKeyIndex);
+                usageTracking.recordRateLimit(currentKeyIndex, -1).catch(() => {});
+                attempts++;
+                // Don't sleep here — getAvailableKeyIndex will find the next ready key
                 continue;
             }
+
             if (isOverloadError(error)) {
-                console.log(`⏳ Gemini overloaded (503), waiting 4s...`);
-                await sleep(4000);
+                overloadRetries++;
+                if (overloadRetries > MAX_OVERLOAD_RETRIES) {
+                    console.log(`⚠️  Gemini overloaded too many times (${overloadRetries}x). Trying Groq fallback...`);
+                    break; // fall through to Groq
+                }
+                const backoff = Math.min(4000 * overloadRetries, 30000);
+                console.log(`⏳ Gemini overloaded (503), waiting ${backoff / 1000}s... (attempt ${overloadRetries}/${MAX_OVERLOAD_RETRIES})`);
+                await sleep(backoff);
                 continue;
             }
+
             if (isAccessDeniedError(error)) {
-                console.log(
-                    `🚫 Key ${currentKeyIndex + 1} was denied access (${error.message}). Rotating to next key...`
-                );
-                const { from, to } = rotateKey();
-                usageTracking.recordRateLimit(from, to).catch(() => {});
-                keysTriedCount++;
+                console.log(`🚫 Key ${currentKeyIndex + 1} denied access (${error.message}). Permanently skipping for this request...`);
+                // Cool it down for 24h effectively (it's broken, not just rate-limited)
+                keyCooldowns[currentKeyIndex] = Date.now() + 24 * 60 * 60 * 1000;
+                usageTracking.recordRateLimit(currentKeyIndex, -1).catch(() => {});
+                attempts++;
                 continue;
             }
-            // Unexpected error — record it, then rethrow
+
+            // Unexpected error — record and rethrow immediately
             usageTracking.recordError(currentKeyIndex).catch(() => {});
             throw error;
         }
     }
 
-    // All keys exhausted — wait 30s then do one final attempt
-    console.log(`⏳ All ${GEMINI_KEYS.length} keys exhausted. Waiting 30s before final retry...`);
-    await sleep(30000);
+    // ── All keys exhausted or overloaded too many times → try Groq ───────────
+    console.log(`⚠️  Gemini keys exhausted after ${attempts} attempts. Trying Groq fallback...`);
 
-    let finalGeminiError;
-    try {
-        const parts = buildParts();
-        return await callGeminiREST(parts, maxOutputTokens, model, onUsage, feature);
-    } catch (finalError) {
-        finalGeminiError = finalError;
-        console.log("⚠️  Final Gemini retry also failed. Trying Groq fallback...");
-    }
-
-    // ── Groq fallback ──
+    let finalGeminiError = new Error(`All ${GEMINI_KEYS.length} Gemini keys rate limited or denied.`);
     try {
         const parts = buildParts();
         const result = await callGroqFallback(parts, maxOutputTokens);
@@ -273,16 +334,8 @@ async function callWithRotation(buildParts, maxOutputTokens = 8192, model = "gem
         return result;
     } catch (groqError) {
         console.log(`⚠️  Groq fallback unavailable/failed: ${groqError.message}`);
-
-        if (isAccessDeniedError(finalGeminiError)) {
-            throw new Error(
-                `All ${GEMINI_KEYS.length} Gemini API keys were denied access by Google, and the Groq fallback ` +
-                `also failed (${groqError.message}). Check that each GEMINI_KEY_n in your .env is valid and its ` +
-                `project/billing is active.`
-            );
-        }
         throw new Error(
-            `All ${GEMINI_KEYS.length} Gemini API keys are rate limited, and the Groq fallback also failed ` +
+            `All ${GEMINI_KEYS.length} Gemini API keys are rate limited/denied, and the Groq fallback also failed ` +
             `(${groqError.message}). Please wait a minute and try again.`
         );
     }
