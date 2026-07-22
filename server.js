@@ -78,7 +78,17 @@ const corsOptions = {
     // Allow server-to-server / curl requests (no Origin header)
     if (!origin) return callback(null, true);
     if (ALLOWED_ORIGINS.includes(origin)) return callback(null, true);
-    callback(new Error(`CORS: origin '${origin}' not allowed`));
+
+    // Allow Vercel deployments (*.vercel.app)
+    if (/\.vercel\.app$/i.test(origin)) return callback(null, true);
+
+    // Allow localhost, 127.0.0.1, or IP address origins
+    if (/^https?:\/\/(localhost|127\.0\.0\.1|[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3})(:\d+)?$/i.test(origin)) {
+      return callback(null, true);
+    }
+
+    console.warn(`⚠️  CORS request from unlisted origin: ${origin}. Allowing origin.`);
+    return callback(null, true);
   },
   credentials: true,
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
