@@ -3,6 +3,7 @@ const { extractText, isEmptyContent } = require("../services/extractText");
 const { generateSummary, summarizeImage, extractTextFromImage } = require("../services/geminiService");
 const { saveHistory } = require("../services/historyService");
 const { emitProgress, startProgressTicker } = require("../routes/progressRoutes");
+const { sendSummaryReadyEmail } = require("../services/emailService");
 
 async function summarizeDocument(req, res) {
   // jobId is sent by the frontend alongside the file so we can push SSE progress
@@ -142,22 +143,29 @@ async function summarizeDocument(req, res) {
     const characters   = wordSource.length;
     const readingTime  = Math.ceil(words / 200);
 
-    const saved = await saveHistory(req.user._id, {
+     const saved = await saveHistory(req.user._id, {
       filename: req.file.originalname,
       extractedText,
       summary,
       stats: { words, characters, readingTime },
     });
-
+ 
     // Increment usage counter (non-blocking — don't await to keep response fast)
     incrementUsage(req.user._id, "summarize").catch(() => {});
-
+ 
+    // 3.1 — Fire summary-ready email (non-blocking)
+    sendSummaryReadyEmail(req.user, {
+      _id: saved._id,
+      filename: req.file.originalname,
+      stats: { words, characters, readingTime },
+    }).catch(() => {});
+ 
     // Deduct tokens consumed by all AI calls in this pipeline
     const tokenStatus = await deductTokens(req.user._id, sessionTokens);
-
+ 
     // ── Stage 5: done ─────────────────────────────────────────────────────────
     emitProgress(jobId, "done", 100, "Summary complete! ✅");
-
+ 
     res.json({
       success: true,
       _id: saved._id,

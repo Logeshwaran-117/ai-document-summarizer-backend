@@ -1,52 +1,33 @@
 // server/services/emailService.js
 //
 // Transactional email sender using Nodemailer.
-// Supports: welcome, payment confirmation, password reset.
+// Supports: welcome, payment confirmation, password reset,
+//           document summary ready, usage limit warnings (80% / 100%).
 //
-// Setup:
-//   npm install nodemailer
-//
-// Required env vars (add to server/.env):
-//   EMAIL_HOST=smtp.gmail.com
-//   EMAIL_PORT=587
-//   EMAIL_USER=your@gmail.com
-//   EMAIL_PASS=your-app-password       # Gmail: use an App Password, not your login password
-//   EMAIL_FROM="DocSummarizer <your@gmail.com>"
-//   FRONTEND_URL=https://your-app.com  # already in .env
-//
-// For production, swap to a service like Resend, Postmark, or SendGrid
-// by replacing the transporter config below.
+// Required env vars:
+//   EMAIL_HOST, EMAIL_PORT, EMAIL_USER, EMAIL_PASS, EMAIL_FROM, FRONTEND_URL
 
 const nodemailer = require("nodemailer");
-
-// ── Transporter ──────────────────────────────────────────────────────────────
 
 const transporter = nodemailer.createTransport({
   host: process.env.EMAIL_HOST || "smtp.gmail.com",
   port: parseInt(process.env.EMAIL_PORT || "587"),
-  secure: process.env.EMAIL_PORT === "465",   // true only for port 465
+  secure: process.env.EMAIL_PORT === "465",
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS,
   },
 });
 
-// Verify on startup in non-test environments
 if (process.env.NODE_ENV !== "test") {
   transporter.verify().catch((err) =>
     console.warn("⚠️  Email transporter not ready:", err.message)
   );
 }
 
-// ── Internal helpers ─────────────────────────────────────────────────────────
-
 const FROM = process.env.EMAIL_FROM || "DocSummarizer <no-reply@docsummarizer.com>";
 const APP  = process.env.FRONTEND_URL || "http://localhost:5173";
 
-/**
- * Send a raw email. All public helpers funnel through here.
- * Returns true on success, false on failure (never throws).
- */
 async function send({ to, subject, html, text }) {
   try {
     await transporter.sendMail({ from: FROM, to, subject, html, text });
@@ -58,7 +39,6 @@ async function send({ to, subject, html, text }) {
   }
 }
 
-/** Shared outer shell so all emails look consistent. */
 function shell(title, bodyHtml) {
   return `
 <!DOCTYPE html>
@@ -73,8 +53,6 @@ function shell(title, bodyHtml) {
     <tr><td align="center">
       <table width="560" cellpadding="0" cellspacing="0"
              style="background:#fff;border-radius:16px;border:1px solid #e5e7eb;overflow:hidden;">
-
-        <!-- Header -->
         <tr>
           <td style="background:#2563eb;padding:28px 36px;">
             <span style="color:#fff;font-size:1.1rem;font-weight:700;letter-spacing:-0.01em;">
@@ -82,15 +60,11 @@ function shell(title, bodyHtml) {
             </span>
           </td>
         </tr>
-
-        <!-- Body -->
         <tr>
           <td style="padding:36px;">
             ${bodyHtml}
           </td>
         </tr>
-
-        <!-- Footer -->
         <tr>
           <td style="padding:24px 36px;border-top:1px solid #f3f4f6;
                      color:#9ca3af;font-size:0.78rem;line-height:1.6;">
@@ -102,7 +76,6 @@ function shell(title, bodyHtml) {
             </a>.
           </td>
         </tr>
-
       </table>
     </td></tr>
   </table>
@@ -111,10 +84,10 @@ function shell(title, bodyHtml) {
   `.trim();
 }
 
-function btn(label, href) {
+function btn(label, href, bg = "#2563eb") {
   return `
     <a href="${href}"
-       style="display:inline-block;background:#2563eb;color:#fff;
+       style="display:inline-block;background:${bg};color:#fff;
               text-decoration:none;padding:12px 28px;border-radius:10px;
               font-weight:700;font-size:0.95rem;margin:8px 0;">
       ${label}
@@ -134,11 +107,6 @@ function p(text, style = "") {
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
-/**
- * Send welcome email immediately after signup.
- *
- * @param {object} user  - Mongoose user doc: { email, name }
- */
 async function sendWelcomeEmail(user) {
   const name = user.name?.split(" ")[0] || "there";
 
@@ -178,12 +146,6 @@ async function sendWelcomeEmail(user) {
   });
 }
 
-/**
- * Send payment confirmation after a successful Razorpay payment.
- *
- * @param {object} user     - Mongoose user doc: { email, name }
- * @param {object} payment  - Payment doc: { invoiceNumber, amount, plan, paidAt }
- */
 async function sendPaymentConfirmationEmail(user, payment) {
   const name       = user.name?.split(" ")[0] || "there";
   const amount     = `₹${(payment.amount / 100).toLocaleString("en-IN")}`;
@@ -196,7 +158,6 @@ async function sendPaymentConfirmationEmail(user, payment) {
     ${h1("Payment confirmed ✓")}
     ${p(`Hi ${name}, your payment of <strong>${amount}</strong> for the <strong>${planName} plan</strong> was received.`)}
 
-    <!-- Receipt table -->
     <table cellpadding="0" cellspacing="0"
            style="width:100%;border:1px solid #e5e7eb;border-radius:10px;
                   overflow:hidden;margin:0 0 24px;">
@@ -234,22 +195,6 @@ async function sendPaymentConfirmationEmail(user, payment) {
   });
 }
 
-/**
- * Send a password-reset link.
- *
- * @param {object} user       - Mongoose user doc: { email, name }
- * @param {string} resetToken - Raw (un-hashed) reset token
- * @param {number} expiresMin - How many minutes the token is valid (default 30)
- *
- * Wiring on the server side:
- *   1. Generate token:   const token = crypto.randomBytes(32).toString("hex");
- *   2. Hash & store:     user.resetToken      = crypto.createHash("sha256").update(token).digest("hex");
- *                        user.resetTokenExp   = Date.now() + expiresMin * 60 * 1000;
- *                        await user.save();
- *   3. Send email:       await sendPasswordResetEmail(user, token, expiresMin);
- *
- * In authRoutes.js, add a POST /forgot-password and POST /reset-password route.
- */
 async function sendPasswordResetEmail(user, resetToken, expiresMin = 30) {
   const name      = user.name?.split(" ")[0] || "there";
   const resetLink = `${APP}/reset-password?token=${resetToken}`;
@@ -278,7 +223,117 @@ async function sendPasswordResetEmail(user, resetToken, expiresMin = 30) {
   });
 }
 
-// ── Utility ───────────────────────────────────────────────────────────────────
+// ── 3.1: Document summary ready ───────────────────────────────────────────────
+/**
+ * Call this after a document is successfully summarized and saved.
+ *
+ * @param {object} user      - Mongoose user doc: { email, name }
+ * @param {object} doc       - Saved Document: { _id, filename, stats }
+ */
+async function sendSummaryReadyEmail(user, doc) {
+  const name       = user.name?.split(" ")[0] || "there";
+  const filename   = doc.filename || "Your document";
+  const docLink    = `${APP}/summary/${doc._id}`;
+  const words      = doc.stats?.words ? doc.stats.words.toLocaleString() : null;
+  const readingTime = doc.stats?.readingTime || null;
+
+  const html = shell("Your summary is ready", `
+    ${h1("Your summary is ready 📄")}
+    ${p(`Hi ${name}, we've finished processing <strong>${filename}</strong>.`)}
+
+    <div style="background:#f0f7ff;border:1px solid #bfdbfe;border-radius:12px;
+                padding:20px 24px;margin:0 0 24px;">
+      <strong style="color:#1e40af;font-size:0.9rem;">Summary stats</strong>
+      <div style="margin-top:10px;display:flex;gap:24px;flex-wrap:wrap;">
+        ${words ? `<div style="color:#374151;font-size:0.875rem;">📝 <strong>${words}</strong> words processed</div>` : ""}
+        ${readingTime ? `<div style="color:#374151;font-size:0.875rem;">⏱️ <strong>${readingTime} min</strong> reading time saved</div>` : ""}
+        <div style="color:#374151;font-size:0.875rem;">✅ Summary generated</div>
+      </div>
+    </div>
+
+    ${btn("View your summary", docLink)}
+
+    ${p(`You can also share this summary with colleagues or download it as PDF or TXT from the summary page.`,
+        "margin-top:20px;color:#6b7280;font-size:0.875rem;")}
+  `);
+
+  return send({
+    to: user.email,
+    subject: `Summary ready: ${filename}`,
+    html,
+    text: `Hi ${name},\n\nYour summary for "${filename}" is ready.\n\nView it here: ${docLink}\n\nThe DocSummarizer team`,
+  });
+}
+
+// ── 3.5: Usage limit warning emails ──────────────────────────────────────────
+/**
+ * Call this when a user hits 80% or 100% of their daily limit.
+ *
+ * @param {object} user    - Mongoose user doc: { email, name, plan }
+ * @param {object} usage   - { used, limit, action } where action = 'summarize' | 'tables'
+ * @param {'80'|'100'} pct - Which threshold was hit
+ */
+async function sendUsageLimitEmail(user, usage, pct) {
+  const name      = user.name?.split(" ")[0] || "there";
+  const planName  = capitalize(user.plan || "free");
+  const actionStr = usage.action === "summarize" ? "summaries" : "table extractions";
+  const isMaxed   = pct === "100";
+
+  const subject = isMaxed
+    ? `You've used all your ${actionStr} for today`
+    : `You've used 80% of your daily ${actionStr}`;
+
+  const accentColor = isMaxed ? "#dc2626" : "#d97706";
+  const accentLight = isMaxed ? "#fef2f2" : "#fffbeb";
+  const accentBorder = isMaxed ? "#fecaca" : "#fde68a";
+  const emoji = isMaxed ? "🔴" : "🟡";
+
+  const html = shell(subject, `
+    ${h1(`${emoji} ${isMaxed ? "Daily limit reached" : "Approaching your daily limit"}`)}
+    ${p(`Hi ${name}, ${isMaxed
+      ? `you've used all <strong>${usage.limit} ${actionStr}</strong> on your ${planName} plan for today.`
+      : `you've used <strong>${usage.used} of ${usage.limit} ${actionStr}</strong> on your ${planName} plan today.`
+    }`)}
+
+    <!-- Usage bar -->
+    <div style="margin:0 0 24px;">
+      <div style="display:flex;justify-content:space-between;margin-bottom:6px;">
+        <span style="font-size:0.8rem;color:#6b7280;">${actionStr}</span>
+        <span style="font-size:0.8rem;font-weight:600;color:${accentColor};">${usage.used} / ${usage.limit}</span>
+      </div>
+      <div style="background:#e5e7eb;border-radius:999px;height:8px;overflow:hidden;">
+        <div style="background:${accentColor};height:100%;width:${Math.min(100, Math.round((usage.used / usage.limit) * 100))}%;border-radius:999px;"></div>
+      </div>
+    </div>
+
+    <div style="background:${accentLight};border:1px solid ${accentBorder};border-radius:12px;
+                padding:16px 20px;margin:0 0 24px;">
+      <p style="margin:0;font-size:0.875rem;color:${accentColor};font-weight:600;">
+        ${isMaxed
+          ? "Your limit resets tomorrow. Upgrade now to keep working."
+          : `You have ${usage.limit - usage.used} ${actionStr} left today.`}
+      </p>
+    </div>
+
+    ${btn("Upgrade your plan", `${APP}/pricing`, "#2563eb")}
+    &nbsp;&nbsp;
+    ${isMaxed ? "" : btn("Continue working", `${APP}/upload`, "#6b7280")}
+
+    ${p(`On the <strong>${planName} plan</strong> you get ${usage.limit} ${actionStr} per day.
+         Upgrading unlocks higher limits or unlimited usage.`,
+        "margin-top:20px;color:#6b7280;font-size:0.875rem;")}
+  `);
+
+  return send({
+    to: user.email,
+    subject,
+    html,
+    text: `Hi ${name},\n\n${isMaxed
+      ? `You've hit your daily limit of ${usage.limit} ${actionStr}.`
+      : `You've used ${usage.used}/${usage.limit} ${actionStr} today.`
+    }\n\nUpgrade at ${APP}/pricing to get more.`,
+  });
+}
 
 function capitalize(str) {
   return str.charAt(0).toUpperCase() + str.slice(1);
@@ -288,4 +343,6 @@ module.exports = {
   sendWelcomeEmail,
   sendPaymentConfirmationEmail,
   sendPasswordResetEmail,
+  sendSummaryReadyEmail,   // 3.1
+  sendUsageLimitEmail,     // 3.5
 };
