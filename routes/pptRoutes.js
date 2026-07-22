@@ -1577,6 +1577,18 @@ const MASTER_LAYOUT_REGISTRY = {
   }
 };
 
+function cleanMarkdown(str) {
+  if (!str) return "";
+  if (typeof str !== "string") return String(str);
+  return str
+    .replace(/\*\*(.*?)\*\*/g, "$1")
+    .replace(/\*(.*?)\*/g, "$1")
+    .replace(/__(.*?)__/g, "$1")
+    .replace(/_(.*?)_/g, "$1")
+    .replace(/`([^`]+)`/g, "$1")
+    .trim();
+}
+
 // ── Build deck from AI-generated slides ───────────────────────────────────────
 function buildAIDeck({ aiSlides, strategy, docTitle, heroTitle, themeKey, wizardOptions }) {
   const COLORS = resolveAITheme(themeKey);
@@ -1587,7 +1599,7 @@ function buildAIDeck({ aiSlides, strategy, docTitle, heroTitle, themeKey, wizard
 
   const pres = new pptxgen();
   pres.layout = "LAYOUT_16x9";
-  pres.title = docTitle;
+  pres.title = cleanMarkdown(docTitle);
 
   let slideCounter = 0;
 
@@ -1617,15 +1629,15 @@ function buildAIDeck({ aiSlides, strategy, docTitle, heroTitle, themeKey, wizard
       // Section tag
       s.addText("S E C T I O N  0 1", { x: 0.6, y: 1.1, w: 5.0, h: 0.3, fontSize: 10, color: COLORS.bgDark, bold: true, charSpacing: 4, fontFace: "Calibri" });
 
-      s.addText(heroTitle.toUpperCase(), { x: 0.6, y: 1.6, w: 6.5, h: 1.3, fontSize: 34, color: COLORS.bgDark, bold: true, fontFace: "Cambria", lineSpacing: 40 });
+      s.addText(cleanMarkdown(heroTitle).toUpperCase(), { x: 0.6, y: 1.6, w: 6.5, h: 1.3, fontSize: 34, color: COLORS.bgDark, bold: true, fontFace: "Cambria", lineSpacing: 40 });
       
       if (slide.subtitle) {
-        s.addText(slide.subtitle, { x: 0.6, y: 3.0, w: 6.5, h: 0.8, fontSize: 18, color: COLORS.bgDark, fontFace: "Calibri" });
+        s.addText(cleanMarkdown(slide.subtitle), { x: 0.6, y: 3.0, w: 6.5, h: 0.8, fontSize: 18, color: COLORS.bgDark, fontFace: "Calibri" });
       }
 
       s.addShape(pres.shapes.RECTANGLE, { x: 0.6, y: 3.9, w: 2.2, h: 0.04, fill: { color: COLORS.bgDark }, line: { color: COLORS.bgDark } });
 
-      s.addText(`${docTitle}  ·  ${today}`, { x: 0.6, y: 4.8, w: 7.0, h: 0.35, fontSize: 10.5, color: COLORS.bgDark, fontFace: "Calibri" });
+      s.addText(`${cleanMarkdown(docTitle)}  ·  ${today}`, { x: 0.6, y: 4.8, w: 7.0, h: 0.35, fontSize: 10.5, color: COLORS.bgDark, fontFace: "Calibri" });
       s.addText("01", { x: 9.0, y: 4.8, w: 0.6, h: 0.35, fontSize: 10.5, color: COLORS.bgDark, fontFace: "Calibri", bold: true });
       if (includeNotes) s.addNotes(slide.speakerNotes || `Cover slide: ${heroTitle}`);
       continue;
@@ -1908,7 +1920,10 @@ function buildAIDeck({ aiSlides, strategy, docTitle, heroTitle, themeKey, wizard
 
     // ── KPI DASHBOARD ─────────────────────────────────────────────────────────
     } else if (slide.slideType === "kpi" && slide.metrics?.length) {
-      const items = slide.metrics.slice(0, 6);
+      const items = slide.metrics
+        .filter(m => m && !isMetaInstructionText(m.label) && !isMetaInstructionText(m.value))
+        .slice(0, 6);
+
       const cols = items.length <= 2 ? 2 : items.length <= 4 ? 2 : 3;
       const rows = Math.ceil(items.length / cols);
       const gap = 0.18;
@@ -1928,21 +1943,20 @@ function buildAIDeck({ aiSlides, strategy, docTitle, heroTitle, themeKey, wizard
           fill: { color: COLORS.cardBg }, line: { color: cc, transparency: 60 }, rectRadius: 0.1,
           shadow: { type: "outer", color: "000000", blur: 6, offset: 2, angle: 45, opacity: 0.06 },
         });
-        // Colored top strip (3px)
         s.addShape("rect", { x, y, w: cardW, h: 0.05, fill: { color: cc }, line: { color: cc } });
-        // Label
-        s.addText(String(m.label || "").toUpperCase().slice(0, 28), {
+
+        s.addText(cleanMarkdown(m.label || "").toUpperCase().slice(0, 28), {
           x: x + 0.15, y: y + 0.1, w: cardW - 0.3, h: 0.26,
           fontSize: 8, color: COLORS.textMuted, bold: true, fontFace: "Calibri", charSpacing: 0.3,
         });
-        // Value
-        const valText = String(m.value || "").slice(0, 32);
+
+        const valText = cleanMarkdown(m.value || "").slice(0, 32);
         const valSize = valText.length > 20 ? 13 : cardH > 1.3 ? 19 : 16;
         s.addText(valText, {
           x: x + 0.15, y: y + 0.40, w: cardW - 0.28, h: cardH - 0.52,
           fontSize: valSize, color: cc, bold: true, fontFace: "Cambria", valign: "top", autoFit: true,
         });
-        // Trend arrow if applicable
+
         const trend = m.trend;
         if (trend === "up" || trend === "down") {
           const arrow = trend === "up" ? "↑" : "↓";
@@ -1962,12 +1976,14 @@ function buildAIDeck({ aiSlides, strategy, docTitle, heroTitle, themeKey, wizard
       ].forEach(col => {
         s.addShape("roundRect", { x: col.x, y: SAFE_Y, w: colW, h: SAFE_H, fill: { color: COLORS.cardBg }, line: { color: COLORS.border }, rectRadius: 0.1 });
         s.addShape("rect", { x: col.x, y: SAFE_Y, w: colW, h: 0.04, fill: { color: col.borderColor }, line: { color: col.borderColor } });
-        s.addText(col.data?.title || "", { x: col.x + 0.15, y: SAFE_Y + 0.08, w: colW - 0.3, h: 0.35, fontSize: 12, color: col.borderColor, bold: true, fontFace: "Calibri" });
+        s.addText(cleanMarkdown(col.data?.title || ""), { x: col.x + 0.15, y: SAFE_Y + 0.08, w: colW - 0.3, h: 0.35, fontSize: 12, color: col.borderColor, bold: true, fontFace: "Calibri" });
         s.addShape(pres.shapes.RECTANGLE, { x: col.x + 0.15, y: SAFE_Y + 0.47, w: colW - 0.3, h: 0.02, fill: { color: COLORS.border }, line: { color: COLORS.border } });
-        if (col.data?.bullets?.length) {
-          const items = col.data.bullets.slice(0, 6).map((b, i) => ({
-            text: b.slice(0, 90),
-            options: { bullet: { code: "25AA", color: col.borderColor }, breakLine: i < col.data.bullets.length - 1, fontSize: 11.5, color: COLORS.textDark, paraSpaceAfter: 8 },
+        
+        const cleanBullets = (col.data?.bullets || []).filter(b => !isMetaInstructionText(b));
+        if (cleanBullets.length) {
+          const items = cleanBullets.slice(0, 6).map((b, i) => ({
+            text: cleanMarkdown(b.slice(0, 90)),
+            options: { bullet: { code: "25AA", color: col.borderColor }, breakLine: i < cleanBullets.length - 1, fontSize: 11.5, color: COLORS.textDark, paraSpaceAfter: 8 },
           }));
           s.addText(items, { x: col.x + 0.15, y: SAFE_Y + 0.55, w: colW - 0.3, h: SAFE_H - 0.65, fontFace: "Calibri", valign: "top" });
         }
@@ -1991,45 +2007,46 @@ function buildAIDeck({ aiSlides, strategy, docTitle, heroTitle, themeKey, wizard
         const isAbove = i % 2 === 0;
         const cc = CARD_PALETTE[i % CARD_PALETTE.length];
 
-        // Node: outer ring + inner dot
         s.addShape(pres.shapes.OVAL, { x: cx - 0.16, y: lineY - 0.16, w: 0.32, h: 0.32, fill: { color: cc, transparency: 70 }, line: { color: cc, transparency: 50 } });
         s.addShape(pres.shapes.OVAL, { x: cx - 0.09, y: lineY - 0.09, w: 0.18, h: 0.18, fill: { color: cc }, line: { color: cc } });
 
         if (isAbove) {
-          s.addText(evt.date || `${i + 1}`, { x: cx - itemW * 0.44, y: lineY - 0.7, w: itemW * 0.88, h: 0.26, fontSize: 8.5, color: cc, bold: true, align: "center", fontFace: "Calibri" });
-          s.addText((evt.event || "").slice(0, 40), { x: cx - itemW * 0.44, y: lineY - 0.42, w: itemW * 0.88, h: 0.34, fontSize: 9, color: COLORS.textDark, bold: true, align: "center", fontFace: "Calibri" });
-          if (evt.detail) s.addText(evt.detail.slice(0, 70), { x: cx - itemW * 0.44, y: SAFE_Y, w: itemW * 0.88, h: lineY - SAFE_Y - 0.48, fontSize: 8, color: COLORS.textMuted, align: "center", fontFace: "Calibri", valign: "bottom" });
+          s.addText(cleanMarkdown(evt.date || `${i + 1}`), { x: cx - itemW * 0.44, y: lineY - 0.7, w: itemW * 0.88, h: 0.26, fontSize: 8.5, color: cc, bold: true, align: "center", fontFace: "Calibri" });
+          s.addText(cleanMarkdown(evt.event || "").slice(0, 40), { x: cx - itemW * 0.44, y: lineY - 0.42, w: itemW * 0.88, h: 0.34, fontSize: 9, color: COLORS.textDark, bold: true, align: "center", fontFace: "Calibri" });
+          if (evt.detail) s.addText(cleanMarkdown(evt.detail).slice(0, 70), { x: cx - itemW * 0.44, y: SAFE_Y, w: itemW * 0.88, h: lineY - SAFE_Y - 0.48, fontSize: 8, color: COLORS.textMuted, align: "center", fontFace: "Calibri", valign: "bottom" });
         } else {
-          s.addText(evt.date || `${i + 1}`, { x: cx - itemW * 0.44, y: lineY + 0.24, w: itemW * 0.88, h: 0.26, fontSize: 8.5, color: cc, bold: true, align: "center", fontFace: "Calibri" });
-          s.addText((evt.event || "").slice(0, 40), { x: cx - itemW * 0.44, y: lineY + 0.50, w: itemW * 0.88, h: 0.34, fontSize: 9, color: COLORS.textDark, bold: true, align: "center", fontFace: "Calibri" });
-          if (evt.detail) s.addText(evt.detail.slice(0, 70), { x: cx - itemW * 0.44, y: lineY + 0.85, w: itemW * 0.88, h: 0.7, fontSize: 8, color: COLORS.textMuted, align: "center", fontFace: "Calibri" });
+          s.addText(cleanMarkdown(evt.date || `${i + 1}`), { x: cx - itemW * 0.44, y: lineY + 0.24, w: itemW * 0.88, h: 0.26, fontSize: 8.5, color: cc, bold: true, align: "center", fontFace: "Calibri" });
+          s.addText(cleanMarkdown(evt.event || "").slice(0, 40), { x: cx - itemW * 0.44, y: lineY + 0.50, w: itemW * 0.88, h: 0.34, fontSize: 9, color: COLORS.textDark, bold: true, align: "center", fontFace: "Calibri" });
+          if (evt.detail) s.addText(cleanMarkdown(evt.detail).slice(0, 70), { x: cx - itemW * 0.44, y: lineY + 0.85, w: itemW * 0.88, h: 0.7, fontSize: 8, color: COLORS.textMuted, align: "center", fontFace: "Calibri" });
         }
       });
 
     // ── BULLETS SLIDE (default) ───────────────────────────────────────────────
     } else {
-      const hasBullets = slide.bullets?.length > 0;
-      const hasBody = slide.body && slide.body.length > 20;
+      const rawBullets = (slide.bullets || []).filter(b => !isMetaInstructionText(b));
+      const hasBullets = rawBullets.length > 0;
+      const bodyClean = !isMetaInstructionText(slide.body) ? slide.body : "";
+      const hasBody = bodyClean && bodyClean.length > 15;
 
       if (hasBullets && hasBody) {
         s.addShape("roundRect", { x: 0.3, y: SAFE_Y, w: 5.5, h: SAFE_H, fill: { color: COLORS.cardBg }, line: { color: COLORS.border }, rectRadius: 0.1 });
-        const bItems = slide.bullets.slice(0, 7).map((b, i) => ({
-          text: b.slice(0, 120),
-          options: { bullet: { code: "25AA", color: CARD_PALETTE[i % CARD_PALETTE.length] }, breakLine: i < slide.bullets.length - 1, fontSize: 12, color: COLORS.textDark, paraSpaceAfter: 8 },
+        const bItems = rawBullets.slice(0, 7).map((b, i) => ({
+          text: cleanMarkdown(b.slice(0, 120)),
+          options: { bullet: { code: "25AA", color: CARD_PALETTE[i % CARD_PALETTE.length] }, breakLine: i < rawBullets.length - 1, fontSize: 12, color: COLORS.textDark, paraSpaceAfter: 8 },
         }));
         s.addText(bItems, { x: 0.5, y: SAFE_Y + 0.15, w: 5.1, h: SAFE_H - 0.3, fontFace: "Calibri", valign: "top" });
         s.addShape("roundRect", { x: 6.05, y: SAFE_Y, w: 3.65, h: SAFE_H, fill: { color: COLORS.cardAlt }, line: { color: COLORS.border }, rectRadius: 0.1 });
         s.addText("KEY INSIGHT", { x: 6.2, y: SAFE_Y + 0.14, w: 3.35, h: 0.3, fontSize: 9, color: COLORS.accent, bold: true, fontFace: "Calibri", charSpacing: 1 });
         s.addShape(pres.shapes.RECTANGLE, { x: 6.2, y: SAFE_Y + 0.47, w: 3.35, h: 0.02, fill: { color: COLORS.accent, transparency: 70 }, line: { color: COLORS.accent, transparency: 70 } });
-        s.addText(slide.body.slice(0, 350), { x: 6.2, y: SAFE_Y + 0.54, w: 3.35, h: SAFE_H - 0.65, fontSize: 11, color: COLORS.textDark, fontFace: "Calibri", valign: "top", lineSpacing: 18 });
+        s.addText(cleanMarkdown(bodyClean.slice(0, 350)), { x: 6.2, y: SAFE_Y + 0.54, w: 3.35, h: SAFE_H - 0.65, fontSize: 11, color: COLORS.textDark, fontFace: "Calibri", valign: "top", lineSpacing: 18 });
       } else if (hasBullets) {
-        const bullets = slide.bullets.slice(0, 8);
+        const bullets = rawBullets.slice(0, 8);
         const cols2 = bullets.length >= 5 ? 2 : 1;
         s.addShape("roundRect", { x: 0.3, y: SAFE_Y, w: 9.4, h: SAFE_H, fill: { color: COLORS.cardBg }, line: { color: COLORS.border }, rectRadius: 0.1 });
         if (cols2 === 2) {
           const half = Math.ceil(bullets.length / 2);
           const mkItems = (arr, startIdx) => arr.map((b, i) => ({
-            text: b.slice(0, 110),
+            text: cleanMarkdown(b.slice(0, 110)),
             options: { bullet: { code: "25AA", color: CARD_PALETTE[(startIdx + i) % CARD_PALETTE.length] }, breakLine: i < arr.length - 1, fontSize: 12, color: COLORS.textDark, paraSpaceAfter: 9 },
           }));
           s.addText(mkItems(bullets.slice(0, half), 0), { x: 0.5, y: SAFE_Y + 0.15, w: 4.35, h: SAFE_H - 0.3, fontFace: "Calibri", valign: "top" });
@@ -2037,15 +2054,15 @@ function buildAIDeck({ aiSlides, strategy, docTitle, heroTitle, themeKey, wizard
           s.addText(mkItems(bullets.slice(half), half), { x: 5.2, y: SAFE_Y + 0.15, w: 4.35, h: SAFE_H - 0.3, fontFace: "Calibri", valign: "top" });
         } else {
           const bItems = bullets.map((b, i) => ({
-            text: b.slice(0, 150),
-            options: { bullet: { code: "25AA", color: CARD_PALETTE[i % CARD_PALETTE.length] }, breakLine: i < bullets.length - 1, fontSize: 13, color: COLORS.textDark, paraSpaceAfter: 11 },
+            text: cleanMarkdown(b.slice(0, 130)),
+            options: { bullet: { code: "25AA", color: CARD_PALETTE[i % CARD_PALETTE.length] }, breakLine: i < bullets.length - 1, fontSize: 12.5, color: COLORS.textDark, paraSpaceAfter: 10 },
           }));
-          s.addText(bItems, { x: 0.5, y: SAFE_Y + 0.18, w: 9.0, h: SAFE_H - 0.3, fontFace: "Calibri", valign: "top" });
+          s.addText(bItems, { x: 0.6, y: SAFE_Y + 0.25, w: 8.8, h: SAFE_H - 0.4, fontFace: "Calibri", valign: "top" });
         }
       } else if (hasBody) {
         s.addShape("roundRect", { x: 0.3, y: SAFE_Y, w: 9.4, h: SAFE_H, fill: { color: COLORS.cardBg }, line: { color: COLORS.border }, rectRadius: 0.1 });
         s.addShape(pres.shapes.RECTANGLE, { x: 0.3, y: SAFE_Y, w: 0.05, h: SAFE_H, fill: { color: COLORS.accent }, line: { color: COLORS.accent } });
-        s.addText(slide.body.slice(0, 700), { x: 0.52, y: SAFE_Y + 0.15, w: 9.1, h: SAFE_H - 0.28, fontSize: 13, color: COLORS.textDark, fontFace: "Calibri", valign: "top", lineSpacing: 22 });
+        s.addText(cleanMarkdown(bodyClean.slice(0, 700)), { x: 0.52, y: SAFE_Y + 0.15, w: 9.1, h: SAFE_H - 0.28, fontSize: 13, color: COLORS.textDark, fontFace: "Calibri", valign: "top", lineSpacing: 22 });
       }
     }
 
@@ -2063,6 +2080,20 @@ function addAIFooter(s, COLORS, docTitle, idx, total) {
   s.addText(String(idx).padStart(2, "0"), { x: 8.85, y: 5.25, w: 0.8, h: 0.28, fontSize: 8.5, color: COLORS.textLight, align: "center", valign: "middle", fontFace: "Calibri", bold: true });
 }
 
+function isMetaInstructionText(str) {
+  if (!str || typeof str !== "string") return false;
+  const s = str.toLowerCase();
+  return (
+    s.includes("opening balance, closing balance") ||
+    s.includes("bar chart:") ||
+    s.includes("donut chart:") ||
+    s.includes("left: 4 largest") ||
+    s.includes("right: 4 largest") ||
+    s.includes("contentfocus") ||
+    s.includes("focus of this slide")
+  );
+}
+
 function addAISlideHeader(s, pres, COLORS, title, icon, subtitle) {
   s.addShape(pres.shapes.RECTANGLE, { x: 0, y: 0, w: 10, h: 1.3, fill: { color: COLORS.bgDark }, line: { color: COLORS.bgDark } });
   s.addShape(pres.shapes.RECTANGLE, { x: 0, y: 1.3, w: 10, h: 0.04, fill: { color: COLORS.accent }, line: { color: COLORS.accent } });
@@ -2070,13 +2101,14 @@ function addAISlideHeader(s, pres, COLORS, title, icon, subtitle) {
   const titleX = 0.4;
   const titleW = 9.2;
 
-  s.addText(title.toUpperCase(), {
+  const cleanTitle = cleanMarkdown(title);
+  s.addText(cleanTitle.toUpperCase(), {
     x: titleX, y: 0.18, w: titleW, h: 0.48,
     fontSize: 18, color: COLORS.textLight, bold: true,
     fontFace: "Cambria", valign: "middle", margin: 0
   });
 
-  const subText = subtitle || "Executive Summary & Quantitative Analysis";
+  const subText = cleanMarkdown(subtitle || "Executive Summary & Quantitative Analysis");
   s.addText(subText, {
     x: titleX, y: 0.68, w: titleW, h: 0.35,
     fontSize: 10.5, color: COLORS.accent, bold: true,

@@ -656,13 +656,9 @@ scorecard: {"slideType":"scorecard","title":"","icon":"📋","items":[{"category
       if (partial && partial.length > 0) {
         console.warn(`⚠️  Batch truncated — recovered ${partial.length}/${batchOutline.length} slides`);
         // Fill missing slides with outline fallbacks
-        const filled = batchOutline.map((outlineSlide, i) => {
+        const filled = batchOutline.map((outlineSlide) => {
           const found = partial.find(p => p.title === outlineSlide.title || p.slideType === outlineSlide.slideType);
-          return found || {
-            slideType: outlineSlide.slideType, title: outlineSlide.title, icon: "📄",
-            bullets: [outlineSlide.contentFocus, outlineSlide.purpose].filter(Boolean),
-            body: outlineSlide.contentFocus, speakerNotes: outlineSlide.purpose,
-          };
+          return found || createSmartFallbackSlide(outlineSlide, strategy);
         });
         return filled;
       }
@@ -719,27 +715,13 @@ scorecard: {"slideType":"scorecard","title":"","icon":"📋","items":[{"category
           if (rec) {
             allGeneratedSlides.push(rec);
           } else {
-            allGeneratedSlides.push({
-              slideType: missingSlide.slideType,
-              title: missingSlide.title,
-              icon: "📄",
-              bullets: [missingSlide.contentFocus, missingSlide.purpose].filter(Boolean),
-              body: missingSlide.contentFocus,
-              speakerNotes: missingSlide.purpose,
-            });
+            allGeneratedSlides.push(createSmartFallbackSlide(missingSlide, strategy));
           }
         });
       } catch (missingErr) {
-        console.warn(`⚠️  Targeted recovery for missing slides failed: ${missingErr.message}. Filling fallbacks.`);
+        console.warn(`⚠️ Targeted recovery for missing slides failed: ${missingErr.message}. Filling fallbacks.`);
         missingOutlines.forEach(missingSlide => {
-          allGeneratedSlides.push({
-            slideType: missingSlide.slideType,
-            title: missingSlide.title,
-            icon: "📄",
-            bullets: [missingSlide.contentFocus, missingSlide.purpose].filter(Boolean),
-            body: missingSlide.contentFocus,
-            speakerNotes: missingSlide.purpose,
-          });
+          allGeneratedSlides.push(createSmartFallbackSlide(missingSlide, strategy));
         });
       }
     }
