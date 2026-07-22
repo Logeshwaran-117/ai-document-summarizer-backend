@@ -335,6 +335,33 @@ ${docSample}
   };
 }
 
+function fitOutlineToTarget(base, targetTotal) {
+  if (!Array.isArray(base) || base.length === 0) return base;
+  const closingIdx = base.findIndex(s => s.slideType === "closing");
+  const closing = closingIdx >= 0 ? base[closingIdx] : base[base.length - 1];
+  const core = closingIdx >= 0 ? base.slice(0, closingIdx) : base.slice(0, -1);
+
+  let result;
+  if (core.length + 1 >= targetTotal) {
+    result = [...core.slice(0, Math.max(targetTotal - 1, 1)), closing];
+  } else {
+    const fillers = [
+      { slideType: "bullets", title: "Additional Financial Observations", contentFocus: "Further insights from the document data", purpose: "Deep dive" },
+      { slideType: "chart", title: "Supplementary Data View", contentFocus: "Additional chart derived from document figures", purpose: "Extra visualization" },
+    ];
+    const extra = [];
+    let i = 0;
+    while (core.length + extra.length + 1 < targetTotal) {
+      const f = fillers[i % fillers.length];
+      const suffix = i >= fillers.length ? ` ${Math.floor(i / fillers.length) + 1}` : "";
+      extra.push({ ...f, title: `${f.title}${suffix}` });
+      i++;
+    }
+    result = [...core, ...extra, closing];
+  }
+  return result.map((s, idx) => ({ ...s, slideNumber: idx + 1 }));
+}
+
 // ── Step 3: Build slide outline ───────────────────────────────────────────────
 
 async function buildOutline(documentText, strategy, wizardOptions = {}) {
