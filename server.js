@@ -87,6 +87,7 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
+app.options(/(.*)/, cors(corsOptions));   // Express 5-compatible preflight
 
 app.use("/api/billing/webhook", express.raw({ type: "application/json" }));
 app.use(express.json());
