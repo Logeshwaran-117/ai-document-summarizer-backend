@@ -17,21 +17,21 @@ router.post("/upload-and-extract", upload.single("file"), uploadAndExtract);
 const THEMES = {
   navyGold: {
     label: "Professional",
-    bgDark: "1E2761", bgLight: "FAFBFF", bgMid: "EEF4FF",
-    accent: "C9A84C", teal: "2FA4A0",
-    textLight: "FFFFFF", textDark: "1A1A2E", textMuted: "5A6A8A",
-    cardBg: "FFFFFF", cardAlt: "EEF4FF", border: "E0E8F0",
-    chart1: "1E2761", chart2: "C9A84C", chart3: "2FA4A0",
+    bgDark: "0F1B38", bgLight: "FAFBFF", bgMid: "EEF4FF",
+    accent: "F5A623", teal: "008080",
+    textLight: "FFFFFF", textDark: "0F1B38", textMuted: "4A5A7A",
+    cardBg: "FFFFFF", cardAlt: "F0F4FA", border: "DDE4F5",
+    chart1: "0F1B38", chart2: "F5A623", chart3: "008080",
     chart4: "E74C3C", chart5: "8E44AD", chart6: "2ECC71",
     chart7: "E67E22", chart8: "1ABC9C",
   },
   midnightBlue: {
     label: "Modern",
-    bgDark: "0D1B2A", bgLight: "F0F6FF", bgMid: "E0EEFF",
-    accent: "00B4D8", teal: "0077B6",
-    textLight: "FFFFFF", textDark: "0D1B2A", textMuted: "4A6080",
+    bgDark: "0F1B38", bgLight: "F0F6FF", bgMid: "E0EEFF",
+    accent: "F5A623", teal: "0077B6",
+    textLight: "FFFFFF", textDark: "0F1B38", textMuted: "4A6080",
     cardBg: "FFFFFF", cardAlt: "E0EEFF", border: "C8DCFF",
-    chart1: "0D1B2A", chart2: "00B4D8", chart3: "0077B6",
+    chart1: "0F1B38", chart2: "F5A623", chart3: "0077B6",
     chart4: "E63946", chart5: "2A9D8F", chart6: "E9C46A",
     chart7: "F4A261", chart8: "264653",
   },
@@ -47,12 +47,11 @@ const THEMES = {
   },
   charcoalRuby: {
     label: "Dark",
-    bgDark: "231F20", bgLight: "F9F7F7", bgMid: "F3E9E7", accent: "C0392B", teal: "8E7B57",
-    textLight: "FFFFFF", textDark: "231F20", textMuted: "6B6260",
+    bgDark: "0F1B38", bgLight: "F9F7F7", bgMid: "F3E9E7", accent: "F5A623", teal: "8E7B57",
+    textLight: "FFFFFF", textDark: "0F1B38", textMuted: "6B6260",
     cardBg: "FFFFFF", cardAlt: "F3E9E7", border: "E7DEDC",
-    chart1: "231F20", chart2: "C0392B", chart3: "E67E22", chart4: "27AE60", chart5: "2980B9",
+    chart1: "0F1B38", chart2: "F5A623", chart3: "E67E22", chart4: "27AE60", chart5: "2980B9",
     chart6: "8E44AD", chart7: "F39C12", chart8: "1ABC9C",
-    gradient1: "231F20", gradient2: "3D3536",
   },
   corporatePurple: {
     label: "Corporate",
@@ -72,7 +71,6 @@ const THEMES = {
     cardBg: "FFFFFF", cardAlt: "E8F5EE", border: "C8E6D4",
     chart1: "1B4332", chart2: "F4A261", chart3: "40916C", chart4: "E63946", chart5: "457B9D",
     chart6: "E9C46A", chart7: "2A9D8F", chart8: "264653",
-    gradient1: "1B4332", gradient2: "2D6A4F",
   },
 };
 
@@ -1454,6 +1452,112 @@ function resolveAITheme(key) {
   return AI_THEMES[WIZARD_THEME_MAP[key] || key] || AI_THEMES.navyGold;
 }
 
+// ── MASTER LAYOUT REGISTRY (Parsed from Master Presentation Template) ─────────
+const MASTER_LAYOUT_REGISTRY = {
+  Cover: {
+    id: "Cover",
+    bg: "F5A623",
+    gridLineColor: "0F1B38", gridTransparency: 92,
+    watermark: { text: "R", fontFace: "Cambria", fontSize: 220, color: "0F1B38", transparency: 88, x: 6.0, y: -0.5, w: 4.5, h: 5.5 },
+    sectionTag: { fontFace: "Calibri", fontSize: 10, bold: true, charSpacing: 4, color: "0F1B38", x: 0.6, y: 1.1, w: 5.0, h: 0.3 },
+    title: { fontFace: "Cambria", fontSize: 34, bold: true, color: "0F1B38", lineSpacing: 40, x: 0.6, y: 1.6, w: 6.5, h: 1.3 },
+    subtitle: { fontFace: "Calibri", fontSize: 18, color: "0F1B38", x: 0.6, y: 3.0, w: 6.5, h: 0.8 },
+    divider: { x: 0.6, y: 3.9, w: 2.2, h: 0.04, color: "0F1B38" },
+    footer: { fontFace: "Calibri", fontSize: 10.5, color: "0F1B38", x: 0.6, y: 4.8, w: 7.0, h: 0.35 },
+    pagePill: { fontFace: "Calibri", fontSize: 10.5, bold: true, color: "0F1B38", x: 9.0, y: 4.8, w: 0.6, h: 0.35 }
+  },
+
+  SectionDivider: {
+    id: "Section Divider",
+    bg: "F5A623",
+    gridLineColor: "0F1B38", gridTransparency: 92,
+    watermark: { fontFace: "Cambria", fontSize: 220, color: "0F1B38", transparency: 88, x: 6.0, y: -0.5, w: 4.5, h: 5.5 },
+    sectionTag: { fontFace: "Calibri", fontSize: 10, bold: true, charSpacing: 4, color: "0F1B38", x: 0.6, y: 1.1, w: 5.0, h: 0.3 },
+    title: { fontFace: "Cambria", fontSize: 34, bold: true, color: "0F1B38", lineSpacing: 40, x: 0.6, y: 1.6, w: 6.5, h: 1.3 },
+    subtitle: { fontFace: "Calibri", fontSize: 18, color: "0F1B38", x: 0.6, y: 3.0, w: 6.5, h: 0.8 },
+    divider: { x: 0.6, y: 3.9, w: 2.2, h: 0.04, color: "0F1B38" },
+    pagePill: { fontFace: "Calibri", fontSize: 10.5, bold: true, color: "0F1B38", x: 9.0, y: 4.8, w: 0.6, h: 0.35 }
+  },
+
+  Header: {
+    bg: "0F1B38",
+    bar: { x: 0, y: 0, w: 10, h: 1.3 },
+    accentLine: { x: 0, y: 1.3, w: 10, h: 0.04, color: "F5A623" },
+    ovalOrnament: { x: 8.6, y: -0.6, w: 1.8, h: 1.8, color: "F5A623", transparency: 88 },
+    title: { fontFace: "Cambria", fontSize: 18, bold: true, color: "FFFFFF" },
+    subtitle: { fontFace: "Calibri", fontSize: 10.5, bold: true, color: "F5A623" }
+  },
+
+  KPI6Dashboard: {
+    id: "6 KPI Dashboard",
+    maxItemsPerSlide: 6,
+    cols: 3, rows: 2,
+    gridX: 0.3, gridY: 1.45, gapX: 0.2, gapY: 0.2,
+    cardWidth: 2.93, cardHeight: 1.65,
+    cardBg: "FAFBFF", cardBorder: "DDE4F5", rectRadius: 0.08,
+    accentBarHeight: 0.05,
+    value: { fontFace: "Cambria", fontSize: 34, bold: true, xOffset: 0.18, yOffset: 0.15, w: 2.6, h: 0.65 },
+    label: { fontFace: "Calibri", fontSize: 11.5, bold: true, color: "0F1B38", xOffset: 0.18, yOffset: 0.82, w: 2.6, h: 0.32 },
+    sublabel: { fontFace: "Calibri", fontSize: 9, color: "4A5A7A", xOffset: 0.18, yOffset: 1.18, w: 2.6, h: 0.30 }
+  },
+
+  KPI2Dashboard: {
+    id: "2 KPI Dashboard",
+    maxItemsPerSlide: 3,
+    cardWidth: 3.8, cardHeight: 1.1,
+    cardBg: "FAFBFF", cardBorder: "DDE4F5", rectRadius: 0.08,
+    accentBarHeight: 0.05,
+    value: { fontFace: "Cambria", fontSize: 28, bold: true },
+    label: { fontFace: "Calibri", fontSize: 11, bold: true, color: "0F1B38" }
+  },
+
+  LargeTable: {
+    id: "Large Table",
+    maxRowsPerSlide: 8,
+    tablePos: { x: 0.4, y: 1.5, w: 9.2, h: 3.5 },
+    headerRow: { h: 0.45, fill: "F5A623", color: "0F1B38", fontFace: "Calibri", fontSize: 10.5, bold: true },
+    bodyRow: { h: 0.38, altFills: ["FFFFFF", "F4F6FA"], color: "0F1B38", fontFace: "Calibri", fontSize: 10 },
+    totalRow: { h: 0.42, fill: "0F1B38", color: "FFFFFF", fontFace: "Calibri", fontSize: 10.5, bold: true }
+  },
+
+  WideBarChart: {
+    id: "Wide Bar Chart",
+    pos: { x: 0.3, y: 1.55, w: 9.4, h: 3.52 },
+    colors: ["0F1B38", "F5A623", "008080", "E74C3C", "8E44AD", "2ECC71"],
+    gridlineColor: "E0E8F0"
+  },
+
+  DonutChart: {
+    id: "Donut Chart",
+    pos: { x: 0.5, y: 1.55, w: 4.8, h: 3.52 },
+    detailPos: { x: 5.4, y: 1.55, w: 4.2, h: 3.52 },
+    holeSize: 50,
+    colors: ["27AE60", "E74C3C"]
+  },
+
+  Recommendations: {
+    id: "Recommendations",
+    maxItemsPerSlide: 4,
+    bg: "0F1B38",
+    headerTag: { fontFace: "Calibri", fontSize: 11, bold: true, charSpacing: 4, color: "F5A623", x: 0.5, y: 0.35, w: 9.0, h: 0.3 },
+    headerTitle: { fontFace: "Cambria", fontSize: 13, bold: true, color: "FFFFFF", x: 0.5, y: 0.72, w: 9.0, h: 0.4 },
+    cols: 2, rows: 2,
+    cardW: 4.45, cardH: 1.75, gapX: 0.3, gapY: 0.25,
+    cardBg: "142448", cardBorder: "DDE4F5",
+    numberBox: { w: 0.85, fill: "F5A623", fontFace: "Cambria", fontSize: 22, bold: true, color: "0F1B38" },
+    title: { fontFace: "Cambria", fontSize: 12.5, bold: true, color: "F5A623" },
+    description: { fontFace: "Calibri", fontSize: 10, color: "FFFFFF", lineSpacing: 16 }
+  },
+
+  Summary: {
+    id: "Summary",
+    bg: "0F1B38",
+    title: { fontFace: "Cambria", fontSize: 44, bold: true, color: "FFFFFF", align: "center" },
+    body: { fontFace: "Calibri", fontSize: 13, color: "7A90B8", align: "center" },
+    messages: { fontFace: "Calibri", fontSize: 10, color: "8A9FC0" }
+  }
+};
+
 // ── Build deck from AI-generated slides ───────────────────────────────────────
 function buildAIDeck({ aiSlides, strategy, docTitle, heroTitle, themeKey, wizardOptions }) {
   const COLORS = resolveAITheme(themeKey);
@@ -1474,32 +1578,36 @@ function buildAIDeck({ aiSlides, strategy, docTitle, heroTitle, themeKey, wizard
 
     // ── COVER SLIDE ──────────────────────────────────────────────────────────
     if (slide.slideType === "cover") {
-      s.background = { color: COLORS.bgDark };
+      s.background = { color: COLORS.accent }; // Master PDF Amber Background
 
-      // Grid pattern overlay (subtle)
+      // Grid pattern overlay
       for (let gx = 0; gx < 10; gx += 0.8) {
-        s.addShape(pres.shapes.RECTANGLE, { x: gx, y: 0, w: 0.01, h: 5.63, fill: { color: COLORS.accent, transparency: 96 }, line: { color: COLORS.accent, transparency: 96 } });
+        s.addShape(pres.shapes.RECTANGLE, { x: gx, y: 0, w: 0.01, h: 5.63, fill: { color: COLORS.bgDark, transparency: 92 }, line: { color: COLORS.bgDark, transparency: 92 } });
       }
       for (let gy = 0; gy < 5.63; gy += 0.7) {
-        s.addShape(pres.shapes.RECTANGLE, { x: 0, y: gy, w: 10, h: 0.01, fill: { color: COLORS.accent, transparency: 96 }, line: { color: COLORS.accent, transparency: 96 } });
+        s.addShape(pres.shapes.RECTANGLE, { x: 0, y: gy, w: 10, h: 0.01, fill: { color: COLORS.bgDark, transparency: 92 }, line: { color: COLORS.bgDark, transparency: 92 } });
       }
 
-      // Decorative circles
-      s.addShape(pres.shapes.OVAL, { x: 7.8, y: -1.0, w: 3.5, h: 3.5, fill: { color: COLORS.accent, transparency: 75 }, line: { color: COLORS.accent, transparency: 75 } });
-      s.addShape(pres.shapes.OVAL, { x: -0.5, y: 4.0, w: 2.0, h: 2.0, fill: { color: COLORS.teal, transparency: 80 }, line: { color: COLORS.teal, transparency: 80 } });
-      s.addShape(pres.shapes.OVAL, { x: 4.5, y: 3.5, w: 1.2, h: 1.2, fill: { color: COLORS.chart3, transparency: 85 }, line: { color: COLORS.chart3, transparency: 85 } });
+      // Giant watermark letter "R" or number on right side
+      s.addText("R", {
+        x: 6.0, y: -0.5, w: 4.5, h: 5.5,
+        fontSize: 220, color: COLORS.bgDark, bold: true,
+        fontFace: "Cambria", transparency: 88, align: "right",
+      });
 
-      // Document type badge
-      const docLabel = (slide.documentTypeLabel || wizardOptions.presentationType || strategy?.documentType || "PRESENTATION").replace(/_/g, " ").toUpperCase();
-      s.addShape("roundRect", { x: 0.6, y: 1.1, w: Math.min(docLabel.length * 0.11 + 0.4, 4.5), h: 0.3, fill: { color: COLORS.accent, transparency: 80 }, line: { color: COLORS.accent, transparency: 60 }, rectRadius: 0.04 });
-      s.addText(docLabel, { x: 0.7, y: 1.1, w: 4.5, h: 0.3, fontSize: 9, color: COLORS.accent, bold: true, charSpacing: 3, fontFace: "Calibri" });
+      // Section tag
+      s.addText("S E C T I O N  0 1", { x: 0.6, y: 1.1, w: 5.0, h: 0.3, fontSize: 10, color: COLORS.bgDark, bold: true, charSpacing: 4, fontFace: "Calibri" });
 
-      s.addShape(pres.shapes.RECTANGLE, { x: 0.6, y: 1.52, w: 1.6, h: 0.04, fill: { color: COLORS.accent }, line: { color: COLORS.accent } });
-      s.addText(heroTitle, { x: 0.6, y: 1.6, w: 8.0, h: 1.3, fontSize: 34, color: COLORS.textLight, bold: true, fontFace: "Cambria", lineSpacing: 42 });
+      s.addText(heroTitle.toUpperCase(), { x: 0.6, y: 1.6, w: 6.5, h: 1.3, fontSize: 34, color: COLORS.bgDark, bold: true, fontFace: "Cambria", lineSpacing: 40 });
+      
       if (slide.subtitle) {
-        s.addText(slide.subtitle, { x: 0.6, y: 3.05, w: 8.2, h: 0.55, fontSize: 13, color: "A0B0D0", fontFace: "Calibri" });
+        s.addText(slide.subtitle, { x: 0.6, y: 3.0, w: 6.5, h: 0.8, fontSize: 18, color: COLORS.bgDark, fontFace: "Calibri" });
       }
-      s.addText(`${today}  •  ${wizardOptions.audience || "All Stakeholders"}`, { x: 0.6, y: 4.85, w: 8.8, h: 0.38, fontSize: 10, color: "6A80A8", fontFace: "Calibri" });
+
+      s.addShape(pres.shapes.RECTANGLE, { x: 0.6, y: 3.9, w: 2.2, h: 0.04, fill: { color: COLORS.bgDark }, line: { color: COLORS.bgDark } });
+
+      s.addText(`${docTitle}  ·  ${today}`, { x: 0.6, y: 4.8, w: 7.0, h: 0.35, fontSize: 10.5, color: COLORS.bgDark, fontFace: "Calibri" });
+      s.addText("01", { x: 9.0, y: 4.8, w: 0.6, h: 0.35, fontSize: 10.5, color: COLORS.bgDark, fontFace: "Calibri", bold: true });
       if (includeNotes) s.addNotes(slide.speakerNotes || `Cover slide: ${heroTitle}`);
       continue;
     }
@@ -1513,7 +1621,6 @@ function buildAIDeck({ aiSlides, strategy, docTitle, heroTitle, themeKey, wizard
       s.addText(slide.title || "Thank You", { x: 1, y: 1.2, w: 8, h: 1.1, fontSize: 44, color: COLORS.textLight, bold: true, fontFace: "Cambria", align: "center" });
       s.addText(slide.body || strategy?.mostImportantInsight || strategy?.keyMessages?.[0] || "AI-Generated Presentation", { x: 1.5, y: 2.4, w: 7, h: 0.55, fontSize: 13, color: "7A90B8", align: "center", fontFace: "Calibri" });
 
-      // Key messages on closing slide
       const closingMessages = slide.keyMessages || strategy?.keyMessages?.slice(0, 3) || [];
       if (closingMessages.length > 0) {
         let msgY = 3.1;
@@ -1530,16 +1637,33 @@ function buildAIDeck({ aiSlides, strategy, docTitle, heroTitle, themeKey, wizard
 
     // ── SECTION DIVIDER ──────────────────────────────────────────────────────
     if (slide.slideType === "section") {
-      s.background = { color: COLORS.bgDark };
-      s.addShape(pres.shapes.OVAL, { x: 7.5, y: -1.0, w: 4.0, h: 4.0, fill: { color: COLORS.accent, transparency: 88 }, line: { color: COLORS.accent, transparency: 88 } });
-      s.addShape(pres.shapes.OVAL, { x: 6.5, y: 3.8, w: 2.5, h: 2.5, fill: { color: COLORS.teal, transparency: 85 }, line: { color: COLORS.teal, transparency: 85 } });
-      s.addText("SECTION", { x: 0.6, y: 1.5, w: 8.5, h: 0.4, fontSize: 11, color: COLORS.accent, bold: true, charSpacing: 5, fontFace: "Calibri" });
-      s.addShape(pres.shapes.RECTANGLE, { x: 0.6, y: 1.98, w: 5.0, h: 0.03, fill: { color: COLORS.accent, transparency: 50 }, line: { color: COLORS.accent, transparency: 50 } });
-      s.addText((slide.title || "Section").slice(0, 60), { x: 0.6, y: 2.05, w: 7.8, h: 1.3, fontSize: 34, color: COLORS.textLight, bold: true, fontFace: "Cambria", valign: "top" });
-      if (slide.subtitle) {
-        s.addText(slide.subtitle.slice(0, 180), { x: 0.6, y: 3.5, w: 7.2, h: 0.9, fontSize: 13, color: "8099C0", fontFace: "Calibri", italic: true, valign: "top" });
+      s.background = { color: COLORS.accent }; // Master PDF Amber Background
+
+      // Grid overlay
+      for (let gx = 0; gx < 10; gx += 0.8) {
+        s.addShape(pres.shapes.RECTANGLE, { x: gx, y: 0, w: 0.01, h: 5.63, fill: { color: COLORS.bgDark, transparency: 92 }, line: { color: COLORS.bgDark, transparency: 92 } });
       }
-      addAIFooter(s, COLORS, docTitle, slideCounter, totalSlides);
+      for (let gy = 0; gy < 5.63; gy += 0.7) {
+        s.addShape(pres.shapes.RECTANGLE, { x: 0, y: gy, w: 10, h: 0.01, fill: { color: COLORS.bgDark, transparency: 92 }, line: { color: COLORS.bgDark, transparency: 92 } });
+      }
+
+      // Giant watermark number on right
+      s.addText(String(slideCounter), {
+        x: 6.0, y: -0.5, w: 4.5, h: 5.5,
+        fontSize: 220, color: COLORS.bgDark, bold: true,
+        fontFace: "Cambria", transparency: 88, align: "right",
+      });
+
+      s.addText("S E C T I O N  " + String(slideCounter).padStart(2, "0"), { x: 0.6, y: 1.1, w: 5.0, h: 0.3, fontSize: 10, color: COLORS.bgDark, bold: true, charSpacing: 4, fontFace: "Calibri" });
+      s.addText((slide.title || "Section").toUpperCase(), { x: 0.6, y: 1.6, w: 6.5, h: 1.3, fontSize: 34, color: COLORS.bgDark, bold: true, fontFace: "Cambria", lineSpacing: 40 });
+      
+      if (slide.subtitle) {
+        s.addText(slide.subtitle, { x: 0.6, y: 3.0, w: 6.5, h: 0.8, fontSize: 18, color: COLORS.bgDark, fontFace: "Calibri" });
+      }
+
+      s.addShape(pres.shapes.RECTANGLE, { x: 0.6, y: 3.9, w: 2.2, h: 0.04, fill: { color: COLORS.bgDark }, line: { color: COLORS.bgDark } });
+
+      s.addText(String(slideCounter).padStart(2, "0"), { x: 9.0, y: 4.8, w: 0.6, h: 0.35, fontSize: 10.5, color: COLORS.bgDark, fontFace: "Calibri", bold: true });
       if (includeNotes) s.addNotes(slide.speakerNotes || `Section: ${slide.title}`);
       continue;
     }
@@ -1634,6 +1758,57 @@ function buildAIDeck({ aiSlides, strategy, docTitle, heroTitle, themeKey, wizard
       if (slide.quote.attribution) {
         s.addText(`— ${slide.quote.attribution}`, { x: 1.2, y: 4.1, w: 7.6, h: 0.4, fontSize: 12, color: COLORS.textMuted, fontFace: "Calibri", align: "right" });
       }
+
+    // ── RECOMMENDATIONS SLIDE ────────────────────────────────────────────────
+    } else if (slide.slideType === "recommendations" && Array.isArray(slide.items) && slide.items.length > 0) {
+      s.background = { color: COLORS.bgDark }; // Dark Navy background!
+      
+      // Top header
+      s.addText("R E C O M M E N D A T I O N S", { x: 0.5, y: 0.35, w: 9.0, h: 0.3, fontSize: 11, color: COLORS.accent, bold: true, charSpacing: 4, fontFace: "Calibri" });
+      s.addText(slide.title || "SUMMARY & NEXT STEPS", { x: 0.5, y: 0.72, w: 9.0, h: 0.4, fontSize: 13, color: COLORS.textLight, bold: true, fontFace: "Cambria" });
+
+      const items = slide.items.slice(0, 4);
+      const colW = 4.45;
+      const rowH = 1.75;
+      const gapX = 0.3;
+      const gapY = 0.25;
+
+      items.forEach((it, i) => {
+        const col = i % 2;
+        const row = Math.floor(i / 2);
+        const x = 0.4 + col * (colW + gapX);
+        const y = 1.35 + row * (rowH + gapY);
+
+        s.addShape("roundRect", {
+          x, y, w: colW, h: rowH,
+          fill: { color: "142448" }, line: { color: COLORS.border, transparency: 70 }, rectRadius: 0.08,
+        });
+
+        // Left Amber Box with 2-digit number (e.g. 01, 02, 03, 04)
+        s.addShape("rect", {
+          x, y, w: 0.85, h: rowH,
+          fill: { color: COLORS.accent }, line: { color: COLORS.accent }
+        });
+        s.addText(String(i + 1).padStart(2, "0"), {
+          x, y: y + rowH / 2 - 0.25, w: 0.85, h: 0.5,
+          fontSize: 22, color: COLORS.bgDark, bold: true, align: "center", valign: "middle", fontFace: "Cambria"
+        });
+
+        s.addText((it.title || "").slice(0, 50), {
+          x: x + 1.0, y: y + 0.12, w: colW - 1.15, h: 0.35,
+          fontSize: 12.5, color: COLORS.accent, bold: true, fontFace: "Cambria"
+        });
+        if (it.description) {
+          s.addText(it.description.slice(0, 150), {
+            x: x + 1.0, y: y + 0.48, w: colW - 1.15, h: rowH - 0.55,
+            fontSize: 10, color: COLORS.textLight, fontFace: "Calibri", valign: "top", lineSpacing: 16
+          });
+        }
+      });
+
+      addAIFooter(s, COLORS, docTitle, slideCounter, totalSlides);
+      if (includeNotes && slide.speakerNotes) s.addNotes(slide.speakerNotes);
+      continue;
 
     // ── SWOT SLIDE ───────────────────────────────────────────────────────────
     } else if (slide.slideType === "swot" && slide.swotData) {
@@ -1863,17 +2038,35 @@ function buildAIDeck({ aiSlides, strategy, docTitle, heroTitle, themeKey, wizard
 
 // ── Shared helpers for AI deck ────────────────────────────────────────────────
 function addAIFooter(s, COLORS, docTitle, idx, total) {
-  s.addText(docTitle.slice(0, 50), { x: 0.3, y: 5.28, w: 7.5, h: 0.27, fontSize: 8.5, color: COLORS.textMuted, fontFace: "Calibri" });
-  s.addShape("roundRect", { x: 8.8, y: 5.25, w: 0.9, h: 0.3, fill: { color: COLORS.bgDark }, line: { color: COLORS.bgDark }, rectRadius: 0.15 });
-  s.addText(`${idx} / ${total}`, { x: 8.8, y: 5.25, w: 0.9, h: 0.3, fontSize: 8.5, color: COLORS.textLight, align: "center", valign: "middle", fontFace: "Calibri", bold: true });
+  s.addText(docTitle.slice(0, 50), { x: 0.35, y: 5.28, w: 7.8, h: 0.27, fontSize: 8.5, color: COLORS.textMuted, fontFace: "Calibri" });
+  s.addShape("roundRect", { x: 8.85, y: 5.25, w: 0.8, h: 0.28, fill: { color: COLORS.bgDark }, line: { color: COLORS.bgDark }, rectRadius: 0.14 });
+  s.addText(String(idx).padStart(2, "0"), { x: 8.85, y: 5.25, w: 0.8, h: 0.28, fontSize: 8.5, color: COLORS.textLight, align: "center", valign: "middle", fontFace: "Calibri", bold: true });
 }
 
-function addAISlideHeader(s, pres, COLORS, title, icon) {
+function addAISlideHeader(s, pres, COLORS, title, icon, subtitle) {
   s.addShape(pres.shapes.RECTANGLE, { x: 0, y: 0, w: 10, h: 1.3, fill: { color: COLORS.bgDark }, line: { color: COLORS.bgDark } });
   s.addShape(pres.shapes.RECTANGLE, { x: 0, y: 1.3, w: 10, h: 0.04, fill: { color: COLORS.accent }, line: { color: COLORS.accent } });
   s.addShape(pres.shapes.OVAL, { x: 8.6, y: -0.6, w: 1.8, h: 1.8, fill: { color: COLORS.accent, transparency: 88 }, line: { color: COLORS.accent, transparency: 88 } });
-  s.addText(icon, { x: 0.35, y: 0.28, w: 0.65, h: 0.65, fontSize: 24, align: "center", valign: "middle" });
-  s.addText(title, { x: 1.08, y: 0.2, w: 8.2, h: 0.88, fontSize: 22, color: COLORS.textLight, bold: true, fontFace: "Cambria", valign: "middle", margin: 0, autoFit: false });
+  
+  if (icon) {
+    s.addText(icon, { x: 0.35, y: 0.28, w: 0.65, h: 0.65, fontSize: 24, align: "center", valign: "middle" });
+  }
+
+  const titleX = icon ? 1.08 : 0.4;
+  const titleW = icon ? 8.2 : 9.2;
+
+  s.addText(title.toUpperCase(), {
+    x: titleX, y: 0.18, w: titleW, h: 0.48,
+    fontSize: 18, color: COLORS.textLight, bold: true,
+    fontFace: "Cambria", valign: "middle", margin: 0
+  });
+
+  const subText = subtitle || "Executive Summary & Quantitative Analysis";
+  s.addText(subText, {
+    x: titleX, y: 0.68, w: titleW, h: 0.35,
+    fontSize: 10.5, color: COLORS.accent, bold: true,
+    fontFace: "Calibri", valign: "middle", margin: 0
+  });
 }
 
 router.post("/generate-ppt-ai", async (req, res) => {
