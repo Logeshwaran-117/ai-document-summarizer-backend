@@ -73,7 +73,7 @@ const buildAllowedOrigins = () => {
 };
 const ALLOWED_ORIGINS = buildAllowedOrigins();
 
-app.use(cors({
+const corsOptions = {
   origin: (origin, callback) => {
     // Allow server-to-server / curl requests (no Origin header)
     if (!origin) return callback(null, true);
@@ -81,8 +81,14 @@ app.use(cors({
     callback(new Error(`CORS: origin '${origin}' not allowed`));
   },
   credentials: true,
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
   exposedHeaders: ["Content-Disposition", "X-Presentation-Id", "X-Slide-Count"],
-}));
+};
+
+app.use(cors(corsOptions));
+// Handle OPTIONS preflight for ALL routes — must come before any route mounts
+app.options("*", cors(corsOptions));
 
 app.use("/api/billing/webhook", express.raw({ type: "application/json" }));
 app.use(express.json());
