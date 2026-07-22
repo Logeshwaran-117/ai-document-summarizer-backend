@@ -62,6 +62,15 @@ const THEMES = {
     chart6: "E9C46A", chart7: "2A9D8F", chart8: "264653",
     gradient1: "1B4332", gradient2: "2D6A4F",
   },
+  amberGrid: {
+    label: "Amber Grid",
+    bgDark: "1B2A52", bgLight: "FAFBFF", bgMid: "EEF2FF", accent: "F5A623", teal: "2FA4A0",
+    textLight: "FFFFFF", textDark: "0F1B38", textMuted: "4A5A7A",
+    cardBg: "FFFFFF", cardAlt: "F0F4FF", border: "DDE4F5",
+    chart1: "1B2A52", chart2: "F5A623", chart3: "2FA4A0", chart4: "E74C3C", chart5: "8E44AD",
+    chart6: "2ECC71", chart7: "E67E22", chart8: "1ABC9C",
+    gradient1: "1B2A52", gradient2: "263A6E",
+  },
 };
 
 const DETAIL_LEVELS = {
@@ -118,6 +127,42 @@ function parseMetricLine(rawLine) {
   const m2 = line.match(/^([A-Za-z][A-Za-z0-9 /&()]{1,32}):\s*(.+)$/);
   if (m2 && m2[2].length < 80) return { label: m2[1].trim(), value: m2[2].trim() };
   return null;
+}
+
+// ── Bold Bullet parser & renderer ─────────────────────────────────────────────
+function parseBoldBullets(bulletText, COLORS, bulletColor, fontSize = 12) {
+  const match = String(bulletText).match(/^\*\*(.*?)\*\*[:\s]*-?\s*(.*)$/);
+  if (match) {
+    const leadIn = match[1].trim();
+    const details = match[2].trim();
+    return [
+      { text: leadIn + ": ", options: { bold: true, color: COLORS.textDark, fontSize, fontFace: "Calibri" } },
+      { text: details, options: { bold: false, color: COLORS.textMuted, fontSize, fontFace: "Calibri" } }
+    ];
+  }
+  return [{ text: bulletText, options: { color: COLORS.textDark, fontSize, fontFace: "Calibri" } }];
+}
+
+function renderAIBullets(s, bullets, x, y, w, h, COLORS, CARD_PALETTE, fontSize = 12) {
+  const textRuns = [];
+  bullets.forEach((b, i) => {
+    const cc = CARD_PALETTE[i % CARD_PALETTE.length];
+    const parsed = parseBoldBullets(b, COLORS, cc, fontSize);
+    
+    parsed[0].options = { 
+      ...parsed[0].options, 
+      bullet: { code: "25AA", color: cc },
+      paraSpaceBefore: 8
+    };
+    
+    if (parsed[1]) {
+      parsed[1].options = { ...parsed[1].options };
+    }
+    
+    parsed[parsed.length - 1].options.breakLine = true;
+    textRuns.push(...parsed);
+  });
+  s.addText(textRuns, { x, y, w, h, valign: "top" });
 }
 
 // ── Summary → slides ──────────────────────────────────────────────────────────
@@ -194,39 +239,53 @@ function addFooter(s, COLORS, docTitle, idx, total) {
   });
 }
 
-function addSlideHeader(s, pres, COLORS, title, icon) {
-  // Header occupies y:0–1.3, content starts at 1.4
-  s.addShape(pres.shapes.RECTANGLE, {
-    x: 0, y: 0, w: 10, h: 1.3,
-    fill: { color: COLORS.bgDark }, line: { color: COLORS.bgDark },
-  });
-  s.addShape(pres.shapes.RECTANGLE, {
-    x: 0, y: 1.3, w: 10, h: 0.04,
-    fill: { color: COLORS.accent }, line: { color: COLORS.accent },
-  });
-  // Subtle right corner decoration — clipped to header only
-  s.addShape(pres.shapes.OVAL, {
-    x: 8.6, y: -0.6, w: 1.8, h: 1.8,
-    fill: { color: COLORS.accent, transparency: 88 },
-    line: { color: COLORS.accent, transparency: 88 },
-  });
-  // Icon
-  s.addText(icon, {
-    x: 0.35, y: 0.28, w: 0.65, h: 0.65,
-    fontSize: 24, align: "center", valign: "middle",
-  });
-  // Title — capped width so it never overflows
+function addSlideHeader(s, pres, COLORS, title, icon, subtitle) {
+  // Title (large conclusion)
   s.addText(title, {
-    x: 1.08, y: 0.2, w: 8.2, h: 0.88,
-    fontSize: 22, color: COLORS.textLight, bold: true,
-    fontFace: "Cambria", valign: "middle", margin: 0, autoFit: false,
+    x: 0.4, y: 0.22, w: 8.8, h: 0.44,
+    fontSize: 17, color: COLORS.textDark, bold: true,
+    fontFace: "Franklin Gothic Medium", valign: "middle", margin: 0
   });
+
+  // Subtitle
+  const subText = subtitle || "Summary of key document metrics and transactions.";
+  s.addText(subText, {
+    x: 0.4, y: 0.66, w: 8.8, h: 0.32,
+    fontSize: 10.5, color: COLORS.textMuted, italic: true,
+    fontFace: "Calibri", valign: "middle", margin: 0
+  });
+
+  // Accent line
+  s.addShape(pres.shapes.RECTANGLE, {
+    x: 0.4, y: 1.02, w: 9.2, h: 0.02,
+    fill: { color: COLORS.accent, transparency: 60 }, line: { color: COLORS.accent, transparency: 60 }
+  });
+
+  if (icon) {
+    s.addText(icon, {
+      x: 9.3, y: 0.22, w: 0.4, h: 0.4,
+      fontSize: 16, align: "right", valign: "middle"
+    });
+  }
 }
 
 // Section divider slide between major sections
 function addSectionDivider(pres, COLORS, sectionTitle, sectionSubtitle, docTitle, slideCounter, totalSlides, includeNotes) {
   const s = pres.addSlide();
   s.background = { color: COLORS.bgDark };
+  // Grid overlay — RBSK amber style
+  for (let gx = 0; gx <= 10; gx += 0.72) {
+    s.addShape(pres.shapes.RECTANGLE, { x: gx, y: 0, w: 0.008, h: 5.63, fill: { color: COLORS.accent, transparency: 92 }, line: { color: COLORS.accent, transparency: 92 } });
+  }
+  for (let gy = 0; gy <= 5.63; gy += 0.63) {
+    s.addShape(pres.shapes.RECTANGLE, { x: 0, y: gy, w: 10, h: 0.008, fill: { color: COLORS.accent, transparency: 92 }, line: { color: COLORS.accent, transparency: 92 } });
+  }
+  // Large number watermark
+  s.addText(String(slideCounter), {
+    x: 6.0, y: -0.5, w: 4.0, h: 4.0,
+    fontSize: 180, color: COLORS.textLight, bold: true,
+    fontFace: "Cambria", transparency: 88, align: "right",
+  });
 
   // Background decorations only (no left bar to avoid overlap)
   s.addShape(pres.shapes.OVAL, { x: 7.5, y: -1.0, w: 4.0, h: 4.0, fill: { color: COLORS.accent, transparency: 88 }, line: { color: COLORS.accent, transparency: 88 } });
@@ -756,53 +815,83 @@ function extractChartData(metrics) {
 // ── KPI Dashboard slide — fixed card sizing and text overflow ─────────────────
 function addKpiSlide(pres, COLORS, metrics, docTitle, slideCounter, totalSlides, includeNotes) {
   const s = pres.addSlide();
-  s.background = { color: COLORS.bgDark };
+  s.background = { color: COLORS.bgLight };
 
-  // Background decorations
-  s.addShape(pres.shapes.OVAL, { x: 7.5, y: -0.8, w: 3.2, h: 3.2, fill: { color: COLORS.accent, transparency: 80 }, line: { color: COLORS.accent, transparency: 80 } });
-  s.addShape(pres.shapes.OVAL, { x: -0.5, y: 4.3, w: 2.0, h: 2.0, fill: { color: COLORS.teal, transparency: 85 }, line: { color: COLORS.teal, transparency: 85 } });
+  addSlideHeader(
+    s, pres, COLORS,
+    "Key Performance Indicators", "📊",
+    "Primary quantitative findings and core metric assessment from the document."
+  );
 
-  // Header
-  s.addText("KEY PERFORMANCE INDICATORS", { x: 0.4, y: 0.22, w: 9.2, h: 0.42, fontSize: 11, color: COLORS.accent, bold: true, charSpacing: 3, fontFace: "Calibri" });
-  s.addShape(pres.shapes.RECTANGLE, { x: 0.4, y: 0.67, w: 9.2, h: 0.03, fill: { color: COLORS.accent, transparency: 60 }, line: { color: COLORS.accent, transparency: 60 } });
-
-  // Cap at 6 KPIs, use 2 cols if <=4, else 3 cols
   const items = metrics.slice(0, 6);
-  const cols = items.length <= 4 ? 2 : 3;
+  const cols = items.length <= 3 ? items.length : items.length === 4 ? 4 : 3;
   const rows = Math.ceil(items.length / cols);
-  const gap = 0.18;
-  const cardW = (9.2 - gap * (cols - 1)) / cols;
-  // Reserve footer space — cards must end above y:5.22
-  const availCardH = (5.18 - 0.82 - gap * (rows - 1)) / rows;
-  const cardH = Math.min(Math.max(availCardH, 1.0), 1.65);
+  const gap = 0.22;
+  const totalW = SAFE.w;
+  const cardW = (totalW - gap * (cols - 1)) / cols;
+  const startY = 1.5;
+  const cardH = rows === 1 ? 2.8 : 1.3;
   const CARD_COLORS = [COLORS.chart2, COLORS.chart3, COLORS.chart4, COLORS.chart5, COLORS.chart1, COLORS.teal];
 
   items.forEach((m, i) => {
     const col = i % cols;
     const row = Math.floor(i / cols);
-    const x = 0.4 + col * (cardW + gap);
-    const y = 0.82 + row * (cardH + gap);
+    const x = SAFE.x1 + col * (cardW + gap);
+    const y = startY + row * (cardH + gap);
     const cc = CARD_COLORS[i % CARD_COLORS.length];
 
+    // Card background
     s.addShape("roundRect", {
       x, y, w: cardW, h: cardH,
-      fill: { color: cc, transparency: 88 }, line: { color: cc, transparency: 50 }, rectRadius: 0.12,
+      fill: { color: COLORS.cardBg }, line: { color: COLORS.border }, rectRadius: 0.08,
+      shadow: { type: "outer", color: "000000", blur: 8, offset: 2, angle: 45, opacity: 0.05 },
     });
-    s.addShape("rect", { x, y, w: 0.05, h: cardH, fill: { color: cc }, line: { color: cc } });
 
-    // Label — uppercase, small
-    s.addText(m.label.toUpperCase().slice(0, 28), {
-      x: x + 0.18, y: y + 0.1, w: cardW - 0.3, h: 0.28,
-      fontSize: 8.5, color: cc, bold: true, fontFace: "Calibri", charSpacing: 0.3,
+    // Left vertical accent bar
+    s.addShape("rect", {
+      x, y, w: 0.05, h: cardH,
+      fill: { color: cc }, line: { color: cc }
     });
-    // Value — font size scaled to card height and text length
-    const valText = m.value.slice(0, 30);
-    const valSize = valText.length > 18 ? 12 : cardH > 1.3 ? 17 : 14;
-    s.addText(valText, {
-      x: x + 0.18, y: y + 0.42, w: cardW - 0.28, h: cardH - 0.56,
-      fontSize: valSize, color: COLORS.textLight, bold: true,
-      fontFace: "Cambria", valign: "top", autoFit: true,
-    });
+
+    // Value & Label Layout (Hero Value style)
+    const valText = String(m.value || "").slice(0, 24);
+    const lblText = String(m.label || "").toUpperCase().slice(0, 36);
+
+    if (rows === 1) {
+      // Large layout for single row
+      const valSize = valText.length > 12 ? 24 : 32;
+      s.addText(valText, {
+        x: x + 0.18, y: y + 0.45, w: cardW - 0.28, h: 0.8,
+        fontSize: valSize, color: cc, bold: true, fontFace: "Franklin Gothic Medium", valign: "middle"
+      });
+      s.addText(lblText, {
+        x: x + 0.18, y: y + 1.45, w: cardW - 0.28, h: 0.9,
+        fontSize: 9, color: COLORS.textMuted, bold: true, fontFace: "Calibri", paraSpaceAfter: 4
+      });
+    } else {
+      // Compact layout for two rows
+      const valSize = valText.length > 14 ? 16 : 22;
+      s.addText(valText, {
+        x: x + 0.18, y: y + 0.15, w: cardW - 0.28, h: 0.5,
+        fontSize: valSize, color: cc, bold: true, fontFace: "Franklin Gothic Medium", valign: "middle"
+      });
+      s.addText(lblText, {
+        x: x + 0.18, y: y + 0.72, w: cardW - 0.28, h: 0.45,
+        fontSize: 8.5, color: COLORS.textMuted, bold: true, fontFace: "Calibri"
+      });
+    }
+
+    // Trend arrow if applicable
+    const trend = m.trend;
+    if (trend === "up" || trend === "down") {
+      const arrow = trend === "up" ? "↑" : "↓";
+      const arrowColor = trend === "up" ? "27AE60" : "E74C3C";
+      s.addText(arrow, {
+        x: x + cardW - 0.45, y: y + (rows === 1 ? 0.55 : 0.18),
+        w: 0.35, h: 0.4,
+        fontSize: 16, color: arrowColor, bold: true, align: "right", fontFace: "Calibri"
+      });
+    }
   });
 
   addFooter(s, COLORS, docTitle, slideCounter, totalSlides);
@@ -858,41 +947,65 @@ function addTimelineSlide(pres, COLORS, metrics, title, docTitle, slideCounter, 
 function addComparisonSlide(pres, COLORS, slideA, slideB, docTitle, slideCounter, totalSlides, includeNotes) {
   const s = pres.addSlide();
   s.background = { color: COLORS.bgLight };
-  addSlideHeader(s, pres, COLORS, "Comparative Analysis", "\u2696\uFE0F");
+  addSlideHeader(
+    s, pres, COLORS,
+    "Comparative Analysis", "⚖️",
+    "Side-by-side comparison and cross-sectional metric mapping."
+  );
 
-  const colW = 4.6;
-  const colH = 3.75;
-  const colY = 1.42;
+  const colW = 4.4;
+  const colH = 3.7;
+  const colY = 1.45;
+  const gap = 0.4;
 
-  // Left column
-  s.addShape("roundRect", { x: 0.25, y: colY, w: colW, h: colH, fill: { color: COLORS.cardBg }, line: { color: COLORS.border }, rectRadius: 0.1 });
-  s.addShape("rect", { x: 0.25, y: colY, w: colW, h: 0.04, fill: { color: COLORS.chart2 }, line: { color: COLORS.chart2 } });
-  s.addText(slideA.title.slice(0, 28), { x: 0.38, y: colY + 0.08, w: colW - 0.2, h: 0.33, fontSize: 12, color: COLORS.textDark, bold: true, fontFace: "Cambria" });
+  // Left column card
+  const x1 = SAFE.x1;
+  s.addShape("roundRect", {
+    x: x1, y: colY, w: colW, h: colH,
+    fill: { color: COLORS.cardBg }, line: { color: COLORS.border }, rectRadius: 0.08,
+    shadow: { type: "outer", color: "000000", blur: 8, offset: 2, angle: 45, opacity: 0.05 },
+  });
+  s.addShape("rect", { x: x1, y: colY, w: colW, h: 0.05, fill: { color: COLORS.chart2 }, line: { color: COLORS.chart2 } });
+  s.addText(slideA.title.slice(0, 32), {
+    x: x1 + 0.18, y: colY + 0.15, w: colW - 0.36, h: 0.35,
+    fontSize: 12.5, color: COLORS.chart2, bold: true, fontFace: "Franklin Gothic Medium"
+  });
+  s.addShape(pres.shapes.RECTANGLE, { x: x1 + 0.18, y: colY + 0.55, w: colW - 0.36, h: 0.02, fill: { color: COLORS.border }, line: { color: COLORS.border } });
 
   const itemsA = slideA.metrics.slice(0, 5);
-  const itemHa = (colH - 0.45) / Math.max(itemsA.length, 1);
+  const itemHa = (colH - 0.7) / Math.max(itemsA.length, 1);
   itemsA.forEach((m, i) => {
-    const y = colY + 0.44 + i * itemHa;
-    s.addText(m.label.toUpperCase().slice(0, 24), { x: 0.38, y, w: colW - 0.2, h: 0.2, fontSize: 8, color: COLORS.textMuted, fontFace: "Calibri", bold: true });
-    s.addText(m.value.slice(0, 24), { x: 0.38, y: y + 0.2, w: colW - 0.2, h: itemHa - 0.26, fontSize: 13, color: COLORS.chart2, fontFace: "Cambria", bold: true });
+    const y = colY + 0.65 + i * itemHa;
+    s.addText(m.label.toUpperCase().slice(0, 28), { x: x1 + 0.18, y, w: colW - 0.36, h: 0.2, fontSize: 8, color: COLORS.textMuted, fontFace: "Calibri", bold: true });
+    s.addText(m.value.slice(0, 28), { x: x1 + 0.18, y: y + 0.2, w: colW - 0.36, h: itemHa - 0.26, fontSize: 11.5, color: COLORS.textDark, fontFace: "Calibri", bold: true });
   });
 
-  // Right column
-  s.addShape("roundRect", { x: 5.15, y: colY, w: colW, h: colH, fill: { color: COLORS.cardBg }, line: { color: COLORS.border }, rectRadius: 0.1 });
-  s.addShape("rect", { x: 5.15, y: colY, w: colW, h: 0.04, fill: { color: COLORS.chart3 }, line: { color: COLORS.chart3 } });
-  s.addText(slideB.title.slice(0, 28), { x: 5.28, y: colY + 0.08, w: colW - 0.2, h: 0.33, fontSize: 12, color: COLORS.textDark, bold: true, fontFace: "Cambria" });
+  // Right column card
+  const x2 = SAFE.x1 + colW + gap;
+  s.addShape("roundRect", {
+    x: x2, y: colY, w: colW, h: colH,
+    fill: { color: COLORS.cardBg }, line: { color: COLORS.border }, rectRadius: 0.08,
+    shadow: { type: "outer", color: "000000", blur: 8, offset: 2, angle: 45, opacity: 0.05 },
+  });
+  s.addShape("rect", { x: x2, y: colY, w: colW, h: 0.05, fill: { color: COLORS.chart3 }, line: { color: COLORS.chart3 } });
+  s.addText(slideB.title.slice(0, 32), {
+    x: x2 + 0.18, y: colY + 0.15, w: colW - 0.36, h: 0.35,
+    fontSize: 12.5, color: COLORS.chart3, bold: true, fontFace: "Franklin Gothic Medium"
+  });
+  s.addShape(pres.shapes.RECTANGLE, { x: x2 + 0.18, y: colY + 0.55, w: colW - 0.36, h: 0.02, fill: { color: COLORS.border }, line: { color: COLORS.border } });
 
   const itemsB = slideB.metrics.slice(0, 5);
-  const itemHb = (colH - 0.45) / Math.max(itemsB.length, 1);
+  const itemHb = (colH - 0.7) / Math.max(itemsB.length, 1);
   itemsB.forEach((m, i) => {
-    const y = colY + 0.44 + i * itemHb;
-    s.addText(m.label.toUpperCase().slice(0, 24), { x: 5.28, y, w: colW - 0.2, h: 0.2, fontSize: 8, color: COLORS.textMuted, fontFace: "Calibri", bold: true });
-    s.addText(m.value.slice(0, 24), { x: 5.28, y: y + 0.2, w: colW - 0.2, h: itemHb - 0.26, fontSize: 13, color: COLORS.chart3, fontFace: "Cambria", bold: true });
+    const y = colY + 0.65 + i * itemHb;
+    s.addText(m.label.toUpperCase().slice(0, 28), { x: x2 + 0.18, y, w: colW - 0.36, h: 0.2, fontSize: 8, color: COLORS.textMuted, fontFace: "Calibri", bold: true });
+    s.addText(m.value.slice(0, 28), { x: x2 + 0.18, y: y + 0.2, w: colW - 0.36, h: itemHb - 0.26, fontSize: 11.5, color: COLORS.textDark, fontFace: "Calibri", bold: true });
   });
 
   // VS badge in center
-  s.addShape(pres.shapes.OVAL, { x: 4.63, y: 2.88, w: 0.74, h: 0.74, fill: { color: COLORS.bgDark }, line: { color: COLORS.bgDark } });
-  s.addText("VS", { x: 4.63, y: 2.88, w: 0.74, h: 0.74, fontSize: 10, color: COLORS.accent, bold: true, align: "center", valign: "middle", fontFace: "Calibri" });
+  const midX = SAFE.x1 + colW + gap / 2 - 0.37;
+  s.addShape(pres.shapes.OVAL, { x: midX, y: 3.1, w: 0.74, h: 0.74, fill: { color: COLORS.bgDark }, line: { color: COLORS.bgDark } });
+  s.addText("VS", { x: midX, y: 3.1, w: 0.74, h: 0.74, fontSize: 10, color: COLORS.accent, bold: true, align: "center", valign: "middle", fontFace: "Calibri" });
 
   addFooter(s, COLORS, docTitle, slideCounter, totalSlides);
   if (includeNotes) s.addNotes(`Comparison: ${slideA.title} vs ${slideB.title}`);
@@ -1439,6 +1552,9 @@ const WIZARD_THEME_MAP = {
   "Dark":             "charcoalRuby",
   "Finance":          "financeGold",
   "Healthcare":       "healthcareMint",
+  "Amber Grid":       "amberGrid",
+  "Government":       "amberGrid",
+  "Medical":          "amberGrid",
   // backwards compat
   "Glassmorphism":    "midnightBlue",
   "Apple":            "tealSlate",
@@ -1508,6 +1624,15 @@ const AI_THEMES = {
     chart1:"1B3A4B",chart2:"52B788",chart3:"40916C",chart4:"E76F51",chart5:"457B9D",
     chart6:"E9C46A",chart7:"2A9D8F",chart8:"264653",gradient1:"1B3A4B",gradient2:"264C60",
   },
+  amberGrid: {
+    label: "Amber Grid",
+    bgDark: "1B2A52", bgLight: "FAFBFF", bgMid: "EEF2FF",
+    accent: "F5A623", teal: "FAB10A", textLight: "FFFFFF", textDark: "0F1B38",
+    textMuted: "4A5A7A", cardBg: "FFFFFF", cardAlt: "F0F4FF", border: "DDE4F5",
+    chart1: "1B2A52", chart2: "F5A623", chart3: "2FA4A0", chart4: "E74C3C", chart5: "8E44AD",
+    chart6: "2ECC71", chart7: "E67E22", chart8: "1ABC9C",
+    gradient1: "1B2A52", gradient2: "263A6E",
+  },
 };
 
 function resolveAITheme(key) {
@@ -1537,12 +1662,22 @@ function buildAIDeck({ aiSlides, strategy, docTitle, heroTitle, themeKey, wizard
       s.background = { color: COLORS.bgDark };
 
       // Grid pattern overlay (subtle)
-      for (let gx = 0; gx < 10; gx += 0.8) {
-        s.addShape(pres.shapes.RECTANGLE, { x: gx, y: 0, w: 0.01, h: 5.63, fill: { color: COLORS.accent, transparency: 96 }, line: { color: COLORS.accent, transparency: 96 } });
-      }
-      for (let gy = 0; gy < 5.63; gy += 0.7) {
-        s.addShape(pres.shapes.RECTANGLE, { x: 0, y: gy, w: 10, h: 0.01, fill: { color: COLORS.accent, transparency: 96 }, line: { color: COLORS.accent, transparency: 96 } });
-      }
+     // Grid pattern overlay — denser, matches RBSK amber style
+    const gridColor = COLORS.accent;
+    for (let gx = 0; gx <= 10; gx += 0.72) {
+      s.addShape(pres.shapes.RECTANGLE, {
+        x: gx, y: 0, w: 0.008, h: 5.63,
+        fill: { color: gridColor, transparency: 92 },
+        line: { color: gridColor, transparency: 92 },
+      });
+    }
+    for (let gy = 0; gy <= 5.63; gy += 0.63) {
+      s.addShape(pres.shapes.RECTANGLE, {
+        x: 0, y: gy, w: 10, h: 0.008,
+        fill: { color: gridColor, transparency: 92 },
+        line: { color: gridColor, transparency: 92 },
+      });
+    }
 
       // Decorative circles
       s.addShape(pres.shapes.OVAL, { x: 7.8, y: -1.0, w: 3.5, h: 3.5, fill: { color: COLORS.accent, transparency: 75 }, line: { color: COLORS.accent, transparency: 75 } });
@@ -1591,6 +1726,19 @@ function buildAIDeck({ aiSlides, strategy, docTitle, heroTitle, themeKey, wizard
     // ── SECTION DIVIDER ──────────────────────────────────────────────────────
     if (slide.slideType === "section") {
       s.background = { color: COLORS.bgDark };
+      // Grid overlay — RBSK style
+      for (let gx = 0; gx <= 10; gx += 0.72) {
+        s.addShape(pres.shapes.RECTANGLE, { x: gx, y: 0, w: 0.008, h: 5.63, fill: { color: COLORS.accent, transparency: 92 }, line: { color: COLORS.accent, transparency: 92 } });
+      }
+      for (let gy = 0; gy <= 5.63; gy += 0.63) {
+        s.addShape(pres.shapes.RECTANGLE, { x: 0, y: gy, w: 10, h: 0.008, fill: { color: COLORS.accent, transparency: 92 }, line: { color: COLORS.accent, transparency: 92 } });
+      }
+      // Large section number (top-right corner watermark)
+      s.addText(String(slideCounter), {
+        x: 6.5, y: -0.8, w: 3.5, h: 4.5,
+        fontSize: 200, color: COLORS.textLight, bold: true,
+        fontFace: "Cambria", transparency: 88, align: "right",
+      });
       s.addShape(pres.shapes.OVAL, { x: 7.5, y: -1.0, w: 4.0, h: 4.0, fill: { color: COLORS.accent, transparency: 88 }, line: { color: COLORS.accent, transparency: 88 } });
       s.addShape(pres.shapes.OVAL, { x: 6.5, y: 3.8, w: 2.5, h: 2.5, fill: { color: COLORS.teal, transparency: 85 }, line: { color: COLORS.teal, transparency: 85 } });
       s.addText("SECTION", { x: 0.6, y: 1.5, w: 8.5, h: 0.4, fontSize: 11, color: COLORS.accent, bold: true, charSpacing: 5, fontFace: "Calibri" });
@@ -1606,7 +1754,7 @@ function buildAIDeck({ aiSlides, strategy, docTitle, heroTitle, themeKey, wizard
 
     // ── All content slides share a dark header ───────────────────────────────
     s.background = { color: COLORS.bgLight };
-    addAISlideHeader(s, pres, COLORS, slide.title || "Slide", slide.icon || "📄");
+    addAISlideHeader(s, pres, COLORS, slide.title || "Slide", slide.icon || "📄", slide.subtitle);
 
     const SAFE_Y = 1.45;
     const SAFE_H = 3.72;
@@ -1717,6 +1865,62 @@ function buildAIDeck({ aiSlides, strategy, docTitle, heroTitle, themeKey, wizard
         if (bullets.length) s.addText(bullets, { x: q.x + 0.15, y: q.y + 0.36, w: qW - 0.3, h: qH - 0.46, fontFace: "Calibri", valign: "top" });
       });
 
+    // ── AGENDA SLIDE ─────────────────────────────────────────────────────────
+    } else if (slide.slideType === "agenda" && Array.isArray(slide.sections) && slide.sections.length > 0) {
+      const items = slide.sections.slice(0, 8);
+      const rowH = Math.min((SAFE_H - 0.1 * (items.length - 1)) / items.length, 0.62);
+      let ay = SAFE_Y;
+      items.forEach((sec, i) => {
+        const cc = CARD_PALETTE[i % CARD_PALETTE.length];
+        s.addShape("roundRect", { x: 0.3, y: ay, w: 9.4, h: rowH, fill: { color: COLORS.cardBg }, line: { color: COLORS.border }, rectRadius: 0.06 });
+        s.addShape(pres.shapes.OVAL, { x: 0.44, y: ay + rowH / 2 - 0.19, w: 0.38, h: 0.38, fill: { color: cc, transparency: 78 }, line: { color: cc, transparency: 50 } });
+        s.addText(String(i + 1).padStart(2, "0"), { x: 0.44, y: ay + rowH / 2 - 0.19, w: 0.38, h: 0.38, fontSize: 11, color: cc, bold: true, align: "center", valign: "middle", fontFace: "Calibri" });
+        s.addText((sec.title || "").slice(0, 45), { x: 1.0, y: ay + 0.06, w: 7.0, h: rowH * 0.55, fontSize: 13, color: COLORS.textDark, bold: true, fontFace: "Calibri", valign: "top" });
+        if (sec.description) {
+          s.addText(sec.description.slice(0, 90), { x: 1.0, y: ay + rowH * 0.5, w: 8.0, h: rowH * 0.45, fontSize: 9.5, color: COLORS.textMuted, fontFace: "Calibri", valign: "top" });
+        }
+        ay += rowH + 0.1;
+      });
+
+    // ── RISK CARDS SLIDE ─────────────────────────────────────────────────────
+    } else if (slide.slideType === "riskCards" && Array.isArray(slide.risks) && slide.risks.length > 0) {
+      const items = slide.risks.slice(0, 5);
+      const sevColor = { critical: "E74C3C", high: "E67E22", medium: "F39C12", low: "27AE60" };
+      const rowH = Math.min((SAFE_H - 0.14 * (items.length - 1)) / items.length, 0.86);
+      let ry = SAFE_Y;
+      items.forEach(risk => {
+        const sc = sevColor[risk.severity] || sevColor.medium;
+        s.addShape("roundRect", { x: 0.3, y: ry, w: 9.4, h: rowH, fill: { color: COLORS.cardBg }, line: { color: sc, transparency: 55 }, rectRadius: 0.07 });
+        s.addShape("rect", { x: 0.3, y: ry, w: 0.06, h: rowH, fill: { color: sc }, line: { color: sc } });
+        s.addShape("roundRect", { x: 9.4 - 1.05, y: ry + 0.1, w: 0.95, h: 0.28, fill: { color: sc, transparency: 80 }, line: { color: sc, transparency: 55 }, rectRadius: 0.14 });
+        s.addText((risk.severity || "medium").toUpperCase(), { x: 9.4 - 1.05, y: ry + 0.1, w: 0.95, h: 0.28, fontSize: 8, color: sc, bold: true, align: "center", valign: "middle", fontFace: "Calibri" });
+        s.addText((risk.title || "").slice(0, 55), { x: 0.5, y: ry + 0.08, w: 7.6, h: 0.3, fontSize: 12.5, color: COLORS.textDark, bold: true, fontFace: "Calibri" });
+        if (risk.description) {
+          s.addText(risk.description.slice(0, 130), { x: 0.5, y: ry + 0.4, w: 8.8, h: rowH - 0.46, fontSize: 10, color: COLORS.textMuted, fontFace: "Calibri", valign: "top" });
+        }
+        ry += rowH + 0.14;
+      });
+
+    // ── RECOMMENDATIONS SLIDE ────────────────────────────────────────────────
+    } else if (slide.slideType === "recommendations" && Array.isArray(slide.items) && slide.items.length > 0) {
+      const items = slide.items.slice(0, 6);
+      const prioColor = { immediate: "E74C3C", "short-term": "F39C12", "long-term": COLORS.chart2 };
+      const rowH = Math.min((SAFE_H - 0.12 * (items.length - 1)) / items.length, 0.72);
+      let ry2 = SAFE_Y;
+      items.forEach((it, i) => {
+        const pc = prioColor[it.priority] || prioColor["short-term"];
+        s.addShape("roundRect", { x: 0.3, y: ry2, w: 9.4, h: rowH, fill: { color: COLORS.cardBg }, line: { color: COLORS.border }, rectRadius: 0.07 });
+        s.addShape(pres.shapes.OVAL, { x: 0.44, y: ry2 + rowH / 2 - 0.18, w: 0.36, h: 0.36, fill: { color: pc }, line: { color: pc } });
+        s.addText(String(i + 1), { x: 0.44, y: ry2 + rowH / 2 - 0.18, w: 0.36, h: 0.36, fontSize: 11, color: COLORS.textLight, bold: true, align: "center", valign: "middle", fontFace: "Calibri" });
+        s.addShape("roundRect", { x: 0.94, y: ry2 + 0.09, w: 1.15, h: 0.24, fill: { color: pc, transparency: 82 }, line: { color: pc, transparency: 60 }, rectRadius: 0.12 });
+        s.addText((it.priority || "short-term").toUpperCase(), { x: 0.94, y: ry2 + 0.09, w: 1.15, h: 0.24, fontSize: 7, color: pc, bold: true, align: "center", valign: "middle", fontFace: "Calibri" });
+        s.addText((it.title || "").slice(0, 55), { x: 2.2, y: ry2 + 0.06, w: 7.3, h: 0.3, fontSize: 11.5, color: COLORS.textDark, bold: true, fontFace: "Calibri" });
+        if (it.description) {
+          s.addText(it.description.slice(0, 110), { x: 2.2, y: ry2 + 0.36, w: 7.3, h: rowH - 0.4, fontSize: 9.5, color: COLORS.textMuted, fontFace: "Calibri", valign: "top" });
+        }
+        ry2 += rowH + 0.12;
+      });
+
     // ── CHART SLIDE ──────────────────────────────────────────────────────────
     } else if (slide.slideType === "chart" && slide.chartData && slide.chartData.labels?.length >= 2) {
       const cd = slide.chartData;
@@ -1744,13 +1948,55 @@ function buildAIDeck({ aiSlides, strategy, docTitle, heroTitle, themeKey, wizard
       const chartH = SAFE_H - 0.42;
 
       try {
-        if (chartType === "pie" || chartType === "donut") {
+        if (chartType === "waterfall") {
+          // pptxgenjs has no native waterfall chart type — approximate with a
+          // stacked bar: an invisible "base" series carries each bar to its
+          // start height, and a visible "delta" series draws the actual step
+          // (green for increases, red for decreases), which is the standard
+          // waterfall workaround for this chart library.
+          let running = 0;
+          const bases = []; const deltas = [];
+          values.forEach(v => {
+            const start = running;
+            running += v;
+            bases.push(Math.min(start, running));
+            deltas.push(Math.abs(v));
+          });
+          const waterfallData = [
+            { name: "base", labels, values: bases },
+            { name: cd.title || slide.title, labels, values: deltas },
+          ];
+          s.addChart(pres.ChartType.bar, waterfallData, {
+            x: 0.3, y: chartY, w: 9.4, h: chartH,
+            barDir: "col", barGrouping: "stacked",
+            chartColors: ["FFFFFF", COLORS.chart2],
+            showLegend: false, showValue: true,
+            dataLabelFontSize: 8, dataLabelColor: COLORS.textLight,
+            catAxisLabelFontSize: 8, valAxisLabelFontSize: 8,
+            catGridLine: { style: "none" },
+            valGridLine: { style: "dash", color: COLORS.border },
+          });
+        } else if (chartType === "radar") {
+          const maxV = Math.max(...values, 1);
+          const radarData = [{
+            name: cd.title || slide.title,
+            labels: labels.slice(0, 8),
+            values: values.slice(0, 8).map(v => (v <= 1 ? Math.round(v * 100) : Math.round(v))),
+          }];
+          s.addChart(pres.ChartType.radar, radarData, {
+            x: 1.6, y: chartY, w: 6.7, h: chartH,
+            chartColors: [COLORS.chart2],
+            showLegend: false,
+            catAxisLabelFontSize: 9, catAxisLabelColor: COLORS.textDark,
+            plotAreaBorderColor: COLORS.border, chartAreaBorderColor: COLORS.border,
+          });
+        } else if (chartType === "pie" || chartType === "donut") {
           const pieData = [{ name: cd.title || slide.title, labels, values }];
           s.addChart(pres.ChartType.doughnut, pieData, {
             x: 0.5, y: chartY, w: 5.5, h: chartH,
             chartColors: chartColors.slice(0, labels.length),
             showLegend: true, legendPos: "r", legendFontSize: 9,
-            showValue: true, dataLabelFontSize: 9, dataLabelColor: COLORS.textLight,
+            showPercent: true, showValue: false, dataLabelFontSize: 9, dataLabelColor: COLORS.textLight,
             holeSize: chartType === "donut" ? 50 : 0,
           });
         } else if (chartType === "line" || chartType === "area") {
@@ -1789,45 +2035,71 @@ function buildAIDeck({ aiSlides, strategy, docTitle, heroTitle, themeKey, wizard
     // ── KPI DASHBOARD ─────────────────────────────────────────────────────────
     } else if (slide.slideType === "kpi" && slide.metrics?.length) {
       const items = slide.metrics.slice(0, 6);
-      const cols = items.length <= 2 ? 2 : items.length <= 4 ? 2 : 3;
+      const cols = items.length <= 3 ? items.length : items.length === 4 ? 4 : 3;
       const rows = Math.ceil(items.length / cols);
-      const gap = 0.18;
-      const totalW = 9.4;
+      const gap = 0.22;
+      const totalW = 9.2;
       const cardW = (totalW - gap * (cols - 1)) / cols;
-      const cardH = Math.min(Math.max((SAFE_H - gap * (rows - 1)) / rows, 1.1), 1.65);
+      const cardH = rows === 1 ? 2.8 : 1.3;
 
       items.forEach((m, i) => {
         const col = i % cols;
         const row = Math.floor(i / cols);
-        const x = 0.3 + col * (cardW + gap);
+        const x = 0.4 + col * (cardW + gap);
         const y = SAFE_Y + row * (cardH + gap);
         const cc = CARD_PALETTE[i % CARD_PALETTE.length];
 
+        // Card background
         s.addShape("roundRect", {
           x, y, w: cardW, h: cardH,
-          fill: { color: COLORS.cardBg }, line: { color: cc, transparency: 60 }, rectRadius: 0.1,
-          shadow: { type: "outer", color: "000000", blur: 6, offset: 2, angle: 45, opacity: 0.06 },
+          fill: { color: COLORS.cardBg }, line: { color: COLORS.border }, rectRadius: 0.08,
+          shadow: { type: "outer", color: "000000", blur: 8, offset: 2, angle: 45, opacity: 0.05 },
         });
-        // Colored top strip (3px)
-        s.addShape("rect", { x, y, w: cardW, h: 0.05, fill: { color: cc }, line: { color: cc } });
-        // Label
-        s.addText(String(m.label || "").toUpperCase().slice(0, 28), {
-          x: x + 0.15, y: y + 0.1, w: cardW - 0.3, h: 0.26,
-          fontSize: 8, color: COLORS.textMuted, bold: true, fontFace: "Calibri", charSpacing: 0.3,
+
+        // Left vertical accent bar
+        s.addShape("rect", {
+          x, y, w: 0.05, h: cardH,
+          fill: { color: cc }, line: { color: cc }
         });
-        // Value
-        const valText = String(m.value || "").slice(0, 32);
-        const valSize = valText.length > 20 ? 13 : cardH > 1.3 ? 19 : 16;
-        s.addText(valText, {
-          x: x + 0.15, y: y + 0.40, w: cardW - 0.28, h: cardH - 0.52,
-          fontSize: valSize, color: cc, bold: true, fontFace: "Cambria", valign: "top", autoFit: true,
-        });
+
+        // Value & Label Layout (Hero Value style)
+        const valText = String(m.value || "").slice(0, 24);
+        const lblText = String(m.label || "").toUpperCase().slice(0, 36);
+
+        if (rows === 1) {
+          // Large layout for single row
+          const valSize = valText.length > 12 ? 24 : 32;
+          s.addText(valText, {
+            x: x + 0.18, y: y + 0.45, w: cardW - 0.28, h: 0.8,
+            fontSize: valSize, color: cc, bold: true, fontFace: "Franklin Gothic Medium", valign: "middle"
+          });
+          s.addText(lblText, {
+            x: x + 0.18, y: y + 1.45, w: cardW - 0.28, h: 0.9,
+            fontSize: 9, color: COLORS.textMuted, bold: true, fontFace: "Calibri", paraSpaceAfter: 4
+          });
+        } else {
+          // Compact layout for two rows
+          const valSize = valText.length > 14 ? 16 : 22;
+          s.addText(valText, {
+            x: x + 0.18, y: y + 0.15, w: cardW - 0.28, h: 0.5,
+            fontSize: valSize, color: cc, bold: true, fontFace: "Franklin Gothic Medium", valign: "middle"
+          });
+          s.addText(lblText, {
+            x: x + 0.18, y: y + 0.72, w: cardW - 0.28, h: 0.45,
+            fontSize: 8.5, color: COLORS.textMuted, bold: true, fontFace: "Calibri"
+          });
+        }
+
         // Trend arrow if applicable
         const trend = m.trend;
         if (trend === "up" || trend === "down") {
           const arrow = trend === "up" ? "↑" : "↓";
           const arrowColor = trend === "up" ? "27AE60" : "E74C3C";
-          s.addText(arrow, { x: x + cardW - 0.4, y: y + 0.38, w: 0.3, h: 0.3, fontSize: 14, color: arrowColor, bold: true, align: "right", fontFace: "Calibri" });
+          s.addText(arrow, {
+            x: x + cardW - 0.45, y: y + (rows === 1 ? 0.55 : 0.18),
+            w: 0.35, h: 0.4,
+            fontSize: 16, color: arrowColor, bold: true, align: "right", fontFace: "Calibri"
+          });
         }
       });
 
@@ -1892,40 +2164,52 @@ function buildAIDeck({ aiSlides, strategy, docTitle, heroTitle, themeKey, wizard
       const hasBody = slide.body && slide.body.length > 20;
 
       if (hasBullets && hasBody) {
-        s.addShape("roundRect", { x: 0.3, y: SAFE_Y, w: 5.5, h: SAFE_H, fill: { color: COLORS.cardBg }, line: { color: COLORS.border }, rectRadius: 0.1 });
-        const bItems = slide.bullets.slice(0, 7).map((b, i) => ({
-          text: b.slice(0, 120),
-          options: { bullet: { code: "25AA", color: CARD_PALETTE[i % CARD_PALETTE.length] }, breakLine: i < slide.bullets.length - 1, fontSize: 12, color: COLORS.textDark, paraSpaceAfter: 8 },
-        }));
-        s.addText(bItems, { x: 0.5, y: SAFE_Y + 0.15, w: 5.1, h: SAFE_H - 0.3, fontFace: "Calibri", valign: "top" });
-        s.addShape("roundRect", { x: 6.05, y: SAFE_Y, w: 3.65, h: SAFE_H, fill: { color: COLORS.cardAlt }, line: { color: COLORS.border }, rectRadius: 0.1 });
-        s.addText("KEY INSIGHT", { x: 6.2, y: SAFE_Y + 0.14, w: 3.35, h: 0.3, fontSize: 9, color: COLORS.accent, bold: true, fontFace: "Calibri", charSpacing: 1 });
-        s.addShape(pres.shapes.RECTANGLE, { x: 6.2, y: SAFE_Y + 0.47, w: 3.35, h: 0.02, fill: { color: COLORS.accent, transparency: 70 }, line: { color: COLORS.accent, transparency: 70 } });
-        s.addText(slide.body.slice(0, 350), { x: 6.2, y: SAFE_Y + 0.54, w: 3.35, h: SAFE_H - 0.65, fontSize: 11, color: COLORS.textDark, fontFace: "Calibri", valign: "top", lineSpacing: 18 });
+        // Bullet list card (left)
+        s.addShape("roundRect", {
+          x: SAFE.x1, y: SAFE_Y, w: 5.5, h: SAFE_H,
+          fill: { color: COLORS.cardBg }, line: { color: COLORS.border }, rectRadius: 0.08,
+          shadow: { type: "outer", color: "000000", blur: 8, offset: 2, angle: 45, opacity: 0.05 },
+        });
+        renderAIBullets(s, slide.bullets.slice(0, 7), SAFE.x1 + 0.2, SAFE_Y + 0.15, 5.1, SAFE_H - 0.3, COLORS, CARD_PALETTE, 11.5);
+
+        // Key Insight Card (right)
+        const rx = SAFE.x1 + 5.5 + 0.25;
+        const rw = SAFE.w - 5.5 - 0.25;
+        s.addShape("roundRect", {
+          x: rx, y: SAFE_Y, w: rw, h: SAFE_H,
+          fill: { color: COLORS.cardAlt }, line: { color: COLORS.border }, rectRadius: 0.08,
+          shadow: { type: "outer", color: "000000", blur: 8, offset: 2, angle: 45, opacity: 0.05 },
+        });
+        s.addText("KEY INSIGHT", { x: rx + 0.2, y: SAFE_Y + 0.15, w: rw - 0.4, h: 0.3, fontSize: 9, color: COLORS.accent, bold: true, fontFace: "Calibri", charSpacing: 1 });
+        s.addShape(pres.shapes.RECTANGLE, { x: rx + 0.2, y: SAFE_Y + 0.48, w: rw - 0.4, h: 0.02, fill: { color: COLORS.accent, transparency: 70 }, line: { color: COLORS.accent, transparency: 70 } });
+        s.addText(slide.body.slice(0, 380), { x: rx + 0.2, y: SAFE_Y + 0.58, w: rw - 0.4, h: SAFE_H - 0.72, fontSize: 11, color: COLORS.textDark, fontFace: "Calibri", valign: "top", lineSpacing: 18 });
+
       } else if (hasBullets) {
         const bullets = slide.bullets.slice(0, 8);
         const cols2 = bullets.length >= 5 ? 2 : 1;
-        s.addShape("roundRect", { x: 0.3, y: SAFE_Y, w: 9.4, h: SAFE_H, fill: { color: COLORS.cardBg }, line: { color: COLORS.border }, rectRadius: 0.1 });
+        s.addShape("roundRect", {
+          x: SAFE.x1, y: SAFE_Y, w: SAFE.w, h: SAFE_H,
+          fill: { color: COLORS.cardBg }, line: { color: COLORS.border }, rectRadius: 0.08,
+          shadow: { type: "outer", color: "000000", blur: 8, offset: 2, angle: 45, opacity: 0.05 },
+        });
+
         if (cols2 === 2) {
           const half = Math.ceil(bullets.length / 2);
-          const mkItems = (arr, startIdx) => arr.map((b, i) => ({
-            text: b.slice(0, 110),
-            options: { bullet: { code: "25AA", color: CARD_PALETTE[(startIdx + i) % CARD_PALETTE.length] }, breakLine: i < arr.length - 1, fontSize: 12, color: COLORS.textDark, paraSpaceAfter: 9 },
-          }));
-          s.addText(mkItems(bullets.slice(0, half), 0), { x: 0.5, y: SAFE_Y + 0.15, w: 4.35, h: SAFE_H - 0.3, fontFace: "Calibri", valign: "top" });
-          s.addShape(pres.shapes.RECTANGLE, { x: 5.05, y: SAFE_Y + 0.18, w: 0.02, h: SAFE_H - 0.38, fill: { color: COLORS.border }, line: { color: COLORS.border } });
-          s.addText(mkItems(bullets.slice(half), half), { x: 5.2, y: SAFE_Y + 0.15, w: 4.35, h: SAFE_H - 0.3, fontFace: "Calibri", valign: "top" });
+          renderAIBullets(s, bullets.slice(0, half), SAFE.x1 + 0.2, SAFE_Y + 0.15, 4.35, SAFE_H - 0.3, COLORS, CARD_PALETTE, 12);
+          s.addShape(pres.shapes.RECTANGLE, { x: SAFE.x1 + 4.6, y: SAFE_Y + 0.18, w: 0.02, h: SAFE_H - 0.38, fill: { color: COLORS.border }, line: { color: COLORS.border } });
+          renderAIBullets(s, bullets.slice(half), SAFE.x1 + 4.8, SAFE_Y + 0.15, 4.35, SAFE_H - 0.3, COLORS, CARD_PALETTE, 12);
         } else {
-          const bItems = bullets.map((b, i) => ({
-            text: b.slice(0, 150),
-            options: { bullet: { code: "25AA", color: CARD_PALETTE[i % CARD_PALETTE.length] }, breakLine: i < bullets.length - 1, fontSize: 13, color: COLORS.textDark, paraSpaceAfter: 11 },
-          }));
-          s.addText(bItems, { x: 0.5, y: SAFE_Y + 0.18, w: 9.0, h: SAFE_H - 0.3, fontFace: "Calibri", valign: "top" });
+          renderAIBullets(s, bullets, SAFE.x1 + 0.2, SAFE_Y + 0.18, SAFE.w - 0.4, SAFE_H - 0.3, COLORS, CARD_PALETTE, 13);
         }
+
       } else if (hasBody) {
-        s.addShape("roundRect", { x: 0.3, y: SAFE_Y, w: 9.4, h: SAFE_H, fill: { color: COLORS.cardBg }, line: { color: COLORS.border }, rectRadius: 0.1 });
-        s.addShape(pres.shapes.RECTANGLE, { x: 0.3, y: SAFE_Y, w: 0.05, h: SAFE_H, fill: { color: COLORS.accent }, line: { color: COLORS.accent } });
-        s.addText(slide.body.slice(0, 700), { x: 0.52, y: SAFE_Y + 0.15, w: 9.1, h: SAFE_H - 0.28, fontSize: 13, color: COLORS.textDark, fontFace: "Calibri", valign: "top", lineSpacing: 22 });
+        s.addShape("roundRect", {
+          x: SAFE.x1, y: SAFE_Y, w: SAFE.w, h: SAFE_H,
+          fill: { color: COLORS.cardBg }, line: { color: COLORS.border }, rectRadius: 0.08,
+          shadow: { type: "outer", color: "000000", blur: 8, offset: 2, angle: 45, opacity: 0.05 },
+        });
+        s.addShape(pres.shapes.RECTANGLE, { x: SAFE.x1, y: SAFE_Y, w: 0.05, h: SAFE_H, fill: { color: COLORS.accent }, line: { color: COLORS.accent } });
+        s.addText(slide.body.slice(0, 700), { x: SAFE.x1 + 0.22, y: SAFE_Y + 0.15, w: SAFE.w - 0.4, h: SAFE_H - 0.28, fontSize: 13, color: COLORS.textDark, fontFace: "Calibri", valign: "top", lineSpacing: 22 });
       }
     }
 
@@ -1943,12 +2227,34 @@ function addAIFooter(s, COLORS, docTitle, idx, total) {
   s.addText(`${idx} / ${total}`, { x: 8.8, y: 5.25, w: 0.9, h: 0.3, fontSize: 8.5, color: COLORS.textLight, align: "center", valign: "middle", fontFace: "Calibri", bold: true });
 }
 
-function addAISlideHeader(s, pres, COLORS, title, icon) {
-  s.addShape(pres.shapes.RECTANGLE, { x: 0, y: 0, w: 10, h: 1.3, fill: { color: COLORS.bgDark }, line: { color: COLORS.bgDark } });
-  s.addShape(pres.shapes.RECTANGLE, { x: 0, y: 1.3, w: 10, h: 0.04, fill: { color: COLORS.accent }, line: { color: COLORS.accent } });
-  s.addShape(pres.shapes.OVAL, { x: 8.6, y: -0.6, w: 1.8, h: 1.8, fill: { color: COLORS.accent, transparency: 88 }, line: { color: COLORS.accent, transparency: 88 } });
-  s.addText(icon, { x: 0.35, y: 0.28, w: 0.65, h: 0.65, fontSize: 24, align: "center", valign: "middle" });
-  s.addText(title, { x: 1.08, y: 0.2, w: 8.2, h: 0.88, fontSize: 22, color: COLORS.textLight, bold: true, fontFace: "Cambria", valign: "middle", margin: 0, autoFit: false });
+function addAISlideHeader(s, pres, COLORS, title, icon, subtitle) {
+  // Title (large conclusion)
+  s.addText(title, {
+    x: 0.4, y: 0.22, w: 8.8, h: 0.44,
+    fontSize: 17, color: COLORS.textDark, bold: true,
+    fontFace: "Franklin Gothic Medium", valign: "middle", margin: 0
+  });
+
+  // Subtitle (insight / so-what)
+  const subText = subtitle || "Key findings and strategic insights from the document.";
+  s.addText(subText, {
+    x: 0.4, y: 0.66, w: 8.8, h: 0.32,
+    fontSize: 10.5, color: COLORS.textMuted, italic: true,
+    fontFace: "Calibri", valign: "middle", margin: 0
+  });
+
+  // Accent line
+  s.addShape(pres.shapes.RECTANGLE, {
+    x: 0.4, y: 1.02, w: 9.2, h: 0.02,
+    fill: { color: COLORS.accent, transparency: 60 }, line: { color: COLORS.accent, transparency: 60 }
+  });
+
+  if (icon) {
+    s.addText(icon, {
+      x: 9.3, y: 0.22, w: 0.4, h: 0.4,
+      fontSize: 16, align: "right", valign: "middle"
+    });
+  }
 }
 
 router.post("/generate-ppt-ai", async (req, res) => {

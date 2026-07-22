@@ -307,7 +307,8 @@ async function buildStrategy(documentText, docType, wizardOptions = {}) {
   const narrative = narrativeByType[docType.type] || narrativeByType.general;
   const docSample = safeTruncate(documentText, 6000);
 
-  const prompt = `You are a senior analyst. Read this document and return a strategy JSON.
+  const prompt = `You are a Principal Presentation AI Architect & McKinsey Senior Storyboarder. Read this document and return a structured presentation strategy.
+Identify trends, anomalies, risks, and opportunities in the data. Formulate a cohesive narrative flow that guides the audience to actionable recommendations.
 Keep ALL string values SHORT (under 80 chars). Return ONLY valid JSON with double-quoted keys.
 
 DOC TYPE: ${docType.type} | AUDIENCE: ${audience} | PURPOSE: ${purpose} | SLIDES: ${slideCount}
@@ -317,7 +318,29 @@ Document:
 ${docSample}
 """
 
-{"presentationTitle":"<concise title max 60 chars>","executiveSummary":"<1-2 sentences max 120 chars>","keyMessages":["<finding+data max 60 chars>","<finding>","<finding>","<finding>","<finding>"],"narrativeFlow":"${narrative}","targetSlideCount":${slideCount},"includeCover":true,"includeAgenda":${slideCount > 6},"includeConclusion":true,"documentType":"${docType.type}","audience":"${audience}","tone":"professional","topQuantitativeFindings":["<exact stat>","<exact stat>","<exact stat>"],"mostImportantInsight":"<insight with data max 80 chars>","chartRecommendations":[{"slideTitle":"<title>","chartType":"bar","reason":"<why max 40 chars>"},{"slideTitle":"<title>","chartType":"pie","reason":"<why>"}]}`;
+{
+  "presentationTitle": "<concise high-impact title max 60 chars>",
+  "executiveSummary": "<1-2 sentences stating the most critical trend or anomaly and its impact, max 120 chars>",
+  "keyMessages": [
+    "<conclusion + exact supporting metric, max 60 chars>",
+    "<key trend or risk identified, max 60 chars>",
+    "<strategic opportunity found, max 60 chars>",
+    "<primary recommendation, max 60 chars>"
+  ],
+  "narrativeFlow": "${narrative}",
+  "targetSlideCount": ${slideCount},
+  "includeCover": true,
+  "includeAgenda": ${slideCount > 6},
+  "includeConclusion": true,
+  "documentType": "${docType.type}",
+  "audience": "${audience}",
+  "tone": "professional",
+  "topQuantitativeFindings": ["<metric 1 + context>", "<metric 2 + context>", "<metric 3 + context>"],
+  "mostImportantInsight": "<so-what insight with exact numbers, max 80 chars>",
+  "chartRecommendations": [
+    {"slideTitle": "<conclusion-based title>", "chartType": "bar|line|pie|donut", "reason": "<why this chart type matches data structure, max 40 chars>"}
+  ]
+}`;
 
   let parsed = null;
   try {
@@ -351,6 +374,41 @@ ${docSample}
   };
 }
 
+// ── Outline sizing helper ──────────────────────────────────────────────────────
+// BUG FIX: previously, the hardcoded outlines for banking/financial_report/
+// healthcare_data were fixed-length arrays (8-9 items). `.slice(0, Math.min(targetTotal, N))`
+// can only ever return AT MOST N items when the array itself only has N items,
+// so requesting 12+ slides silently produced only 8-9. This helper makes the
+// hardcoded outlines actually honor the requested slide count in both directions:
+// trims if the pool is bigger than needed, and pads with extra analysis slides
+// (inserted before the closing slide) if the pool is smaller than requested.
+function fitOutlineToTarget(base, targetTotal) {
+  if (!Array.isArray(base) || base.length === 0) return base;
+  const closingIdx = base.findIndex(s => s.slideType === "closing");
+  const closing = closingIdx >= 0 ? base[closingIdx] : base[base.length - 1];
+  const core = closingIdx >= 0 ? base.slice(0, closingIdx) : base.slice(0, -1);
+
+  let result;
+  if (core.length + 1 >= targetTotal) {
+    result = [...core.slice(0, Math.max(targetTotal - 1, 1)), closing];
+  } else {
+    const fillers = [
+      { slideType: "bullets", title: "Additional Financial Observations", contentFocus: "Further insights from the document data", purpose: "Deep dive" },
+      { slideType: "chart", title: "Supplementary Data View", contentFocus: "Additional chart derived from document figures", purpose: "Extra visualization" },
+    ];
+    const extra = [];
+    let i = 0;
+    while (core.length + extra.length + 1 < targetTotal) {
+      const f = fillers[i % fillers.length];
+      const suffix = i >= fillers.length ? ` ${Math.floor(i / fillers.length) + 1}` : "";
+      extra.push({ ...f, title: `${f.title}${suffix}` });
+      i++;
+    }
+    result = [...core, ...extra, closing];
+  }
+  return result.map((s, idx) => ({ ...s, slideNumber: idx + 1 }));
+}
+
 // ── Step 3: Build slide outline ───────────────────────────────────────────────
 
 async function buildOutline(documentText, strategy, wizardOptions = {}) {
@@ -371,6 +429,7 @@ async function buildOutline(documentText, strategy, wizardOptions = {}) {
     educational_content: ["bullets","chart","quote","twoColumn","process"],
     government_report: ["kpi","chart","twoColumn","bullets","scorecard"],
     healthcare_data: ["kpi","chart","twoColumn","bullets","scorecard"],
+    government_report: ["kpi","chart","twoColumn","bullets","scorecard"],
     sales_report: ["kpi","chart","twoColumn","bullets","scorecard"],
     hr_document: ["kpi","chart","bullets","twoColumn"],
     marketing_report: ["kpi","chart","bullets","twoColumn"],
@@ -391,25 +450,36 @@ async function buildOutline(documentText, strategy, wizardOptions = {}) {
       { slideNumber:5, title:"Top Inflows vs Top Outflows", slideType:"twoColumn", contentFocus:"Left: 4 largest credits with amounts. Right: 4 largest debits with amounts", purpose:"Significant transactions" },
       { slideNumber:6, title:"Transaction Patterns & Observations", slideType:"bullets", contentFocus:"UPI count, NEFT count, recurring payees, cashback, balance trajectory", purpose:"Behavioral insights" },
       { slideNumber:7, title:"Financial Health Scorecard", slideType:"scorecard", contentFocus:"Savings Rate, Spending Discipline, Digital Adoption, Balance Stability, EMI Load", purpose:"Health summary" },
-      { slideNumber:8, title:"Key Takeaways & Recommendations", slideType:"closing", contentFocus:"Top 3 insights and action items", purpose:"Close" },
+      { slideNumber:8, title:"Multi-Dimension Spending Radar", slideType:"chart", contentFocus:"Radar chart: Savings Rate, Digital Adoption, Spending Discipline, Balance Stability, EMI Load — scored 0-100", purpose:"Holistic financial profile" },
+      { slideNumber:9, title:"Risk Analysis & Executive Insights", slideType:"riskCards", contentFocus:"Overdraft risk, high recurring debit risk, low balance buffer risk", purpose:"Risk flagging" },
+      { slideNumber:10, title:"Strategic Recommendations", slideType:"recommendations", contentFocus:"Immediate, short-term and long-term actions to improve financial health", purpose:"Action plan" },
+      { slideNumber:11, title:"Key Takeaways & Recommendations", slideType:"closing", contentFocus:"Top 3 insights and action items", purpose:"Close" },
     ];
-    return base.slice(0, Math.min(targetTotal, 10));
+    return fitOutlineToTarget(base, targetTotal);
   }
 
-  // Financial report: hardcoded reliable outline
+  // Financial report: hardcoded reliable outline — matches the "Executive P&L Review"
+  // reference structure (agenda → exec summary → revenue/cost analysis → full P&L
+  // detail → waterfall → scorecard → radar → risk cards → recommendations → close).
   if (strategy.documentType === "financial_report") {
     const base = [
-      { slideNumber:1, title:strategy.presentationTitle, slideType:"cover", contentFocus:"Company name, period, report type", purpose:"Introduction" },
-      { slideNumber:2, title:"Financial Highlights", slideType:"kpi", contentFocus:"Revenue, gross profit, net profit/loss, EBITDA, total assets, total liabilities — exact figures", purpose:"Key metrics snapshot" },
-      { slideNumber:3, title:"Revenue & Profitability", slideType:"chart", contentFocus:"Bar chart: revenue vs gross profit vs net profit", purpose:"Profitability visualization" },
-      { slideNumber:4, title:"P&L Statement Summary", slideType:"twoColumn", contentFocus:"Left: Income items with amounts. Right: Expense items with amounts", purpose:"P&L breakdown" },
-      { slideNumber:5, title:"Balance Sheet Overview", slideType:"twoColumn", contentFocus:"Left: Assets (current + non-current) with values. Right: Liabilities + Equity with values", purpose:"Financial position" },
-      { slideNumber:6, title:"Cost Structure Analysis", slideType:"chart", contentFocus:"Pie/donut chart of major expense categories", purpose:"Cost breakdown" },
-      { slideNumber:7, title:"Key Financial Observations", slideType:"bullets", contentFocus:"Margins, ratios, year-on-year trends, notable items from the statements", purpose:"Analysis" },
-      { slideNumber:8, title:"Financial Health Assessment", slideType:"scorecard", contentFocus:"Liquidity, Profitability, Solvency, Efficiency, Growth scores", purpose:"Health scorecard" },
-      { slideNumber:9, title:"Key Takeaways", slideType:"closing", contentFocus:"Top financial insights and recommendations", purpose:"Close" },
+      { slideNumber:1, title:strategy.presentationTitle, slideType:"cover", contentFocus:"Company name, period, report type, headline KPIs", purpose:"Introduction" },
+      { slideNumber:2, title:"Presentation Agenda", slideType:"agenda", contentFocus:"Executive Summary, Revenue Analysis, Cost Structure, P&L Detail, Waterfall, Health Assessment, Risk Analysis, Recommendations", purpose:"Roadmap" },
+      { slideNumber:3, title:"Executive Summary", slideType:"kpi", contentFocus:"Total income, total expenses, net profit, profit margin — exact figures with sub-labels (e.g. number of revenue streams)", purpose:"Key metrics snapshot" },
+      { slideNumber:4, title:"Revenue Analysis — Income Breakdown", slideType:"chart", contentFocus:"Bar chart: each income line item with amount and % of total income", purpose:"Revenue composition" },
+      { slideNumber:5, title:"Cost Structure Analysis — Expense Breakdown", slideType:"chart", contentFocus:"Bar or donut chart: each expense line item with amount and % of total expenses; call out the dominant cost driver", purpose:"Cost composition" },
+      { slideNumber:6, title:"P&L Statement — Full Line-by-Line Detail", slideType:"twoColumn", contentFocus:"Left: every income line item with amount and %. Right: every expense line item with amount and %", purpose:"Complete P&L breakdown" },
+      { slideNumber:7, title:"Balance Sheet Overview", slideType:"twoColumn", contentFocus:"Left: assets (current + non-current) with values, or note if not reported. Right: liabilities + equity with values", purpose:"Financial position" },
+      { slideNumber:8, title:"Revenue-to-Profit Waterfall Analysis", slideType:"chart", contentFocus:"Waterfall chart: starting from total income, subtracting each major expense category down to net profit", purpose:"Visualize how income converts to profit" },
+      { slideNumber:9, title:"Income vs Expense — Category Comparison", slideType:"chart", contentFocus:"Grouped bar or donut comparing total income vs total expenses by category", purpose:"Cash flow balance" },
+      { slideNumber:10, title:"Key Financial Observations", slideType:"bullets", contentFocus:"Margins, ratios, concentration risk, notable line items from the statements", purpose:"Analysis" },
+      { slideNumber:11, title:"Financial Health Assessment", slideType:"scorecard", contentFocus:"Net Profit Margin, Revenue Diversity, Cost Control, Liquidity, Solvency — scored with status (good/warning/critical) and a one-line comment each", purpose:"Health scorecard" },
+      { slideNumber:12, title:"Multi-Dimension Financial Performance Radar", slideType:"chart", contentFocus:"Radar chart: Net Margin, Revenue Diversity, Cost Control, Program/Core Revenue, Operating Buffer — each scored 0-100", purpose:"Holistic performance view" },
+      { slideNumber:13, title:"Risk Analysis & Executive Insights", slideType:"riskCards", contentFocus:"Top 3-4 financial risks (e.g. revenue concentration, thin margin, cost dominance) each with a severity level and a one-line explanation grounded in the document's numbers", purpose:"Risk flagging" },
+      { slideNumber:14, title:"Strategic Recommendations", slideType:"recommendations", contentFocus:"Grouped into Immediate / Short-Term / Long-Term actions, each tied to a specific figure from the document", purpose:"Action plan" },
+      { slideNumber:15, title:"Key Takeaways", slideType:"closing", contentFocus:"Top financial insights and recommendations", purpose:"Close" },
     ];
-    return base.slice(0, Math.min(targetTotal, 12));
+    return fitOutlineToTarget(base, targetTotal);
   }
 
   // Healthcare: hardcoded outline
@@ -423,13 +493,16 @@ async function buildOutline(documentText, strategy, wizardOptions = {}) {
       { slideNumber:6, title:"Block-wise Coverage", slideType:"chart", contentFocus:"Bar chart: expected vs confirmed cases per block (all 8 blocks)", purpose:"Geographic analysis" },
       { slideNumber:7, title:"AWC Screening Performance", slideType:"twoColumn", contentFocus:"Left: Blindness — AWC identified vs RBSK confirmed. Right: Hearing — AWC identified vs RBSK confirmed", purpose:"AWC analysis" },
       { slideNumber:8, title:"Recommendations Scorecard", slideType:"scorecard", contentFocus:"Close detection gap, complete pending surgeries, focus Vellore Corporation, strengthen AWC referral", purpose:"Action priorities" },
-      { slideNumber:9, title:"Key Takeaways", slideType:"closing", contentFocus:"Top 3 findings and next steps", purpose:"Close" },
+      { slideNumber:9, title:"Risk Analysis & Executive Insights", slideType:"riskCards", contentFocus:"Highest-gap blocks/conditions flagged as risks with severity and rationale", purpose:"Risk flagging" },
+      { slideNumber:10, title:"Strategic Recommendations", slideType:"recommendations", contentFocus:"Immediate, short-term and long-term actions grouped by priority", purpose:"Action plan" },
+      { slideNumber:11, title:"Key Takeaways", slideType:"closing", contentFocus:"Top 3 findings and next steps", purpose:"Close" },
     ];
-    return base.slice(0, Math.min(targetTotal, 12));
+    return fitOutlineToTarget(base, targetTotal);
   }
 
   // All other types: structure-only prompt
-  const prompt = `Create a slide outline. Return ONLY a valid JSON array with double-quoted keys.
+  const prompt = `Create a structured slide outline. Return ONLY a valid JSON array with double-quoted keys.
+CRITICAL: Every slide title MUST be an action-oriented conclusion or takeaway (e.g., 'Operating margin expanded by 14% due to consolidation' instead of 'Financial Analysis').
 
 Presentation: "${strategy.presentationTitle}"
 Narrative: ${strategy.narrativeFlow}
@@ -442,7 +515,7 @@ Preferred: ${preferredTypes}
 Rules: First = "cover", Last = "closing", include kpi + chart if data present.
 
 Return array of exactly ${targetTotal} objects:
-[{"slideNumber":1,"title":"Title","slideType":"cover","contentFocus":"details","purpose":"why"}]`;
+[{"slideNumber":1,"title":"<conclusion/headline title>","slideType":"cover","contentFocus":"Focus of this slide's content and data to extract","purpose":"Strategic narrative purpose"}]`;
 
   try {
     const raw = await aiCall(prompt, 3000);
@@ -493,7 +566,11 @@ async function buildSlideContent(documentText, outline, strategy, wizardOptions 
 - Total Assets, Total Liabilities, Equity: exact figures from Balance Sheet.
 - For P&L twoColumn: Left = all income line items with amounts, Right = all expense line items with amounts.
 - For Balance Sheet twoColumn: Left = assets breakdown, Right = liabilities + equity breakdown.
-- Chart values must be actual numbers from the document.`,
+- Chart values must be actual numbers from the document.
+- For the waterfall chart: chartData.type="waterfall", labels/values are ordered steps from total income down through each major expense to net profit (positive = adds, negative = subtracts).
+- For the radar chart: chartData.type="radar", 4-6 dimensions (e.g. Net Margin, Revenue Diversity, Cost Control, Operating Buffer) each scored 0-100 based on the actual figures.
+- For riskCards: 3-4 real risks grounded in the numbers (e.g. revenue concentration %, margin thinness), each with severity critical|high|medium|low.
+- For recommendations: group into immediate|short-term|long-term, each tied to a specific figure from the document.`,
 
     healthcare_data: `HEALTHCARE RULES: Extract EXACT values only.
 - Expected, Confirmed, Medical Mgmt, Surgery Done: from district totals table.
@@ -506,9 +583,14 @@ async function buildSlideContent(documentText, outline, strategy, wizardOptions 
   const extraRules = domainRules[strategy.documentType] || "";
 
   async function generateBatch(batchOutline) {
-    const prompt = `You are a McKinsey analyst. Generate slide content from REAL document data only.
-NEVER invent numbers. Use exact values from the document. Return valid JSON array, double-quoted keys.
-CRITICAL: Keep ALL string values SHORT — subtitle max 60 chars, speakerNotes max 120 chars, bullet items max 100 chars. Never write long paragraphs inside JSON strings.
+    const prompt = `You are a Principal Presentation AI Architect & Senior McKinsey Consultant. Generate slide content using REAL data from the document.
+NEVER invent numbers, anomalies, or facts. Use exact values. Return a valid JSON array of objects.
+
+CRITICAL PRESENTATION DESIGN RULES:
+1. Slide Titles MUST be conclusions or key takeaways (e.g., "Operating margin expanded by 14% driven by consolidation" instead of "Financial Analysis" or "Revenue").
+2. Every slide MUST have a "subtitle" containing a 1-sentence executive insight answering "So what?" (e.g., "Streamlined processes reduced overhead by $12M, offsetting rising raw material costs").
+3. Bullets MUST NEVER be plain lists or paragraphs. They MUST be concise cards following the format: "**Lead-in**: Concise explanation of the metric/trend/anomaly" (e.g., "**Revenue Concentration**: 45% of sales depend on top three accounts, posing key operational risk").
+4. Keep all string values short and high-impact. Avoid repeating information across slides.
 
 DOC TYPE: ${strategy.documentType} | AUDIENCE: ${strategy.audience}
 BULLETS/SLIDE: up to ${bulletCount} | NOTES: ${speakerNotes}
@@ -523,17 +605,20 @@ ${docSample}
 """
 
 Return JSON array of ${batchOutline.length} objects. Schemas:
-cover: {"slideType":"cover","title":"","subtitle":"","documentTypeLabel":"","speakerNotes":""}
-closing: {"slideType":"closing","title":"","body":"","keyMessages":["","",""],"speakerNotes":""}
-section: {"slideType":"section","title":"","subtitle":"","speakerNotes":""}
-bullets: {"slideType":"bullets","title":"","icon":"","bullets":["finding + so what"],"body":"","speakerNotes":""}
-kpi: {"slideType":"kpi","title":"","icon":"📊","metrics":[{"label":"LABEL","value":"EXACT VALUE","trend":"up|down|neutral"}],"speakerNotes":""}
-chart: {"slideType":"chart","title":"","icon":"📈","chartData":{"type":"bar|line|pie|donut","title":"","labels":["l1"],"values":[123]},"bullets":["insight"],"speakerNotes":""}
-twoColumn: {"slideType":"twoColumn","title":"","icon":"","twoColumns":{"left":{"title":"","bullets":[""]},"right":{"title":"","bullets":[""]}},"speakerNotes":""}
-swot: {"slideType":"swot","title":"","icon":"🔍","swotData":{"strengths":[""],"weaknesses":[""],"opportunities":[""],"threats":[""]},"speakerNotes":""}
-timeline: {"slideType":"timeline","title":"","icon":"📅","timeline":[{"date":"","event":"","detail":""}],"speakerNotes":""}
-process: {"slideType":"process","title":"","icon":"⚙️","steps":[{"number":1,"title":"","description":"","icon":""}],"speakerNotes":""}
-scorecard: {"slideType":"scorecard","title":"","icon":"📋","items":[{"category":"","score":7,"maxScore":10,"status":"good|warning|critical","comment":""}],"speakerNotes":""}`;
+cover: {"slideType":"cover","title":"<conclusion title>","subtitle":"<insight subtitle>","documentTypeLabel":"","speakerNotes":""}
+closing: {"slideType":"closing","title":"<conclusion title>","body":"<insight body>","keyMessages":["**Message 1**: Details","**Message 2**: Details"],"speakerNotes":""}
+section: {"slideType":"section","title":"<section headline title>","subtitle":"<section description/takeaway>","speakerNotes":""}
+bullets: {"slideType":"bullets","title":"<conclusion title>","subtitle":"<insight subtitle>","icon":"📄","bullets":["**Lead-in**: Explanation of insight"],"speakerNotes":""}
+kpi: {"slideType":"kpi","title":"<conclusion title>","subtitle":"<insight subtitle>","icon":"📊","metrics":[{"label":"METRIC LABEL","value":"EXACT VALUE","trend":"up|down|neutral"}],"speakerNotes":""}
+chart: {"slideType":"chart","title":"<conclusion title>","subtitle":"<insight subtitle>","icon":"📈","chartData":{"type":"bar|line|pie|donut","title":"Chart Headline","labels":["l1"],"values":[123]},"bullets":["**Insight**: Detailed takeaway from chart"],"speakerNotes":""}
+twoColumn: {"slideType":"twoColumn","title":"<conclusion title>","subtitle":"<insight subtitle>","icon":"⚖️","twoColumns":{"left":{"title":"Column A title","bullets":["**Key Point**: Detail"]},"right":{"title":"Column B title","bullets":["**Key Point**: Detail"]}},"speakerNotes":""}
+swot: {"slideType":"swot","title":"<conclusion title>","subtitle":"<insight subtitle>","icon":"🔍","swotData":{"strengths":["**Strength 1**: Details"],"weaknesses":["**Weakness 1**: Details"],"opportunities":["**Opportunity 1**: Details"],"threats":["**Threat 1**: Details"]},"speakerNotes":""}
+timeline: {"slideType":"timeline","title":"<conclusion title>","subtitle":"<insight subtitle>","icon":"📅","timeline":[{"date":"Date/Phase","event":"Event name","detail":"**Detail**: Takeaway explanation"}],"speakerNotes":""}
+process: {"slideType":"process","title":"<conclusion title>","subtitle":"<insight subtitle>","icon":"⚙️","steps":[{"number":1,"title":"Step Title","description":"**Action**: What happens in this step","icon":""}],"speakerNotes":""}
+scorecard: {"slideType":"scorecard","title":"<conclusion title>","subtitle":"<insight subtitle>","icon":"📋","items":[{"category":"Category Name","score":7,"maxScore":10,"status":"good|warning|critical","comment":"**Analysis**: Why this score"}],"speakerNotes":""}
+agenda: {"slideType":"agenda","title":"Agenda Title","subtitle":"Agenda Subtitle","sections":[{"icon":"📄","title":"Section Title","description":"Description of content"}],"speakerNotes":""}
+riskCards: {"slideType":"riskCards","title":"<conclusion title>","subtitle":"<insight subtitle>","icon":"⚠️","risks":[{"severity":"critical|high|medium|low","title":"Risk Title","description":"**Impact**: How it affects the business"}],"speakerNotes":""}
+recommendations: {"slideType":"recommendations","title":"<conclusion title>","subtitle":"<insight subtitle>","icon":"🎯","items":[{"priority":"immediate|short-term|long-term","title":"Recommendation Title","description":"**Rationale**: Direct business action items"}],"speakerNotes":""}`;
 
     const raw = await aiCall(prompt, 8192);
     try {
@@ -545,7 +630,12 @@ scorecard: {"slideType":"scorecard","title":"","icon":"📋","items":[{"category
         console.warn(`⚠️  Batch truncated — recovered ${partial.length}/${batchOutline.length} slides`);
         // Fill missing slides with outline fallbacks
         const filled = batchOutline.map((outlineSlide, i) => {
-          const found = partial.find(p => p.title === outlineSlide.title || p.slideType === outlineSlide.slideType);
+          // 1. Try matching by exact index alignment if type matches
+          if (partial[i] && partial[i].slideType === outlineSlide.slideType) {
+            return partial[i];
+          }
+          // 2. Try matching by type anywhere in the partial results
+          const found = partial.find(p => p.slideType === outlineSlide.slideType);
           return found || {
             slideType: outlineSlide.slideType, title: outlineSlide.title, icon: "📄",
             bullets: [outlineSlide.contentFocus, outlineSlide.purpose].filter(Boolean),
@@ -621,6 +711,32 @@ function validateAndRepairSlides(slides, strategy, docType) {
         maxScore: typeof item.maxScore === "number" ? item.maxScore : 10,
         status: ["good","warning","critical"].includes(item.status) ? item.status : "warning",
       }));
+    }
+    if (slide.slideType === "riskCards") {
+      if (!Array.isArray(slide.risks) || slide.risks.length === 0) {
+        slide.slideType = "bullets";
+        slide.bullets = strategy.topQuantitativeFindings?.length ? strategy.topQuantitativeFindings : ["See document for risk factors"];
+      } else {
+        slide.risks = slide.risks.slice(0, 5).map(r => ({
+          ...r,
+          severity: ["critical","high","medium","low"].includes(r.severity) ? r.severity : "medium",
+        }));
+      }
+    }
+    if (slide.slideType === "recommendations") {
+      if (!Array.isArray(slide.items) || slide.items.length === 0) {
+        slide.slideType = "bullets";
+        slide.bullets = strategy.keyMessages?.length ? strategy.keyMessages : ["See document for recommendations"];
+      } else {
+        slide.items = slide.items.slice(0, 6).map(it => ({
+          ...it,
+          priority: ["immediate","short-term","long-term"].includes(it.priority) ? it.priority : "short-term",
+        }));
+      }
+    }
+    if (slide.slideType === "agenda" && (!Array.isArray(slide.sections) || slide.sections.length === 0)) {
+      slide.slideType = "bullets";
+      slide.bullets = strategy.keyMessages?.length ? strategy.keyMessages : ["Overview", "Analysis", "Recommendations"];
     }
     return slide;
   }).filter(Boolean);
