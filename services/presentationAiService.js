@@ -77,25 +77,49 @@ function partialJsonExtract(s) {
 }
 
 function parseJsonResponse(raw) {
+  if (!raw || typeof raw !== "string") {
+    throw new Error("Unable to parse AI JSON response: Response text is empty or invalid type");
+  }
+
   let s = raw.replace(/```json\s*/gi, "").replace(/```\s*/g, "").trim();
-  try { return JSON.parse(s); } catch {}
+
+  // Try direct parse
+  try {
+    return JSON.parse(s);
+  } catch (err) {
+    console.warn(`⚠️  Direct JSON.parse failed (${err.message}). Attempting repair & extraction pipeline...`);
+  }
+
+  // Regex array/object match
   const arrM = s.match(/(\[[\s\S]*\])/);
   if (arrM) { try { return JSON.parse(arrM[1]); } catch {} }
+
   const objM = s.match(/(\{[\s\S]*\})/);
   if (objM) { try { return JSON.parse(objM[1]); } catch {} }
+
+  // Repair JSON string syntax
   const repaired = repairJsonString(s);
   try { return JSON.parse(repaired); } catch {}
+
   const arrM2 = repaired.match(/(\[[\s\S]*\])/);
   if (arrM2) { try { return JSON.parse(arrM2[1]); } catch {} }
+
+  // Array truncation recovery
   const recovered = tryRecoverTruncatedArray(repaired) || tryRecoverTruncatedArray(s);
-  if (recovered) return recovered;
-  try { return JSON.parse(repaired.replace(/[\x00-\x1F\x7F]/g, " ")); } catch {}
+  if (recovered) {
+    console.warn(`⚠️  Recovered ${recovered.length} items from truncated JSON array response.`);
+    return recovered;
+  }
+
+  // Object recovery
   const extracted = extractCompleteObjects(repaired) || extractCompleteObjects(s);
   if (extracted && extracted.length > 0) {
-    console.warn(`⚠️  Extracted ${extracted.length} complete objects from truncated response`);
+    console.warn(`⚠️  Extracted ${extracted.length} complete slide objects from truncated/malformed response.`);
     return extracted;
   }
-  throw new Error("Unable to parse AI JSON response: " + s.slice(0, 200));
+
+  console.error(`❌ Unable to parse AI JSON response. Raw snippet (${s.length} chars): ${s.slice(0, 150)}...`);
+  throw new Error("Unable to parse AI JSON response: " + s.slice(0, 150));
 }
 
 // ── Document text unwrapper ───────────────────────────────────────────────────
@@ -124,8 +148,8 @@ function safeTruncate(text, maxChars = 80000) {
   return text.slice(0, half) + "\n\n[... middle truncated ...]\n\n" + text.slice(-half);
 }
 
-async function aiCall(prompt, maxTokens = 8192) {
-  return callWithRotation(() => [{ text: prompt }], maxTokens, "gemini-3.5-flash", null, "summarize");
+async function aiCall(prompt, maxTokens = 8192, responseMimeType = "application/json") {
+  return callWithRotation(() => [{ text: prompt }], maxTokens, "gemini-3.5-flash", null, "summarize", responseMimeType);
 }
 
 async function aiCallWithImage(prompt, base64Data, mimeType, maxTokens = 8192) {
@@ -614,30 +638,82 @@ scorecard: {"slideType":"scorecard","title":"","icon":"📋","items":[{"category
     }
   }
 
-  try {
-    if (outline.length <= 8) return await generateBatch(outline);
-    const half = Math.ceil(outline.length / 2);
-    console.log(`📦 Batching: ${half} + ${outline.length - half} slides`);
-    const [s1, s2] = await Promise.all([generateBatch(outline.slice(0, half)), generateBatch(outline.slice(half))]);
-    return [...s1, ...s2];
-  } catch (e) {
-    console.error("buildSlideContent fallback:", e.message);
-    console.log("⚠️  Attempting per-slide fallback generation…");
-    const results = [];
-    for (const slideOutline of outline) {
+  const BATCH_SIZE = wizardOptions.batchSize || 5;
+  const chunks = [];
+  for (let i = 0; i < outline.length; i += BATCH_SIZE) {
+    chunks.push(outline.slice(i, i + BATCH_SIZE));
+  }
+  console.log(`📦 Batching slide generation: ${outline.length} slides into ${chunks.length} batches of max ${BATCH_SIZE} slides...`);
+
+  const allGeneratedSlides = [];
+
+  for (let b = 0; b < chunks.length; b++) {
+    const batchOutline = chunks[b];
+    console.log(`✍️  Generating Batch ${b + 1}/${chunks.length} (${batchOutline.length} slides)...`);
+
+    let batchResults = [];
+    try {
+      batchResults = await generateBatch(batchOutline);
+    } catch (err) {
+      console.warn(`⚠️  Batch ${b + 1} initial generation failed (${err.message}). Retrying batch once...`);
       try {
-        const single = await generateBatch([slideOutline]);
-        results.push(...(Array.isArray(single) ? single : [single]));
-      } catch {
-        results.push({
-          slideType: slideOutline.slideType, title: slideOutline.title, icon: "📄",
-          bullets: [slideOutline.contentFocus, slideOutline.purpose].filter(Boolean),
-          body: slideOutline.contentFocus, speakerNotes: slideOutline.purpose,
+        batchResults = await generateBatch(batchOutline);
+      } catch (retryErr) {
+        console.error(`❌ Batch ${b + 1} retry failed (${retryErr.message}). Will generate missing slides via targeted fallback.`);
+      }
+    }
+
+    if (!Array.isArray(batchResults)) batchResults = [batchResults].filter(Boolean);
+
+    // Track missing items in this batch
+    const missingOutlines = [];
+    batchOutline.forEach((outlineSlide, i) => {
+      const found = batchResults[i] && (batchResults[i].slideType === outlineSlide.slideType || batchResults[i].title === outlineSlide.title) ? batchResults[i] : null;
+      if (found) {
+        allGeneratedSlides.push(found);
+      } else {
+        missingOutlines.push(outlineSlide);
+      }
+    });
+
+    if (missingOutlines.length > 0) {
+      console.warn(`⚠️  Batch ${b + 1} missing ${missingOutlines.length}/${batchOutline.length} slides. Running targeted recovery for missing slides...`);
+      try {
+        const recoveredMissing = await generateBatch(missingOutlines);
+        const recoveredArr = Array.isArray(recoveredMissing) ? recoveredMissing : [recoveredMissing];
+
+        missingOutlines.forEach((missingSlide, mi) => {
+          const rec = recoveredArr[mi] || recoveredArr.find(r => r.slideType === missingSlide.slideType);
+          if (rec) {
+            allGeneratedSlides.push(rec);
+          } else {
+            allGeneratedSlides.push({
+              slideType: missingSlide.slideType,
+              title: missingSlide.title,
+              icon: "📄",
+              bullets: [missingSlide.contentFocus, missingSlide.purpose].filter(Boolean),
+              body: missingSlide.contentFocus,
+              speakerNotes: missingSlide.purpose,
+            });
+          }
+        });
+      } catch (missingErr) {
+        console.warn(`⚠️  Targeted recovery for missing slides failed: ${missingErr.message}. Filling fallbacks.`);
+        missingOutlines.forEach(missingSlide => {
+          allGeneratedSlides.push({
+            slideType: missingSlide.slideType,
+            title: missingSlide.title,
+            icon: "📄",
+            bullets: [missingSlide.contentFocus, missingSlide.purpose].filter(Boolean),
+            body: missingSlide.contentFocus,
+            speakerNotes: missingSlide.purpose,
+          });
         });
       }
     }
-    return results;
   }
+
+  return allGeneratedSlides;
 }
 
 // ── Post-processing validation ─────────────────────────────────────────────────

@@ -80,7 +80,7 @@ async function recordSuccess(keyIndex, usageMetadata = {}, feature = "summarize"
         },
         $setOnInsert: { keyIndex, date },
       },
-      { upsert: true, new: false }
+      { upsert: true, returnDocument: "before" }
     );
 
     // ── Real-time state ─────────────────────────────────────────────────────

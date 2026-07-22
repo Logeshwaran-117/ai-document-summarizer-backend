@@ -1615,8 +1615,6 @@ function buildAIDeck({ aiSlides, strategy, docTitle, heroTitle, themeKey, wizard
     // ── CLOSING SLIDE ────────────────────────────────────────────────────────
     if (slide.slideType === "closing") {
       s.background = { color: COLORS.bgDark };
-      s.addShape(pres.shapes.OVAL, { x: -1.0, y: 2.5, w: 4.0, h: 4.0, fill: { color: COLORS.accent, transparency: 82 }, line: { color: COLORS.accent, transparency: 82 } });
-      s.addShape(pres.shapes.OVAL, { x: 8.5, y: -0.5, w: 2.5, h: 2.5, fill: { color: COLORS.teal, transparency: 78 }, line: { color: COLORS.teal, transparency: 78 } });
       s.addShape(pres.shapes.RECTANGLE, { x: 2.5, y: 2.6, w: 5.0, h: 0.04, fill: { color: COLORS.accent, transparency: 60 }, line: { color: COLORS.accent, transparency: 60 } });
       s.addText(slide.title || "Thank You", { x: 1, y: 1.2, w: 8, h: 1.1, fontSize: 44, color: COLORS.textLight, bold: true, fontFace: "Cambria", align: "center" });
       s.addText(slide.body || strategy?.mostImportantInsight || strategy?.keyMessages?.[0] || "AI-Generated Presentation", { x: 1.5, y: 2.4, w: 7, h: 0.55, fontSize: 13, color: "7A90B8", align: "center", fontFace: "Calibri" });
@@ -1625,8 +1623,7 @@ function buildAIDeck({ aiSlides, strategy, docTitle, heroTitle, themeKey, wizard
       if (closingMessages.length > 0) {
         let msgY = 3.1;
         closingMessages.slice(0, 3).forEach(msg => {
-          s.addShape(pres.shapes.OVAL, { x: 1.2, y: msgY + 0.04, w: 0.12, h: 0.12, fill: { color: COLORS.accent }, line: { color: COLORS.accent } });
-          s.addText(msg.slice(0, 100), { x: 1.42, y: msgY, w: 7.2, h: 0.28, fontSize: 10, color: "8A9FC0", fontFace: "Calibri" });
+          s.addText(`▪ ${msg.slice(0, 100)}`, { x: 1.42, y: msgY, w: 7.2, h: 0.28, fontSize: 10.5, color: "8A9FC0", fontFace: "Calibri" });
           msgY += 0.33;
         });
       }
@@ -2046,14 +2043,9 @@ function addAIFooter(s, COLORS, docTitle, idx, total) {
 function addAISlideHeader(s, pres, COLORS, title, icon, subtitle) {
   s.addShape(pres.shapes.RECTANGLE, { x: 0, y: 0, w: 10, h: 1.3, fill: { color: COLORS.bgDark }, line: { color: COLORS.bgDark } });
   s.addShape(pres.shapes.RECTANGLE, { x: 0, y: 1.3, w: 10, h: 0.04, fill: { color: COLORS.accent }, line: { color: COLORS.accent } });
-  s.addShape(pres.shapes.OVAL, { x: 8.6, y: -0.6, w: 1.8, h: 1.8, fill: { color: COLORS.accent, transparency: 88 }, line: { color: COLORS.accent, transparency: 88 } });
-  
-  if (icon) {
-    s.addText(icon, { x: 0.35, y: 0.28, w: 0.65, h: 0.65, fontSize: 24, align: "center", valign: "middle" });
-  }
 
-  const titleX = icon ? 1.08 : 0.4;
-  const titleW = icon ? 8.2 : 9.2;
+  const titleX = 0.4;
+  const titleW = 9.2;
 
   s.addText(title.toUpperCase(), {
     x: titleX, y: 0.18, w: titleW, h: 0.48,

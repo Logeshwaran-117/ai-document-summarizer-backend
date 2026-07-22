@@ -120,7 +120,7 @@ function partsToPromptText(parts) {
     return parts.filter(p => p.text).map(p => p.text).join("\n\n");
 }
 
-async function callGroqFallback(parts, maxOutputTokens) {
+async function callGroqFallback(parts, maxOutputTokens, responseMimeType = null) {
     const client = getGroqClient();
     if (!client) {
         throw new Error(
@@ -153,6 +153,7 @@ async function callGroqFallback(parts, maxOutputTokens) {
         model: GROQ_MODEL,
         messages: [{ role: "user", content: promptText }],
         max_tokens: Math.min(maxOutputTokens, 8192),
+        ...(responseMimeType === "application/json" ? { response_format: { type: "json_object" } } : {}),
     });
 
     return completion.choices?.[0]?.message?.content ?? "";
@@ -175,18 +176,24 @@ const BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models";
  * @param {string}   model
  * @param {Function|null} onUsage  - legacy callback passed by controllers
  * @param {string}   feature       - "summarize"|"banking"|"table" for breakdown
+ * @param {string|null} responseMimeType - optional "application/json"
  */
-async function callGeminiREST(parts, maxOutputTokens = 8192, model = "gemini-3.5-flash", onUsage = null, feature = "summarize") {
+async function callGeminiREST(parts, maxOutputTokens = 8192, model = "gemini-3.5-flash", onUsage = null, feature = "summarize", responseMimeType = null) {
     const activeIndex = currentKeyIndex;
     const key = getCurrentKey();
     const url = `${BASE_URL}/${model}:generateContent?key=${key}`;
+
+    const generationConfig = { maxOutputTokens };
+    if (responseMimeType) {
+        generationConfig.responseMimeType = responseMimeType;
+    }
 
     const res = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
             contents: [{ parts }],
-            generationConfig: { maxOutputTokens },
+            generationConfig,
         }),
     });
 
@@ -262,8 +269,9 @@ function parseRetryAfter(error) {
  * @param {string}   model
  * @param {Function|null} onUsage   - legacy token callback from controllers
  * @param {string}   feature        - "summarize"|"banking"|"table"
+ * @param {string|null} responseMimeType - optional "application/json"
  */
-async function callWithRotation(buildParts, maxOutputTokens = 8192, model = "gemini-3.5-flash", onUsage = null, feature = "summarize") {
+async function callWithRotation(buildParts, maxOutputTokens = 8192, model = "gemini-3.5-flash", onUsage = null, feature = "summarize", responseMimeType = null) {
     const MAX_ATTEMPTS = GEMINI_KEYS.length * 2; // allow re-trying keys after cooldown expires
     let attempts = 0;
     let overloadRetries = 0;
@@ -283,7 +291,7 @@ async function callWithRotation(buildParts, maxOutputTokens = 8192, model = "gem
 
         try {
             const parts = buildParts();
-            const result = await callGeminiREST(parts, maxOutputTokens, model, onUsage, feature);
+            const result = await callGeminiREST(parts, maxOutputTokens, model, onUsage, feature, responseMimeType);
             overloadRetries = 0; // reset on success
             return result;
         } catch (error) {
@@ -329,7 +337,7 @@ async function callWithRotation(buildParts, maxOutputTokens = 8192, model = "gem
     let finalGeminiError = new Error(`All ${GEMINI_KEYS.length} Gemini keys rate limited or denied.`);
     try {
         const parts = buildParts();
-        const result = await callGroqFallback(parts, maxOutputTokens);
+        const result = await callGroqFallback(parts, maxOutputTokens, responseMimeType);
         console.log(`✅ Groq fallback (${GROQ_MODEL}) succeeded.`);
         return result;
     } catch (groqError) {

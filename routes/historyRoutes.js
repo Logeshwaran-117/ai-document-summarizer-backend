@@ -226,7 +226,7 @@ router.put("/:id/tags", async (req, res) => {
     const doc = await Document.findOneAndUpdate(
       { _id: req.params.id, userId: req.user._id },
       { $set: { tags: cleaned } },
-      { new: true, select: "tags" }
+      { returnDocument: "after", select: "tags" }
     );
  
     if (!doc) return res.status(404).json({ message: "Document not found" });
