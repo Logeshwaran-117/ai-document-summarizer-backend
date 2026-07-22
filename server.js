@@ -88,7 +88,7 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 // Handle OPTIONS preflight for ALL routes — must come before any route mounts
-app.options("*", cors(corsOptions));
+app.options("/(.*)", cors(corsOptions));
 
 app.use("/api/billing/webhook", express.raw({ type: "application/json" }));
 app.use(express.json());
