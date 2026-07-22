@@ -1,3 +1,6 @@
+// server/models/Document.js
+// 3.2 — Added tags field for user-defined labels.
+
 const mongoose = require('mongoose');
 
 const chatMessageSchema = new mongoose.Schema({
@@ -20,9 +23,11 @@ const documentSchema = new mongoose.Schema({
   uploadedAt:  { type: Date, default: Date.now },
 
   // ── Share link support ──────────────────────────────────────────────────
-  // Populated by POST /api/history/:id/share; cleared by DELETE /api/history/:id/share
-  // Indexed so the public /shared/:token lookup is fast.
   shareToken: { type: String, default: undefined, index: { unique: true, sparse: true } },
+
+  // ── 3.2: Tags / Folders ─────────────────────────────────────────────────
+  // User-defined string labels, max 10 per document.
+  tags: { type: [String], default: [] },
 });
 
 module.exports = mongoose.model('Document', documentSchema);

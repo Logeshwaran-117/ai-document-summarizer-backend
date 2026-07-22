@@ -1,5 +1,9 @@
+// server/middleware/planLimit.js
+// 3.5 — fires usage-warning emails at 80% and 100% of daily plan limit.
+
 const User = require('../models/User');
 const { checkLimit, PLANS } = require('../config/plans');
+const { sendUsageLimitEmail } = require('../services/emailService');
 
 // Factory: returns middleware for a given action ('summarize' or 'tables')
 function limitAction(action) {
@@ -15,8 +19,6 @@ function limitAction(action) {
     const result = checkLimit(user, action);
 
     if (result.needsReset) {
-      // Reset BOTH counters together so a new calendar day always starts clean,
-      // regardless of which action triggers the reset first.
       await User.findByIdAndUpdate(user._id, {
         $set: {
           'subscription.usageResetAt':    new Date(),
@@ -29,6 +31,12 @@ function limitAction(action) {
     }
 
     if (!result.allowed) {
+      // ── 3.5: 100% limit email ─────────────────────────────────────────────
+      // Only fire once per day — track with a flag on the user doc or just fire
+      // every time they hit the wall (idempotent; email service deduplicates via
+      // the "email sent" log).  Non-blocking so the 429 returns instantly.
+      sendUsageLimitEmail(user, { used: result.used, limit: result.limit, action }, '100').catch(() => {});
+
       return res.status(429).json({
         success: false,
         limitReached: true,
@@ -37,6 +45,16 @@ function limitAction(action) {
         limit: result.limit,
         used: result.used,
       });
+    }
+
+    // ── 3.5: 80% warning email ────────────────────────────────────────────────
+    // Fire when this next action will push the user to or past 80%.
+    // We check BEFORE incrementing, so result.used is the count before this call.
+    const usedAfterThis = result.used + 1;
+    const pct = result.limit > 0 ? usedAfterThis / result.limit : 0;
+    if (pct >= 0.8 && result.used / result.limit < 0.8) {
+      // Just crossed the 80% line — send once
+      sendUsageLimitEmail(user, { used: usedAfterThis, limit: result.limit, action }, '80').catch(() => {});
     }
 
     // Attach to req so the controller can increment after success
@@ -62,8 +80,7 @@ async function deductTokens(userId, tokensUsed) {
       const plan = PLANS[user.plan || 'free'];
       user.tokenLimit = plan?.limits?.tokenLimit ?? PLANS.free.limits.tokenLimit ?? 50000;
     }
-    
-    // Auto-reset if the date has passed
+
     if (!user.tokenResetDate || new Date() > user.tokenResetDate) {
       user.tokensUsed = 0;
       const nextMonth = new Date();

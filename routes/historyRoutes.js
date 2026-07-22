@@ -210,4 +210,46 @@ router.post("/:id/chat", async (req, res) => {
   }
 });
 
+router.put("/:id/tags", async (req, res) => {
+  try {
+    if (!req.user) return res.status(401).json({ message: "Not authenticated" });
+ 
+    const { tags } = req.body;
+    if (!Array.isArray(tags)) return res.status(400).json({ message: "tags must be an array" });
+ 
+    // Sanitise: trim, lowercase, max 20 chars each, max 10 tags
+    const cleaned = tags
+      .map((t) => String(t).trim().toLowerCase().slice(0, 20))
+      .filter(Boolean)
+      .slice(0, 10);
+ 
+    const doc = await Document.findOneAndUpdate(
+      { _id: req.params.id, userId: req.user._id },
+      { $set: { tags: cleaned } },
+      { new: true, select: "tags" }
+    );
+ 
+    if (!doc) return res.status(404).json({ message: "Document not found" });
+ 
+    res.json({ success: true, tags: doc.tags });
+  } catch (err) {
+    console.error("Set tags error:", err);
+    res.status(500).json({ message: "Failed to update tags" });
+  }
+});
+ 
+// ── 3.2: Get all distinct tags for the current user ───────────────────────────
+// GET /api/history/tags
+router.get("/tags", async (req, res) => {
+  try {
+    if (!req.user) return res.status(401).json({ message: "Not authenticated" });
+ 
+    const tags = await Document.distinct("tags", { userId: req.user._id });
+    res.json({ tags: tags.filter(Boolean).sort() });
+  } catch (err) {
+    res.status(500).json({ message: "Failed to fetch tags" });
+  }
+});
+ 
+
 module.exports = router;

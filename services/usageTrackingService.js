@@ -17,6 +17,23 @@ const { ApiKeyDaily, ApiKeyState } = require("../models/ApiKeyUsage");
 const DAILY_REQUEST_LIMIT = parseInt(process.env.GEMINI_DAILY_REQUEST_LIMIT || "1500", 10);
 const DAILY_TOKEN_BUDGET  = parseInt(process.env.GEMINI_DAILY_TOKEN_BUDGET  || "1000000", 10);
 
+/**
+ * Count how many GEMINI_KEY_N vars are actually set in the environment.
+ * This lets usageTrackingService.js work correctly regardless of whether
+ * geminiService.js has loaded yet (which sets GEMINI_KEYS_COUNT at runtime).
+ * Falls back to GEMINI_KEYS_COUNT env var, then counts GEMINI_KEY_1…N directly.
+ */
+function resolveKeyCount() {
+  // Explicit override always wins (set in .env or by geminiService at startup)
+  if (process.env.GEMINI_KEYS_COUNT) {
+    return parseInt(process.env.GEMINI_KEYS_COUNT, 10);
+  }
+  // Count GEMINI_KEY_1, GEMINI_KEY_2, … until one is missing
+  let count = 0;
+  while (process.env[`GEMINI_KEY_${count + 1}`]) count++;
+  return count || 1; // never return 0
+}
+
 /** Returns "YYYY-MM-DD" in UTC for the current moment. */
 function todayUTC() {
   return new Date().toISOString().slice(0, 10);
@@ -166,9 +183,9 @@ async function getTodayStats() {
     ApiKeyState.findOne({ keyIndex: -1 }).lean(),
   ]);
 
-  const totalKeys = parseInt(process.env.GEMINI_KEYS_COUNT || "4", 10);
+  const totalKeys = resolveKeyCount();
 
-  // Build a complete array for all 4 keys (fill zeros for keys with no activity today)
+  // Build a complete array for all keys (fill zeros for keys with no activity today)
   const keys = Array.from({ length: totalKeys }, (_, i) => {
     const doc = dailyDocs.find((d) => d.keyIndex === i) || {};
     const requests    = doc.requestCount    || 0;

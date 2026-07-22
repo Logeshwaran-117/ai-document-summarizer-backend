@@ -73,9 +73,13 @@ async function uploadAndExtract(req, res) {
         filename: req.file.originalname,
       });
     } else {
-      // extractText() can return: a plain string, { text }, { content }, or { pages }
+      // extractText() can return: a plain string, { rawText, isScanned } (PDF),
+      // { text }, { content }, or { pages }
       if (typeof extracted === "string") {
         documentText = extracted;
+      } else if (extracted?.rawText) {
+        // PDF path — extractFromPdf returns { rawText, isScanned }
+        documentText = extracted.rawText;
       } else if (extracted?.text) {
         documentText = extracted.text;
       } else if (extracted?.content) {

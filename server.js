@@ -73,7 +73,7 @@ const buildAllowedOrigins = () => {
 };
 const ALLOWED_ORIGINS = buildAllowedOrigins();
 
-app.use(cors({
+const corsOptions = {
   origin: (origin, callback) => {
     // Allow server-to-server / curl requests (no Origin header)
     if (!origin) return callback(null, true);
@@ -81,11 +81,30 @@ app.use(cors({
     callback(new Error(`CORS: origin '${origin}' not allowed`));
   },
   credentials: true,
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
   exposedHeaders: ["Content-Disposition", "X-Presentation-Id", "X-Slide-Count"],
-}));
+};
+
+app.use(cors(corsOptions));
+app.options(/(.*)/, cors(corsOptions));   // Express 5-compatible preflight
 
 app.use("/api/billing/webhook", express.raw({ type: "application/json" }));
 app.use(express.json());
+
+app.get("/api/health", (req, res) => {
+  const dbState = mongoose.connection.readyState;
+  // readyState: 0=disconnected, 1=connected, 2=connecting, 3=disconnecting
+  const dbStatus = dbState === 1 ? "connected" : dbState === 2 ? "connecting" : "disconnected";
+  const status   = dbState === 1 ? "ok" : "degraded";
+ 
+  res.status(dbState === 1 ? 200 : 503).json({
+    status,
+    db: dbStatus,
+    uptime: Math.floor(process.uptime()),
+    ts: new Date().toISOString(),
+  });
+});
 
 app.use(session({
     secret: process.env.SESSION_SECRET || "a-very-long-random-string",
