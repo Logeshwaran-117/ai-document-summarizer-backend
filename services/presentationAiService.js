@@ -19,6 +19,11 @@ function repairJsonString(raw) {
   s = s.replace(/:\s*'([^']*)'/g, ': "$1"');
   s = s.replace(/([{,]\s*)'([^']+)'\s*:/g, '$1"$2":');
   s = s.replace(/([{,]\s*)([a-zA-Z_][a-zA-Z0-9_]*)\s*:/g, '$1"$2":');
+  s = s.replace(/[\u0000-\u001F]+/g, (match) => {
+    if (match === "\n" || match === "\r\n" || match === "\r") return " ";
+    if (match === "\t") return " ";
+    return "";
+  });
   return s;
 }
 
