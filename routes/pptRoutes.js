@@ -1374,22 +1374,41 @@ const WIZARD_THEME_MAP = {
   "Minimal":          "tealSlate",
   "Corporate":        "corporatePurple",
   "Creative":         "forestGreen",
-  "Dark":             "charcoalRuby",
+  "Dark":             "darkExecutive",
+  "Light":            "lightExecutive",
   "Finance":          "financeGold",
   "Healthcare":       "healthcareMint",
+  "Dark Mode":        "darkExecutive",
+  "Light Mode":       "lightExecutive",
   // backwards compat
   "Glassmorphism":    "midnightBlue",
   "Apple":            "tealSlate",
   "Microsoft Fluent": "navyGold",
   "Google Material":  "tealSlate",
-  "Luxury":           "charcoalRuby",
-  "AI Futuristic":    "midnightBlue",
+  "Luxury":           "darkExecutive",
+  "AI Futuristic":    "darkExecutive",
   "Startup":          "forestGreen",
   "Education":        "forestGreen",
 };
 
 // ── Upgraded 8-theme palette ──────────────────────────────────────────────────
 const AI_THEMES = {
+  darkExecutive: {
+    label: "Dark Mode", bgDark: "090F1E", bgLight: "0F1B38", bgMid: "162544",
+    accent: "F5A623", teal: "00B4D8", textLight: "FFFFFF", textDark: "FFFFFF",
+    textMuted: "94A3B8", cardBg: "142448", cardAlt: "182A50", border: "2A3B60",
+    chart1:"F5A623",chart2:"00B4D8",chart3:"2ECC71",chart4:"E74C3C",chart5:"9B59B6",
+    chart6:"3498DB",chart7:"1ABC9C",chart8:"F1C40F",gradient1:"0F1B38",gradient2:"162544",
+    isDark: true,
+  },
+  lightExecutive: {
+    label: "Light Mode", bgDark: "0F1B38", bgLight: "F8FAFC", bgMid: "EEF2F6",
+    accent: "F5A623", teal: "008080", textLight: "FFFFFF", textDark: "0F1B38",
+    textMuted: "4A5A7A", cardBg: "FFFFFF", cardAlt: "F4F6FA", border: "DDE4F5",
+    chart1:"0F1B38",chart2:"F5A623",chart3:"008080",chart4:"E74C3C",chart5:"8E44AD",
+    chart6:"2ECC71",chart7:"E67E22",chart8:"1ABC9C",gradient1:"0F1B38",gradient2:"1A2B50",
+    isDark: false,
+  },
   navyGold: {
     label: "Professional", bgDark: "1E2761", bgLight: "F7F9FC", bgMid: "EEF4FF",
     accent: "C9A84C", teal: "2FA4A0", textLight: "FFFFFF", textDark: "1A1A2E",
@@ -1615,16 +1634,21 @@ function buildAIDeck({ aiSlides, strategy, docTitle, heroTitle, themeKey, wizard
     // ── CLOSING SLIDE ────────────────────────────────────────────────────────
     if (slide.slideType === "closing") {
       s.background = { color: COLORS.bgDark };
-      s.addShape(pres.shapes.RECTANGLE, { x: 2.5, y: 2.6, w: 5.0, h: 0.04, fill: { color: COLORS.accent, transparency: 60 }, line: { color: COLORS.accent, transparency: 60 } });
-      s.addText(slide.title || "Thank You", { x: 1, y: 1.2, w: 8, h: 1.1, fontSize: 44, color: COLORS.textLight, bold: true, fontFace: "Cambria", align: "center" });
-      s.addText(slide.body || strategy?.mostImportantInsight || strategy?.keyMessages?.[0] || "AI-Generated Presentation", { x: 1.5, y: 2.4, w: 7, h: 0.55, fontSize: 13, color: "7A90B8", align: "center", fontFace: "Calibri" });
+      s.addText((slide.title || "Thank You").toUpperCase(), {
+        x: 0.8, y: 0.7, w: 8.4, h: 1.3,
+        fontSize: 30, color: COLORS.textLight, bold: true, fontFace: "Cambria", align: "center", lineSpacing: 36
+      });
+      s.addShape(pres.shapes.RECTANGLE, { x: 2.5, y: 2.2, w: 5.0, h: 0.03, fill: { color: COLORS.accent }, line: { color: COLORS.accent } });
+      
+      const bodyText = slide.body || strategy?.mostImportantInsight || strategy?.keyMessages?.[0] || "Executive Findings & Next Steps";
+      s.addText(bodyText, { x: 1.0, y: 2.38, w: 8.0, h: 0.65, fontSize: 13, color: "A0B4D0", align: "center", fontFace: "Calibri" });
 
       const closingMessages = slide.keyMessages || strategy?.keyMessages?.slice(0, 3) || [];
       if (closingMessages.length > 0) {
-        let msgY = 3.1;
+        let msgY = 3.25;
         closingMessages.slice(0, 3).forEach(msg => {
-          s.addText(`▪ ${msg.slice(0, 100)}`, { x: 1.42, y: msgY, w: 7.2, h: 0.28, fontSize: 10.5, color: "8A9FC0", fontFace: "Calibri" });
-          msgY += 0.33;
+          s.addText(`▪ ${msg.slice(0, 110)}`, { x: 1.2, y: msgY, w: 7.6, h: 0.3, fontSize: 10.5, color: "8A9FC0", fontFace: "Calibri" });
+          msgY += 0.35;
         });
       }
       s.addText(today, { x: 1, y: 5.05, w: 8, h: 0.28, fontSize: 9.5, color: "5A6A8A", align: "center", fontFace: "Calibri" });
@@ -1644,18 +1668,17 @@ function buildAIDeck({ aiSlides, strategy, docTitle, heroTitle, themeKey, wizard
         s.addShape(pres.shapes.RECTANGLE, { x: 0, y: gy, w: 10, h: 0.01, fill: { color: COLORS.bgDark, transparency: 92 }, line: { color: COLORS.bgDark, transparency: 92 } });
       }
 
-      // Giant watermark number on right
-      s.addText(String(slideCounter), {
+      s.addText("1", {
         x: 6.0, y: -0.5, w: 4.5, h: 5.5,
         fontSize: 220, color: COLORS.bgDark, bold: true,
         fontFace: "Cambria", transparency: 88, align: "right",
       });
 
-      s.addText("S E C T I O N  " + String(slideCounter).padStart(2, "0"), { x: 0.6, y: 1.1, w: 5.0, h: 0.3, fontSize: 10, color: COLORS.bgDark, bold: true, charSpacing: 4, fontFace: "Calibri" });
-      s.addText((slide.title || "Section").toUpperCase(), { x: 0.6, y: 1.6, w: 6.5, h: 1.3, fontSize: 34, color: COLORS.bgDark, bold: true, fontFace: "Cambria", lineSpacing: 40 });
-      
-      if (slide.subtitle) {
-        s.addText(slide.subtitle, { x: 0.6, y: 3.0, w: 6.5, h: 0.8, fontSize: 18, color: COLORS.bgDark, fontFace: "Calibri" });
+      s.addText("S E C T I O N  0 1", { x: 0.6, y: 1.1, w: 5.0, h: 0.3, fontSize: 10, color: COLORS.bgDark, bold: true, charSpacing: 4, fontFace: "Calibri" });
+      s.addText(slide.title.toUpperCase(), { x: 0.6, y: 1.6, w: 6.5, h: 1.3, fontSize: 34, color: COLORS.bgDark, bold: true, fontFace: "Cambria", lineSpacing: 40 });
+
+      if (slide.subtitle || slide.contentFocus) {
+        s.addText(slide.subtitle || slide.contentFocus, { x: 0.6, y: 3.0, w: 6.5, h: 0.8, fontSize: 18, color: COLORS.bgDark, fontFace: "Calibri" });
       }
 
       s.addShape(pres.shapes.RECTANGLE, { x: 0.6, y: 3.9, w: 2.2, h: 0.04, fill: { color: COLORS.bgDark }, line: { color: COLORS.bgDark } });

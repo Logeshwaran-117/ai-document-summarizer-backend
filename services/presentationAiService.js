@@ -410,6 +410,43 @@ function fitOutlineToTarget(base, targetTotal, documentType) {
   return result.map((s, idx) => ({ ...s, slideNumber: idx + 1 }));
 }
 
+function enforceChartCountLimits(outline, wizardOptions = {}) {
+  if (!Array.isArray(outline)) return outline;
+
+  let maxCharts = 99;
+  const chartOpt = String(wizardOptions.maxCharts || wizardOptions.chartCount || "Auto").toLowerCase();
+
+  if (chartOpt.includes("0") || chartOpt.includes("no chart")) {
+    maxCharts = 0;
+  } else if (chartOpt.includes("1")) {
+    maxCharts = 1;
+  } else if (chartOpt.includes("2")) {
+    maxCharts = 2;
+  } else if (chartOpt.includes("3")) {
+    maxCharts = 3;
+  } else if (chartOpt.includes("5")) {
+    maxCharts = 5;
+  }
+
+  let chartCount = 0;
+  return outline.map(slide => {
+    if (slide.slideType === "chart") {
+      chartCount++;
+      if (chartCount > maxCharts) {
+        // Exceeded user's requested chart count -> convert to analytical table/scorecard/twoColumn
+        const altType = chartCount % 2 === 0 ? "scorecard" : "twoColumn";
+        return {
+          ...slide,
+          slideType: altType,
+          title: slide.title.replace(/chart|graph/gi, "Summary Table"),
+          contentFocus: `${slide.contentFocus} (Tabulated in analytical table format with key findings)`
+        };
+      }
+    }
+    return slide;
+  });
+}
+
 // ── Step 3: Build slide outline ───────────────────────────────────────────────
 
 async function buildOutline(documentText, strategy, wizardOptions = {}) {
@@ -430,7 +467,6 @@ async function buildOutline(documentText, strategy, wizardOptions = {}) {
     educational_content: ["bullets","chart","quote","twoColumn","process"],
     government_report: ["kpi","chart","twoColumn","bullets","scorecard"],
     healthcare_data: ["kpi","chart","twoColumn","bullets","scorecard"],
-    government_report: ["kpi","chart","twoColumn","bullets","scorecard"],
     sales_report: ["kpi","chart","twoColumn","bullets","scorecard"],
     hr_document: ["kpi","chart","bullets","twoColumn"],
     marketing_report: ["kpi","chart","bullets","twoColumn"],
@@ -440,6 +476,8 @@ async function buildOutline(documentText, strategy, wizardOptions = {}) {
     general: ["bullets","twoColumn","chart","kpi"],
   };
   const preferredTypes = (typeSlideTypes[strategy.documentType] || typeSlideTypes.general).join(", ");
+
+  let rawOutline = null;
 
   // Banking: hardcoded outline
   if (strategy.documentType === "banking") {
@@ -453,11 +491,8 @@ async function buildOutline(documentText, strategy, wizardOptions = {}) {
       { slideNumber:7, title:"Financial Health Scorecard", slideType:"scorecard", contentFocus:"Savings Rate, Spending Discipline, Digital Adoption, Balance Stability, EMI Load", purpose:"Health summary" },
       { slideNumber:8, title:"Key Takeaways & Recommendations", slideType:"closing", contentFocus:"Top 3 insights and action items", purpose:"Close" },
     ];
-    return fitOutlineToTarget(base, targetTotal, strategy.documentType);
-  }
-
-  // Financial report: hardcoded reliable outline
-  if (strategy.documentType === "financial_report") {
+    rawOutline = fitOutlineToTarget(base, targetTotal, strategy.documentType);
+  } else if (strategy.documentType === "financial_report") {
     const base = [
       { slideNumber:1, title:strategy.presentationTitle, slideType:"cover", contentFocus:"Company name, period, report type", purpose:"Introduction" },
       { slideNumber:2, title:"Financial Highlights", slideType:"kpi", contentFocus:"Revenue, gross profit, net profit/loss, EBITDA, total assets, total liabilities — exact figures", purpose:"Key metrics snapshot" },
@@ -469,11 +504,8 @@ async function buildOutline(documentText, strategy, wizardOptions = {}) {
       { slideNumber:8, title:"Financial Health Assessment", slideType:"scorecard", contentFocus:"Liquidity, Profitability, Solvency, Efficiency, Growth scores", purpose:"Health scorecard" },
       { slideNumber:9, title:"Key Takeaways", slideType:"closing", contentFocus:"Top financial insights and recommendations", purpose:"Close" },
     ];
-    return fitOutlineToTarget(base, targetTotal, strategy.documentType);
-  }
-
-  // Healthcare: hardcoded outline
-  if (strategy.documentType === "healthcare_data") {
+    rawOutline = fitOutlineToTarget(base, targetTotal, strategy.documentType);
+  } else if (strategy.documentType === "healthcare_data") {
     const base = [
       { slideNumber:1, title:strategy.presentationTitle, slideType:"cover", contentFocus:"Program name, district, period", purpose:"Introduction" },
       { slideNumber:2, title:"Programme Overview", slideType:"kpi", contentFocus:"Expected cases, confirmed cases, medically managed, surgeries needed, surgery done, pending", purpose:"District totals" },
@@ -485,11 +517,8 @@ async function buildOutline(documentText, strategy, wizardOptions = {}) {
       { slideNumber:8, title:"Recommendations Scorecard", slideType:"scorecard", contentFocus:"Close detection gap, complete pending surgeries, focus Vellore Corporation, strengthen AWC referral", purpose:"Action priorities" },
       { slideNumber:9, title:"Key Takeaways", slideType:"closing", contentFocus:"Top 3 findings and next steps", purpose:"Close" },
     ];
-    return fitOutlineToTarget(base, targetTotal, strategy.documentType);
-  }
-
-  // All other types: structure-only prompt
-  const prompt = `Create a slide outline. Return ONLY a valid JSON array with double-quoted keys.
+    rawOutline = fitOutlineToTarget(base, targetTotal, strategy.documentType);
+    const prompt = `Create a slide outline. Return ONLY a valid JSON array with double-quoted keys.
 
 Presentation: "${strategy.presentationTitle}"
 Narrative: ${strategy.narrativeFlow}
@@ -499,29 +528,32 @@ Target: ${targetTotal} slides
 Allowed types: cover, section, bullets, kpi, chart, twoColumn, timeline, swot, quote, process, scorecard, closing, agenda, riskCards, recommendations
 Preferred: ${preferredTypes}
 
-Rules: First = "cover", Last = "closing", include kpi + chart if data present.
+Rules: First = "cover", Last = "closing", include kpi + scorecard tables.
 
 Return array of exactly ${targetTotal} objects:
 [{"slideNumber":1,"title":"<conclusion/headline title>","slideType":"cover","contentFocus":"Focus of this slide's content and data to extract","purpose":"Strategic narrative purpose"}]`;
 
-  try {
-    const raw = await aiCall(prompt, 3000);
-    const outline = parseJsonResponse(raw);
-    if (!Array.isArray(outline) || outline.length === 0) throw new Error("Empty outline");
-    console.log(`📐 Outline parsed OK: ${outline.length} slides`);
-    return outline;
-  } catch (e) {
-    console.error("buildOutline fallback:", e.message);
-    return [
-      { slideNumber:1, title:strategy.presentationTitle, slideType:"cover", contentFocus:"Title", purpose:"Introduction" },
-      { slideNumber:2, title:"Executive Summary", slideType:"bullets", contentFocus:"Document overview", purpose:"Context" },
-      { slideNumber:3, title:"Key Metrics", slideType:"kpi", contentFocus:"Main numeric metrics", purpose:"Data snapshot" },
-      { slideNumber:4, title:"Data Analysis", slideType:"chart", contentFocus:"Visual breakdown", purpose:"Visual insight" },
-      { slideNumber:5, title:"Key Findings", slideType:"twoColumn", contentFocus:"Main findings comparison", purpose:"Analysis" },
-      { slideNumber:6, title:"Recommendations", slideType:"bullets", contentFocus:"Action items", purpose:"Next steps" },
-      { slideNumber:7, title:"Key Takeaways", slideType:"closing", contentFocus:"Summary", purpose:"Close" },
-    ];
+    try {
+      const raw = await aiCall(prompt, 3000);
+      const outline = parseJsonResponse(raw);
+      if (!Array.isArray(outline) || outline.length === 0) throw new Error("Empty outline");
+      console.log(`📐 Outline parsed OK: ${outline.length} slides`);
+      rawOutline = outline;
+    } catch (e) {
+      console.error("buildOutline fallback:", e.message);
+      rawOutline = [
+        { slideNumber:1, title:strategy.presentationTitle, slideType:"cover", contentFocus:"Title", purpose:"Introduction" },
+        { slideNumber:2, title:"Executive Summary", slideType:"bullets", contentFocus:"Document overview", purpose:"Context" },
+        { slideNumber:3, title:"Key Metrics", slideType:"kpi", contentFocus:"Main numeric metrics", purpose:"Data snapshot" },
+        { slideNumber:4, title:"Data Analysis Table", slideType:"scorecard", contentFocus:"Tabular breakdown", purpose:"Visual insight" },
+        { slideNumber:5, title:"Key Findings", slideType:"twoColumn", contentFocus:"Main findings comparison", purpose:"Analysis" },
+        { slideNumber:6, title:"Recommendations", slideType:"bullets", contentFocus:"Action items", purpose:"Next steps" },
+        { slideNumber:7, title:"Key Takeaways", slideType:"closing", contentFocus:"Summary", purpose:"Close" },
+      ];
+    }
   }
+
+  return enforceChartCountLimits(rawOutline, wizardOptions);
 }
 
 // ── Step 4: Build slide content ───────────────────────────────────────────────
