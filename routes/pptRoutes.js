@@ -1665,23 +1665,8 @@ function buildAIDeck({ aiSlides, strategy, docTitle, heroTitle, themeKey, wizard
       const values = cd.values.slice(0, 10).map(v => (typeof v === "number" ? v : parseFloat(v) || 0));
       const chartColors = [COLORS.chart1, COLORS.chart2, COLORS.chart3, COLORS.chart4, COLORS.chart5, COLORS.chart6, COLORS.chart7, COLORS.chart8];
 
-      // Mini stat pills above chart
-      const total = values.reduce((a, b) => a + b, 0);
-      const maxV = Math.max(...values);
-      const minV = Math.min(...values);
-      const statPills = [
-        { label: "MAX", val: String(maxV), color: COLORS.chart2 },
-        { label: "MIN", val: String(minV), color: COLORS.chart4 },
-        { label: "TOTAL", val: total >= 1000 ? `${(total/1000).toFixed(1)}K` : String(total), color: COLORS.teal },
-      ];
-      statPills.forEach((pill, pi) => {
-        const px = 0.3 + pi * 3.13;
-        s.addShape("roundRect", { x: px, y: SAFE_Y, w: 3.0, h: 0.34, fill: { color: pill.color, transparency: 90 }, line: { color: pill.color, transparency: 70 }, rectRadius: 0.08 });
-        s.addText(`${pill.label}  ${pill.val}`, { x: px + 0.1, y: SAFE_Y, w: 2.8, h: 0.34, fontSize: 9, color: pill.color, bold: true, fontFace: "Calibri", valign: "middle" });
-      });
-
-      const chartY = SAFE_Y + 0.42;
-      const chartH = SAFE_H - 0.42;
+      const chartY = SAFE_Y + 0.1;
+      const chartH = SAFE_H - 0.2;
 
       try {
         if (chartType === "pie" || chartType === "donut") {
@@ -1690,7 +1675,7 @@ function buildAIDeck({ aiSlides, strategy, docTitle, heroTitle, themeKey, wizard
             x: 0.5, y: chartY, w: 5.5, h: chartH,
             chartColors: chartColors.slice(0, labels.length),
             showLegend: true, legendPos: "r", legendFontSize: 9,
-            showValue: true, dataLabelFontSize: 9, dataLabelColor: COLORS.textLight,
+            showPercent: true, showValue: false, dataLabelFontSize: 9, dataLabelColor: COLORS.textLight,
             holeSize: chartType === "donut" ? 50 : 0,
           });
         } else if (chartType === "line" || chartType === "area") {

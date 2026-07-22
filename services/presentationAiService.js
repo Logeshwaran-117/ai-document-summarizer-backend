@@ -335,7 +335,7 @@ ${docSample}
   };
 }
 
-function fitOutlineToTarget(base, targetTotal) {
+function fitOutlineToTarget(base, targetTotal, documentType) {
   if (!Array.isArray(base) || base.length === 0) return base;
   const closingIdx = base.findIndex(s => s.slideType === "closing");
   const closing = closingIdx >= 0 ? base[closingIdx] : base[base.length - 1];
@@ -345,15 +345,39 @@ function fitOutlineToTarget(base, targetTotal) {
   if (core.length + 1 >= targetTotal) {
     result = [...core.slice(0, Math.max(targetTotal - 1, 1)), closing];
   } else {
-    const fillers = [
-      { slideType: "bullets", title: "Additional Financial Observations", contentFocus: "Further insights from the document data", purpose: "Deep dive" },
-      { slideType: "chart", title: "Supplementary Data View", contentFocus: "Additional chart derived from document figures", purpose: "Extra visualization" },
-    ];
+    const fillersPool = {
+      banking: [
+        { slideType: "chart", title: "UPI vs Net Banking Transaction Volume", contentFocus: "Compare counts/amounts of UPI transfers vs other payment channels", purpose: "Digital adoption analysis" },
+        { slideType: "bullets", title: "Recurring Charges & Subscription Outflows", contentFocus: "Identify repeat payees, bank charges, and subscription fees", purpose: "Fixed costs identification" },
+        { slideType: "chart", title: "Daily Balance Trajectory & Buffer Analysis", contentFocus: "Line chart of end-of-day balances over the statement period", purpose: "Liquidity trends" },
+        { slideType: "bullets", title: "Inflow Frequency & Income Stability", contentFocus: "Assess deposit intervals, salary/transfer frequency, and reliability", purpose: "Inflow stability assessment" },
+        { slideType: "bullets", title: "Debt Obligations & Micro-Lending Engagement", contentFocus: "Identify loan repayments, interest rates, and micro-loan sources", purpose: "Leverage overview" },
+      ],
+      financial_report: [
+        { slideType: "chart", title: "Operating EBITDA vs Net Profit Margins", contentFocus: "Compare operating profit margin to net profit margin over time", purpose: "Margin efficiency" },
+        { slideType: "scorecard", title: "Key Liquidity & Leverage Ratios", contentFocus: "Current ratio, quick ratio, debt-to-equity status", purpose: "Solvency checklist" },
+        { slideType: "bullets", title: "Working Capital Cycle & Cash Conversion", contentFocus: "Receivables, payables, and inventory cycle metrics", purpose: "Liquidity efficiency" },
+        { slideType: "chart", title: "Capital Expenditure vs Depreciation Trends", contentFocus: "Investments in property, plant, and equipment vs amortization", purpose: "Asset lifecycle analysis" },
+        { slideType: "bullets", title: "Non-Operating Income & Exceptional Items", contentFocus: "One-off costs, interest expense, or tax adjustments impact", purpose: "Special adjustments overview" },
+      ],
+      healthcare_data: [
+        { slideType: "scorecard", title: "Condition Detection & Referral Gap Heatmap", contentFocus: "Shortfall in expected vs confirmed cases per block", purpose: "Critical gaps analysis" },
+        { slideType: "bullets", title: "Surgical Backlog & Pending Cases Analysis", contentFocus: "Review reasons for pending surgeries (CHD, Cleft Lip) by block", purpose: "Pending cases deep dive" },
+        { slideType: "process", title: "AWC-to-RBSK Patient Referral Funnel", contentFocus: "Steps from identification at AWC to confirmation and surgery", purpose: "Referral flow analysis" },
+        { slideType: "chart", title: "Block-wise Success Metric Rankings", contentFocus: "Compare surgery completion rates across blocks", purpose: "Geographic ranking" },
+      ],
+      general: [
+        { slideType: "bullets", title: "Key Operational Observations", contentFocus: "Core findings from document data and processes", purpose: "Operations overview" },
+        { slideType: "chart", title: "Distribution of Primary Data Variables", contentFocus: "Breakdown of the main variables mentioned in text", purpose: "Data distribution" },
+      ]
+    };
+
+    const fillers = fillersPool[documentType] || fillersPool.general;
     const extra = [];
     let i = 0;
     while (core.length + extra.length + 1 < targetTotal) {
-      const f = fillers[i % fillers.length];
-      const suffix = i >= fillers.length ? ` ${Math.floor(i / fillers.length) + 1}` : "";
+      const f = fillers[i % fillers.length] || fillersPool.general[0];
+      const suffix = i >= fillers.length ? ` (Part ${Math.floor(i / fillers.length) + 1})` : "";
       extra.push({ ...f, title: `${f.title}${suffix}` });
       i++;
     }
@@ -405,7 +429,7 @@ async function buildOutline(documentText, strategy, wizardOptions = {}) {
       { slideNumber:7, title:"Financial Health Scorecard", slideType:"scorecard", contentFocus:"Savings Rate, Spending Discipline, Digital Adoption, Balance Stability, EMI Load", purpose:"Health summary" },
       { slideNumber:8, title:"Key Takeaways & Recommendations", slideType:"closing", contentFocus:"Top 3 insights and action items", purpose:"Close" },
     ];
-    return fitOutlineToTarget(base, targetTotal);
+    return fitOutlineToTarget(base, targetTotal, strategy.documentType);
   }
 
   // Financial report: hardcoded reliable outline
@@ -421,7 +445,7 @@ async function buildOutline(documentText, strategy, wizardOptions = {}) {
       { slideNumber:8, title:"Financial Health Assessment", slideType:"scorecard", contentFocus:"Liquidity, Profitability, Solvency, Efficiency, Growth scores", purpose:"Health scorecard" },
       { slideNumber:9, title:"Key Takeaways", slideType:"closing", contentFocus:"Top financial insights and recommendations", purpose:"Close" },
     ];
-    return fitOutlineToTarget(base, targetTotal);
+    return fitOutlineToTarget(base, targetTotal, strategy.documentType);
   }
 
   // Healthcare: hardcoded outline
@@ -437,7 +461,7 @@ async function buildOutline(documentText, strategy, wizardOptions = {}) {
       { slideNumber:8, title:"Recommendations Scorecard", slideType:"scorecard", contentFocus:"Close detection gap, complete pending surgeries, focus Vellore Corporation, strengthen AWC referral", purpose:"Action priorities" },
       { slideNumber:9, title:"Key Takeaways", slideType:"closing", contentFocus:"Top 3 findings and next steps", purpose:"Close" },
     ];
-    return fitOutlineToTarget(base, targetTotal);
+    return fitOutlineToTarget(base, targetTotal, strategy.documentType);
   }
 
   // All other types: structure-only prompt
@@ -537,6 +561,10 @@ recommendations: {"slideType":"recommendations","title":"","icon":"🎯","items"
     const prompt = `You are a McKinsey analyst. Generate slide content from REAL document data only.
 NEVER invent numbers. Use exact values from the document. Return valid JSON array, double-quoted keys.
 CRITICAL: Keep ALL string values SHORT — subtitle max 60 chars, speakerNotes max 120 chars, bullet items max 100 chars. Never write long paragraphs inside JSON strings.
+CRITICAL NARRATIVE TITLE RULES:
+1. You MUST rewrite the outline slide's title into a specific, data-driven conclusion title for each slide. Never output generic titles like "Additional Financial Observations", "Supplementary Data View", "Account Overview", "Key Financial Observations", or titles containing parts/numbers.
+2. The title must state the single most important number or finding (e.g., "UPI transfers dominate outflow volume at 84% of total debits" instead of "Transaction Volume by Category").
+3. Bullets MUST NEVER be plain lists. They MUST follow the format: "**Lead-in**: Explanation of data point" (e.g., "**Mpokket Inflows**: Received ₹4,632 from Mpokket, indicating engagement with digital lending").
 
 DOC TYPE: ${strategy.documentType} | AUDIENCE: ${strategy.audience}
 BULLETS/SLIDE: up to ${bulletCount} | NOTES: ${speakerNotes}
