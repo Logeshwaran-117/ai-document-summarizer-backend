@@ -14,7 +14,7 @@ const Document = require("../models/Document");
 router.post("/upload-and-extract", upload.single("file"), uploadAndExtract);
 
 // ── Theme palettes ─────────────────────────────────────────────────────────────
-const AI_THEMES = {
+const THEMES = {
   navyGold: {
     label: "Professional",
     bgDark: "1E2761", bgLight: "FAFBFF", bgMid: "EEF4FF",
@@ -44,6 +44,15 @@ const AI_THEMES = {
     chart1: "0F3D3E", chart2: "3FBFAE", chart3: "F39C12",
     chart4: "E74C3C", chart5: "8E44AD", chart6: "2ECC71",
     chart7: "E67E22", chart8: "1ABC9C",
+  },
+  charcoalRuby: {
+    label: "Dark",
+    bgDark: "231F20", bgLight: "F9F7F7", bgMid: "F3E9E7", accent: "C0392B", teal: "8E7B57",
+    textLight: "FFFFFF", textDark: "231F20", textMuted: "6B6260",
+    cardBg: "FFFFFF", cardAlt: "F3E9E7", border: "E7DEDC",
+    chart1: "231F20", chart2: "C0392B", chart3: "E67E22", chart4: "27AE60", chart5: "2980B9",
+    chart6: "8E44AD", chart7: "F39C12", chart8: "1ABC9C",
+    gradient1: "231F20", gradient2: "3D3536",
   },
   corporatePurple: {
     label: "Corporate",
@@ -199,6 +208,10 @@ function addAIFooter(s, C, docTitle, idx, total) {
     fontSize: 8.5, color: C.textLight, align: "center", valign: "middle",
     fontFace: "Calibri", bold: true,
   });
+}
+
+function addFooter(s, COLORS, docTitle, idx, total) {
+  addAIFooter(s, COLORS, docTitle, idx, total);
 }
 
 function addSlideHeader(s, pres, COLORS, title, icon) {
@@ -1191,9 +1204,9 @@ function buildDeck({ summary, docTitle, heroTitle, theme, detail, chartDensityCo
       });
     }
 
-    addAIFooter(s, C, docTitle, slideCounter, totalSlides);
+    addAIFooter(s, COLORS, docTitle, slideCounter, totalSlides);
     if (includeNotes && slide.speakerNotes) s.addNotes(slide.speakerNotes);
-  }
+  });
 
   return { pres, slideCount: totalSlides };
 }
