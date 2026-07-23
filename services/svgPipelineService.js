@@ -119,110 +119,85 @@ Return ONLY a valid JSON object matching this schema:
   return parsed;
 }
 
+function getLayoutHint(slideType) {
+  switch (slideType) {
+    case "cover":
+      return "Large centered title, subtitle below, decorative horizontal line using primary color";
+    case "kpi":
+      return "3 metric cards side by side at y=200, each 340px wide with label above value";
+    case "twoColumn":
+      return "Left column x=60 w=560, right column x=660 w=560, divider line at x=640";
+    case "chart":
+      return "Draw actual bars/lines using rect or path elements with real data values proportionally scaled";
+    case "swot":
+      return "4 quadrants: top-left Strengths (green), top-right Weaknesses (red), bottom-left Opportunities (blue), bottom-right Threats (orange)";
+    case "executiveSummary":
+      return "Summary header card at y=140 h=120, 2 wide key takeaway boxes below at y=280 and y=480 w=1160";
+    case "process":
+      return "4 horizontal step cards side-by-side (x=60, 360, 660, 960; width=260) with arrow connectors between them";
+    case "scorecard":
+      return "Grid layout of 4 scorecard containers (2x2) with category title, status color pill/badge, and metric text inside";
+    case "recommendations":
+      return "3 full-width horizontal recommendation rows stacked vertically at y=160, y=320, y=480 (height=130, width=1160) with numbered callouts";
+    case "closing":
+      return "Large centered closing title, subtitle below, contact/next steps details";
+    default:
+      return "Balanced container layout with 40px margin, clear text hierarchy, and structured card backgrounds";
+  }
+}
+
 // ── Step B: Per-Slide SVG Generation ─────────────────────────────────────────
 async function generateSlideSVG(slideSpec, designSpec, documentText, slideIndex, totalSlides) {
-  const c = designSpec.colorPalette;
-  const fonts = designSpec.fonts || { heading: "Cambria", body: "Calibri" };
-  const isDataSlide = ["chart", "kpi", "table"].includes(slideSpec.slideType);
+  const palette = designSpec.colorPalette || THEME_PALETTES.Professional;
+  const slideNumber = slideIndex + 1;
+  const slideType = slideSpec.slideType || "executiveSummary";
+  const slideTitle = slideSpec.title || `Slide ${slideNumber}`;
+  const slideContent = `${slideSpec.contentFocus || ""}\nContext from document:\n${documentText.slice(0, 3000)}`;
+
+  const isDataSlide = ["chart", "kpi", "table"].includes(slideType);
 
   const nativeMarkerInstructions = isDataSlide ? `
-NATIVE CHART & TABLE MARKERS (CRITICAL for chart/table/kpi slides):
-Instead of drawing bars or tables as SVG rects only, embed a marker <g> with metadata so PowerPoint renders native editable elements:
-
-For CHART slides use:
-<g data-pptx-replace-with="chart" id="chart-${slideIndex}">
-  <!-- Visual fallback SVG bars (shown in preview, replaced in native PPTX) -->
-  <rect x="100" y="200" width="80" height="150" fill="${c.primary}"/>
-  <rect x="220" y="120" width="80" height="230" fill="${c.secondary}"/>
-  <!-- JSON metadata for native chart -->
-  <metadata type="application/json">{
-    "chartType": "bar",
-    "title": "${slideSpec.title || 'Chart Title'}",
-    "x": 60, "y": 150, "width": 700, "height": 400,
-    "series": [
-      {
-        "name": "Series 1",
-        "labels": ["Category A", "Category B", "Category C"],
-        "values": [42, 78, 35]
-      }
-    ],
-    "colors": ["${c.primary}", "${c.secondary}"],
-    "showLegend": true,
-    "showValues": true
-  }</metadata>
-</g>
-
-For TABLE slides use:
-<g data-pptx-replace-with="table" id="table-${slideIndex}">
-  <!-- Visual fallback -->
-  <rect x="60" y="150" width="900" height="400" fill="${c.cardBg}" rx="8"/>
-  <metadata type="application/json">{
-    "x": 60, "y": 150, "width": 900, "height": 400,
-    "headers": ["Metric / Column 1", "Value 1", "Value 2"],
-    "rows": [
-      ["Row 1 Data", "100", "200"],
-      ["Row 2 Data", "300", "400"]
-    ],
-    "headerFill": "${c.primary}",
-    "headerTextColor": "${c.textDark}",
-    "rowFills": ["${c.cardBg}", "${c.background}"],
-    "fontSize": 14
-  }</metadata>
-</g>
-
-IMPORTANT: Extract and populate REAL numbers from the document. Never invent placeholder numbers.
+NATIVE CHART & TABLE MARKERS (Optional native PPTX enhancement):
+If this slide contains charts or tables, embed a marker <g> with JSON metadata:
+For CHART: <g data-pptx-replace-with="chart" id="chart-${slideIndex}"><rect x="100" y="200" width="80" height="150" fill="${palette.primary}"/><metadata type="application/json">{"chartType":"bar","title":"${slideTitle}","x":60,"y":150,"width":700,"height":400,"series":[{"name":"Series 1","labels":["A","B"],"values":[50,100]}],"colors":["${palette.primary}"]}</metadata></g>
 ` : "";
 
-  const prompt = `You are an expert vector layout designer generating slide ${slideIndex + 1} of ${totalSlides} in SVG format.
+  const prompt = `You are an expert SVG slide designer. Generate a SINGLE complete, valid SVG for slide ${slideNumber} of ${totalSlides}.
 
-CANVAS BOUNDS & SPATIAL MATH:
-- Canvas: 1280x720px (16:9 aspect ratio)
-- Header Bar: y:0 to y:120px with background ${c.background} and bottom accent line
-- Content Area: x:60px to x:1220px, y:140px to y:640px (Outer padding: 60px, Gap between cards: 20px)
-- Footer: y:660px to y:700px
+SLIDE SPEC:
+- Type: ${slideType}
+- Title: ${slideTitle}
+- Content: ${slideContent}
+- Theme colors: background=${palette.background}, primary=${palette.primary}, text=${palette.text}, card=${palette.cardBg}
 
-DESIGN SYSTEM TOKENS:
-- Canvas Background: ${c.background}
-- Primary Accent (Gold/Highlight): ${c.primary}
-- Secondary Accent (Teal): ${c.secondary}
-- Text Light: ${c.text}
-- Card Background: ${c.cardBg}
-- Card Border: ${c.cardBorder}
-- Muted Text: ${c.muted}
-- Heading Font: ${fonts.heading}
-- Body Font: ${fonts.body}
+CRITICAL REQUIREMENTS — follow ALL of these or the output is unusable:
+1. Output ONLY the SVG tag. No markdown, no code fences, no explanation.
+2. Start with <svg width="1280" height="720" xmlns="http://www.w3.org/2000/svg"> — width and height are MANDATORY.
+3. CLOSE every tag you open. <text> must have </text>. <g> must have </g>. No exceptions.
+4. Keep total SVG under 8000 characters. Do NOT truncate mid-tag.
+5. Use only these safe SVG elements: rect, text, line, circle, path, g, defs, linearGradient, stop. Never use foreignObject, image with external URL, or script.
+6. Every <text> element must have x, y, font-size, and fill attributes explicitly set.
+7. Use tspan for multi-line text — never put raw newlines inside a <text> element.
+8. All colors must be valid hex (#RRGGBB) or rgb() — never "transparent" or named colors except "white" and "black".
 
-SLIDE SPECIFICATION:
-- Slide Number: ${slideIndex + 1} / ${totalSlides}
-- Type: ${slideSpec.slideType}
-- Title: ${slideSpec.title}
-- Subtitle/Focus: ${slideSpec.contentFocus}
-- Layout Pattern: ${slideSpec.visualLayoutPattern}
-
-DOCUMENT FACTS (Use ONLY real data from here, never invent placeholder numbers):
-"""
-${documentText.slice(0, 6000)}
-"""
+SLIDE DESIGN RULES:
+- Fill the full 1280×720 canvas. Background rect must be first: <rect width="1280" height="720" fill="${palette.background}"/>
+- Title at y=80, font-size=36, fill="${palette.primary}", font-weight="bold"
+- Body text minimum font-size=14. Never place text beyond x=1220 or y=680.
+- Metric cards: use rect with fill="${palette.cardBg}", rx="8", and place value text centered inside.
+- Leave at least 40px margin on all 4 edges.
+- For ${slideType} slides specifically:
+  ${getLayoutHint(slideType)}
 
 ${nativeMarkerInstructions}
 
-RULES (CRITICAL):
-1. Output MUST BE ONLY THE RAW SVG CODE starting with <svg> and ending with </svg>.
-2. Absolutely NO conversational text, chain-of-thought, self-corrections (e.g. "Wait, I missed..."), or explanations.
-3. Every <text> element MUST explicitly declare x, y, font-family, font-size, fill, and font-weight.
-4. Typography Scale: Title font-size 32px (bold), Subtitle font-size 15px, Card Headings 18px (bold), Body text font-size 13px, Metric values 28-34px (bold).
-5. Surround content elements in rounded rectangular containers (<rect rx="10" ry="10" fill="${c.cardBg}" stroke="${c.cardBorder}">).
-6. Slide footer must render page number "${slideIndex + 1} / ${totalSlides}" on the right.
-7. NO foreignObject tags. Use standard SVG tags (<rect>, <circle>, <path>, <text>, <line>, <g>).
-8. ${isDataSlide ? "Use native marker <g> blocks for charts/tables as shown above with fallback shapes." : "Use standard SVG elements."}
-
-Generate the raw SVG for slide ${slideIndex + 1} now:`;
+Generate the complete SVG now. Remember: close ALL tags.`;
 
   const raw = await callWithRotation(
     () => [{ text: prompt }], 8192, "gemini-3.5-flash", null, "summarize", null
   );
 
-  let svgContent = extractValidSvg(raw, c);
+  let svgContent = extractValidSvg(raw, palette);
   if (!svgContent) {
     console.warn(`⚠️ Raw AI output for slide ${slideIndex + 1}: ${String(raw).slice(0, 150)}`);
     throw new Error(`Slide ${slideIndex + 1}: AI did not return valid SVG`);
@@ -230,7 +205,7 @@ Generate the raw SVG for slide ${slideIndex + 1} now:`;
 
   // Sanitize XML entities and normalize SVG structure
   svgContent = sanitizeXmlEntities(svgContent);
-  svgContent = normalizeSvgAttributes(svgContent, c);
+  svgContent = normalizeSvgAttributes(svgContent, palette);
 
   // Validate XML well-formedness and check for truncation
   let validation = validateSvgXml(svgContent);
@@ -240,7 +215,7 @@ Generate the raw SVG for slide ${slideIndex + 1} now:`;
       const repaired = await repairSvgXmlWithAi(svgContent, validation.error);
       if (repaired) {
         let sanitizedRepaired = sanitizeXmlEntities(repaired);
-        sanitizedRepaired = normalizeSvgAttributes(sanitizedRepaired, c);
+        sanitizedRepaired = normalizeSvgAttributes(sanitizedRepaired, palette);
         const reCheck = validateSvgXml(sanitizedRepaired);
         if (reCheck.valid) {
           console.log(`✅ [SVG Pipeline] Slide ${slideIndex + 1} SVG XML repaired successfully by AI.`);
