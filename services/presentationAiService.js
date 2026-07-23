@@ -809,39 +809,15 @@ async function generatePresentationPlan(documentText, wizardOptions = {}) {
     return handleImageDocument(wizardOptions.base64Data, wizardOptions.mimeType, wizardOptions);
   }
 
-  console.log("🎯 Step 1: Detecting document type…");
   const docType = await detectDocumentType(documentText);
-  console.log(`📄 Detected: ${docType.type} (${docType.confidence}) — dataRichness: ${docType.dataRichness}`);
-
-  console.log("🧠 Step 2: Building presentation strategy…");
   const strategy = await buildStrategy(documentText, docType, wizardOptions);
-  console.log(`📋 Strategy: "${strategy.presentationTitle}" — ${strategy.targetSlideCount} slides`);
-
-  console.log("🗂️  Step 3: Building slide outline…");
   const outline = await buildOutline(documentText, strategy, wizardOptions);
-  console.log(`📐 Outline: ${outline.length} slides`);
+  const slides = await buildSlideContent(documentText, outline, strategy, wizardOptions);
+  const repaired = validateAndRepairSlides(slides, strategy, docType);
 
-  console.log("✍️  Step 4: Generating slide content…");
-  let slides;
-  try {
-    slides = await buildSlideContent(documentText, outline, strategy, wizardOptions);
-    console.log(`✅ Generated ${slides.length} slides`);
-  } catch (e) {
-    console.error("Slide generation failed, using fallback:", e.message);
-    slides = outline.map(s => ({
-      slideType: s.slideType, title: s.title, icon: "📄",
-      bullets: [s.contentFocus, s.purpose].filter(Boolean),
-      body: s.contentFocus, speakerNotes: s.purpose,
-    }));
-  }
-
-  if (!Array.isArray(slides) || slides.length === 0) {
-    throw new Error("AI failed to generate slide content. Please try again.");
-  }
-
-  slides = validateAndRepairSlides(slides, strategy, docType);
-  console.log(`✅ Final: ${slides.length} slides`);
-  return { strategy, outline, slides };
+  return { strategy, outline, slides: repaired };
 }
 
-module.exports = { generatePresentationPlan };
+const { renderPresentationToPptx } = require("./presentation");
+
+module.exports = { generatePresentationPlan, renderPresentationToPptx };
