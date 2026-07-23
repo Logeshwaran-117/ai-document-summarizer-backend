@@ -181,20 +181,37 @@ def add_native_table(slide, payload):
             except Exception:
                 pass
 
+def safe_parse_svg_xml(svg_path):
+    """Safely reads, sanitizes XML entities, and parses SVG file into ElementTree root."""
+    try:
+        with open(svg_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+
+        content = re.sub(r'^```xml\s*', '', content)
+        content = re.sub(r'^```svg\s*', '', content)
+        content = re.sub(r'\s*```$', '', content)
+
+        # Entity-aware ampersand escaping
+        content = re.sub(r'&(?!amp;|lt;|gt;|quot;|apos;|#[0-9]+;|#x[0-9a-fA-F]+;)', '&amp;', content)
+
+        ET.register_namespace("", "http://www.w3.org/2000/svg")
+        return ET.fromstring(content)
+    except Exception as e:
+        print(f"  ⚠️ safe_parse_svg_xml error in {os.path.basename(svg_path)}: {e}")
+        return None
+
 def parse_svg_shapes_to_pptx(svg_path, slide):
     """Fallback vector parser: parses SVG elements directly into native python-pptx shapes."""
-    try:
-        ET.register_namespace("", "http://www.w3.org/2000/svg")
-        tree = ET.parse(svg_path)
-        root = tree.getroot()
-    except Exception as e:
-        print(f"  ⚠️ Error parsing SVG XML in {svg_path}: {e}")
-        return
+    root = safe_parse_svg_xml(svg_path)
+    if root is None:
+        return 0
 
     def clean_tag(tag):
         return tag.split("}")[-1] if "}" in tag else tag
 
-    # Process elements
+    shapes_added = 0
+
+    # Process elements recursively across all nested <g> groups
     for elem in root.iter():
         tag = clean_tag(elem.tag)
 
@@ -233,6 +250,8 @@ def parse_svg_shapes_to_pptx(svg_path, slide):
                     shape.line.width = Pt(sw)
                 else:
                     shape.line.fill.background()
+
+                shapes_added += 1
             except Exception:
                 pass
 
@@ -275,6 +294,8 @@ def parse_svg_shapes_to_pptx(svg_path, slide):
                 run.font.color.rgb = hex_to_rgb(fill_hex)
                 if font_weight in ["bold", "600", "700", "800", "900"]:
                     run.font.bold = True
+
+                shapes_added += 1
             except Exception:
                 pass
 
@@ -300,17 +321,17 @@ def parse_svg_shapes_to_pptx(svg_path, slide):
                 shape.fill.solid()
                 shape.fill.fore_color.rgb = hex_to_rgb(stroke_hex)
                 shape.line.fill.background()
+
+                shapes_added += 1
             except Exception:
                 pass
 
+    return shapes_added
+
 def process_svg_file(svg_path, slide):
     """Parse one SVG, find native markers, add to slide."""
-    try:
-        ET.register_namespace("", "http://www.w3.org/2000/svg")
-        tree = ET.parse(svg_path)
-        root = tree.getroot()
-    except Exception as e:
-        print(f"  ⚠️ Error parsing XML in {svg_path}: {e}")
+    root = safe_parse_svg_xml(svg_path)
+    if root is None:
         return
 
     # Find all groups with data-pptx-replace-with
@@ -342,6 +363,62 @@ def process_svg_file(svg_path, slide):
         elif replace_with == "table":
             add_native_table(slide, payload)
 
+def add_emergency_fallback(slide, slide_num):
+    """Renders a styled container and professional notice if slide content could not be rendered."""
+    print(f"  🚨 Slide {slide_num}: Rendering emergency slide fallback container.")
+    
+    # Background container
+    bg = slide.shapes.add_shape(
+        MSO_SHAPE.RECTANGLE,
+        Inches(0), Inches(0),
+        Inches(SLIDE_W), Inches(SLIDE_H)
+    )
+    bg.fill.solid()
+    bg.fill.fore_color.rgb = RGBColor(15, 27, 56)  # Dark executive blue
+    bg.line.fill.background()
+
+    # Content container card
+    card = slide.shapes.add_shape(
+        MSO_SHAPE.ROUNDED_RECTANGLE,
+        Inches(1.0), Inches(1.5),
+        Inches(SLIDE_W - 2.0), Inches(4.5)
+    )
+    card.fill.solid()
+    card.fill.fore_color.rgb = RGBColor(26, 43, 80)
+    card.line.color.rgb = RGBColor(245, 166, 35)
+    card.line.width = Pt(2)
+
+    # Title box
+    tbox = slide.shapes.add_textbox(Inches(1.5), Inches(2.2), Inches(SLIDE_W - 3.0), Inches(1.0))
+    p1 = tbox.text_frame.paragraphs[0]
+    p1.alignment = PP_ALIGN.LEFT
+    run1 = p1.add_run()
+    run1.text = f"Slide {slide_num}: Executive Summary"
+    run1.font.name = "Cambria"
+    run1.font.size = Pt(24)
+    run1.font.bold = True
+    run1.font.color.rgb = RGBColor(255, 255, 255)
+
+    # Body notice box
+    msgbox = slide.shapes.add_textbox(Inches(1.5), Inches(3.4), Inches(SLIDE_W - 3.0), Inches(2.0))
+    tf = msgbox.text_frame
+    tf.word_wrap = True
+    
+    p2 = tf.paragraphs[0]
+    run2 = p2.add_run()
+    run2.text = "Content unavailable due to rendering issue.\n"
+    run2.font.name = "Calibri"
+    run2.font.size = Pt(16)
+    run2.font.bold = True
+    run2.font.color.rgb = RGBColor(245, 166, 35)
+
+    p3 = tf.add_paragraph()
+    run3 = p3.add_run()
+    run3.text = "The presentation structure was generated successfully, but visual graphics for this slide could not be parsed."
+    run3.font.name = "Calibri"
+    run3.font.size = Pt(14)
+    run3.font.color.rgb = RGBColor(128, 153, 192)
+
 def svg_folder_to_pptx(svg_dir, output_path):
     svg_dir = Path(svg_dir)
     svg_files = sorted(svg_dir.glob("*.svg"))
@@ -372,11 +449,11 @@ def svg_folder_to_pptx(svg_dir, output_path):
 
         png_path = svg_file.with_suffix(".png")
         bg_added = False
+        shapes_parsed = 0
 
         # 1. Check for pre-rendered PNG background (e.g. created by node-canvas)
-        # Require at least 5KB — a valid 1280x720 slide PNG will always be much larger.
-        # A 0-byte or tiny file means node-canvas failed; skip it so we fall through to vector fallback.
-        PNG_MIN_BYTES = 5 * 1024
+        # Require at least 15KB — a valid 1280x720 slide PNG will always be much larger.
+        PNG_MIN_BYTES = 15 * 1024
         if png_path.exists() and png_path.stat().st_size >= PNG_MIN_BYTES:
             try:
                 pic = slide.shapes.add_picture(
@@ -411,10 +488,14 @@ def svg_folder_to_pptx(svg_dir, output_path):
         # 3. Vector element fallback: parse SVG XML directly into native DrawingML shapes
         if not bg_added:
             print(f"  📐 Parsing SVG vector elements directly into PowerPoint shapes for slide {i+1}...")
-            parse_svg_shapes_to_pptx(svg_file, slide)
+            shapes_parsed = parse_svg_shapes_to_pptx(svg_file, slide)
 
         # Now inject native chart/table objects on top
         process_svg_file(svg_file, slide)
+
+        # 4. Emergency visual slide fallback if no picture or vector elements were parsed
+        if not bg_added and shapes_parsed == 0:
+            add_emergency_fallback(slide, i + 1)
 
     prs.save(output_path)
     print(f"✅ Saved: {output_path}")

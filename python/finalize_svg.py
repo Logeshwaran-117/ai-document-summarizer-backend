@@ -8,6 +8,12 @@ import os
 import glob
 import re
 
+def sanitize_xml(content):
+    if not content:
+        return ""
+    # Entity-aware regex: escape & only when not part of a valid XML entity
+    return re.sub(r'&(?!amp;|lt;|gt;|quot;|apos;|#[0-9]+;|#x[0-9a-fA-F]+;)', '&amp;', content)
+
 def process_svg_file(filepath):
     with open(filepath, 'r', encoding='utf-8') as f:
         content = f.read()
@@ -17,9 +23,15 @@ def process_svg_file(filepath):
     content = re.sub(r'^```svg\s*', '', content)
     content = re.sub(r'\s*```$', '', content)
 
-    # Ensure viewBox and width/height exist
+    # Sanitize XML entities
+    content = sanitize_xml(content)
+
+    # Ensure xmlns, viewBox, width, and height exist on <svg> root tag
+    if '<svg' in content and 'xmlns' not in content:
+        content = re.sub(r'<svg\b', '<svg xmlns="http://www.w3.org/2000/svg"', content, count=1)
+
     if '<svg' in content and 'viewBox' not in content:
-        content = content.replace('<svg', '<svg viewBox="0 0 1280 720" width="1280" height="720"')
+        content = re.sub(r'<svg\b', '<svg viewBox="0 0 1280 720" width="1280" height="720"', content, count=1)
 
     with open(filepath, 'w', encoding='utf-8') as f:
         f.write(content.strip())

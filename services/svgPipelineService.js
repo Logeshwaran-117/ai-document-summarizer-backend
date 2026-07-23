@@ -222,12 +222,137 @@ Generate the raw SVG for slide ${slideIndex + 1} now:`;
     () => [{ text: prompt }], 8192, "gemini-3.5-flash", null, "summarize", null
   );
 
-  const svgContent = extractValidSvg(raw, c);
+  let svgContent = extractValidSvg(raw, c);
   if (!svgContent) {
     console.warn(`⚠️ Raw AI output for slide ${slideIndex + 1}: ${String(raw).slice(0, 150)}`);
     throw new Error(`Slide ${slideIndex + 1}: AI did not return valid SVG`);
   }
+
+  // Sanitize XML entities and normalize SVG structure
+  svgContent = sanitizeXmlEntities(svgContent);
+  svgContent = normalizeSvgAttributes(svgContent, c);
+
+  // Validate XML well-formedness and check for truncation
+  let validation = validateSvgXml(svgContent);
+  if (!validation.valid) {
+    console.warn(`⚠️ [SVG Pipeline] Slide ${slideIndex + 1} XML validation failed (${validation.error}). Attempting targeted AI repair retry...`);
+    try {
+      const repaired = await repairSvgXmlWithAi(svgContent, validation.error);
+      if (repaired) {
+        let sanitizedRepaired = sanitizeXmlEntities(repaired);
+        sanitizedRepaired = normalizeSvgAttributes(sanitizedRepaired, c);
+        const reCheck = validateSvgXml(sanitizedRepaired);
+        if (reCheck.valid) {
+          console.log(`✅ [SVG Pipeline] Slide ${slideIndex + 1} SVG XML repaired successfully by AI.`);
+          svgContent = sanitizedRepaired;
+        } else {
+          console.warn(`⚠️ [SVG Pipeline] Repaired SVG still has validation warning: ${reCheck.error}`);
+        }
+      }
+    } catch (repairErr) {
+      console.warn(`⚠️ [SVG Pipeline] Targeted AI repair retry failed: ${repairErr.message}`);
+    }
+  }
+
   return svgContent;
+}
+
+/**
+ * Escapes standalone '&' characters without double-escaping valid XML entities.
+ */
+function sanitizeXmlEntities(svgStr) {
+  if (!svgStr || typeof svgStr !== "string") return "";
+  // Entity-aware regex: replaces '&' only when NOT followed by valid XML entity patterns
+  return svgStr.replace(/&(?!amp;|lt;|gt;|quot;|apos;|#[0-9]+;|#x[0-9a-fA-F]+;)/g, "&amp;");
+}
+
+/**
+ * Ensures standard SVG attributes (xmlns, viewBox, width, height) are present on root <svg> tag.
+ */
+function normalizeSvgAttributes(svgStr, palette = null) {
+  if (!svgStr || typeof svgStr !== "string") return "";
+  let result = svgStr.trim();
+
+  // Ensure opening <svg> tag exists
+  if (!/<svg/i.test(result)) return result;
+
+  const bg = palette && palette.background ? palette.background : "#0F1B38";
+  
+  result = result.replace(/<svg([^>]*)>/i, (match, attrs) => {
+    let newAttrs = attrs;
+    if (!/xmlns\s*=/i.test(newAttrs)) {
+      newAttrs += ' xmlns="http://www.w3.org/2000/svg"';
+    }
+    if (!/viewBox\s*=/i.test(newAttrs)) {
+      newAttrs += ' viewBox="0 0 1280 720"';
+    }
+    if (!/width\s*=/i.test(newAttrs)) {
+      newAttrs += ' width="1280"';
+    }
+    if (!/height\s*=/i.test(newAttrs)) {
+      newAttrs += ' height="720"';
+    }
+    return `<svg${newAttrs}>`;
+  });
+
+  return result;
+}
+
+/**
+ * Performs XML syntax validation and checks for truncation.
+ */
+function validateSvgXml(svgStr) {
+  if (!svgStr || typeof svgStr !== "string") {
+    return { valid: false, error: "Empty SVG content" };
+  }
+  const trimmed = svgStr.trim();
+  if (!trimmed.startsWith("<svg") && !/<svg/i.test(trimmed)) {
+    return { valid: false, error: "Missing opening <svg> root tag" };
+  }
+  if (!trimmed.endsWith("</svg>") && !/<\/svg>/i.test(trimmed)) {
+    return { valid: false, error: "Truncated SVG: Missing closing </svg> tag" };
+  }
+
+  // Tag balance checks for critical container elements
+  const openText = (trimmed.match(/<text\b/gi) || []).length;
+  const closeText = (trimmed.match(/<\/text>/gi) || []).length;
+  if (openText > closeText) {
+    return { valid: false, error: `Truncated <text> tags (${openText} opened vs ${closeText} closed)` };
+  }
+
+  const openG = (trimmed.match(/<g\b/gi) || []).length;
+  const closeG = (trimmed.match(/<\/g>/gi) || []).length;
+  if (openG > closeG) {
+    return { valid: false, error: `Truncated <g> tags (${openG} opened vs ${closeG} closed)` };
+  }
+
+  return { valid: true };
+}
+
+/**
+ * Prompts Gemini to repair XML syntax errors in a broken SVG without redesigning the slide layout.
+ */
+async function repairSvgXmlWithAi(brokenSvg, errorMsg) {
+  const prompt = `The following SVG markup contains XML validation errors: "${errorMsg}".
+
+BROKEN SVG MARKUP:
+\`\`\`xml
+${brokenSvg.slice(0, 7000)}
+\`\`\`
+
+REPAIR INSTRUCTIONS:
+1. Return ONLY the repaired raw SVG string starting with <svg> and ending with </svg>.
+2. Do NOT redesign the slide, change layout, or alter existing colors.
+3. Fix all unescaped '&' characters to &amp;, close any unclosed tags (<text>, <g>, </svg>), and balance XML syntax.
+4. Output MUST be ONLY valid raw SVG.
+
+Repaired SVG:`;
+
+  const raw = await callWithRotation(
+    () => [{ text: prompt }], 8192, "gemini-3.5-flash", null, "summarize", null
+  );
+
+  return extractValidSvg(raw);
 }
 
 function cleanSvgString(svgStr) {
@@ -368,28 +493,36 @@ function escapeXml(str) {
 
 // ── Main Orchestrator Function ───────────────────────────────────────────────
 async function renderSvgToPngCanvas(svgContent, pngPath) {
-  // Ensure the SVG root tag always has explicit width/height (node-canvas requires them)
-  let svgStr = svgContent.trim();
-  if (/<svg/i.test(svgStr) && !/\bwidth\s*=/.test(svgStr.match(/<svg[^>]*/i)?.[0] || "")) {
-    svgStr = svgStr.replace(/<svg/i, '<svg width="1280" height="720"');
-  }
-  if (/<svg/i.test(svgStr) && !/\bheight\s*=/.test(svgStr.match(/<svg[^>]*/i)?.[0] || "")) {
-    svgStr = svgStr.replace(/<svg/i, '<svg height="720"');
-  }
+  // Ensure explicit dimensions
+  let svgStr = normalizeSvgAttributes(svgContent);
 
   try {
     const { createCanvas, loadImage } = require("canvas");
     const canvas = createCanvas(1280, 720);
     const ctx = canvas.getContext("2d");
-    const imgBuf = Buffer.from(svgStr, "utf8");
-    const img = await loadImage(imgBuf);
+    
+    // Pass Base64 data URI to node-canvas for maximum OS & stream compatibility
+    const base64Svg = Buffer.from(svgStr, "utf8").toString("base64");
+    const dataUri = `data:image/svg+xml;base64,${base64Svg}`;
+    
+    const img = await loadImage(dataUri);
     ctx.drawImage(img, 0, 0, 1280, 720);
     const pngBuffer = canvas.toBuffer("image/png");
+
+    // Quality check threshold: A valid 1280x720 rendered slide PNG must be >= 15 KB
+    const MIN_PNG_SIZE = 15 * 1024;
+    if (pngBuffer.length < MIN_PNG_SIZE) {
+      console.warn(`⚠️ [SVG Pipeline] node-canvas PNG size too small (${pngBuffer.length} bytes < 15KB threshold), skipping PNG background.`);
+      if (fs.existsSync(pngPath)) {
+        try { fs.unlinkSync(pngPath); } catch (_) {}
+      }
+      return false;
+    }
+
     fs.writeFileSync(pngPath, pngBuffer);
     return true;
   } catch (err) {
     console.warn(`⚠️ [SVG Pipeline] node-canvas PNG render warning: ${err.message}`);
-    // CRITICAL: Delete any partial/corrupt PNG so Python falls through to CairoSVG or vector fallback
     if (fs.existsSync(pngPath)) {
       try { fs.unlinkSync(pngPath); } catch (_) {}
     }
@@ -421,13 +554,21 @@ async function generatePresentationViaSVG(documentText, wizardOptions = {}) {
         svgContent = generateFallbackSVG(slides[i], designSpec, i, slides.length);
       }
 
+      console.log(`  📊 Slide ${i + 1} SVG size: ${svgContent.length} chars`);
+
       const filename = `slide_${String(i + 1).padStart(3, "0")}.svg`;
       const svgPath = path.join(svgDir, filename);
       fs.writeFileSync(svgPath, svgContent, "utf8");
 
       // Pre-render high-res PNG for CairoSVG-less Python environments (e.g. Windows)
       const pngPath = svgPath.replace(/\.svg$/i, ".png");
-      await renderSvgToPngCanvas(svgContent, pngPath);
+      const rendered = await renderSvgToPngCanvas(svgContent, pngPath);
+      if (rendered) {
+        const stats = fs.statSync(pngPath);
+        console.log(`  🖼️ Slide ${i + 1} PNG pre-rendered successfully (${Math.round(stats.size / 1024)} KB)`);
+      } else {
+        console.log(`  ⚠️ Slide ${i + 1} PNG pre-render skipped or failed, falling through to Python vector parsing`);
+      }
     }
 
     console.log("🔧 [SVG Pipeline] Finalizing SVG vectors...");
