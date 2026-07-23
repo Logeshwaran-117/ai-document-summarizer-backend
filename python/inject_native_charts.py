@@ -11,11 +11,26 @@ import re
 from pathlib import Path
 from xml.etree import ElementTree as ET
 
-from pptx import Presentation
-from pptx.util import Inches, Pt, Emu
-from pptx.dml.color import RGBColor
-from pptx.enum.chart import XL_CHART_TYPE
-from pptx.chart.data import ChartData
+try:
+    from pptx import Presentation
+    from pptx.util import Inches, Pt, Emu
+    from pptx.dml.color import RGBColor
+    from pptx.enum.chart import XL_CHART_TYPE
+    from pptx.chart.data import ChartData
+except ModuleNotFoundError:
+    import subprocess
+    print("⚠️ python-pptx missing in Python environment. Auto-installing required packages...")
+    try:
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "python-pptx>=0.6.23", "lxml>=4.9", "Pillow>=10.0"])
+        from pptx import Presentation
+        from pptx.util import Inches, Pt, Emu
+        from pptx.dml.color import RGBColor
+        from pptx.enum.chart import XL_CHART_TYPE
+        from pptx.chart.data import ChartData
+        print("✅ python-pptx auto-installed successfully.")
+    except Exception as _inst_err:
+        print(f"❌ Failed to auto-install python-pptx: {_inst_err}", file=sys.stderr)
+        raise
 
 SLIDE_W = 13.333  # inches (16:9 presentation layout matching 1280px width)
 SLIDE_H = 7.5     # inches (16:9 presentation layout matching 720px height)

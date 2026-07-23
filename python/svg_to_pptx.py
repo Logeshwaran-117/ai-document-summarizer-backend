@@ -9,13 +9,24 @@ import os
 import argparse
 import glob
 # pyrefly: ignore [missing-import]
-from pptx import Presentation
-# pyrefly: ignore [missing-import]
-from pptx.util import Inches, Pt
-# pyrefly: ignore [missing-import]
-from pptx.dml.color import RGBColor
-# pyrefly: ignore [missing-import]
-from pptx.enum.text import PP_ALIGN
+try:
+    from pptx import Presentation
+    from pptx.util import Inches, Pt
+    from pptx.dml.color import RGBColor
+    from pptx.enum.text import PP_ALIGN
+except ModuleNotFoundError:
+    import subprocess
+    print("⚠️ python-pptx missing in Python environment. Auto-installing required packages...")
+    try:
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "python-pptx>=0.6.23", "lxml>=4.9", "Pillow>=10.0"])
+        from pptx import Presentation
+        from pptx.util import Inches, Pt
+        from pptx.dml.color import RGBColor
+        from pptx.enum.text import PP_ALIGN
+        print("✅ python-pptx auto-installed successfully.")
+    except Exception as _inst_err:
+        print(f"❌ Failed to auto-install python-pptx: {_inst_err}", file=sys.stderr)
+        raise
 
 try:
     # pyrefly: ignore [missing-import]

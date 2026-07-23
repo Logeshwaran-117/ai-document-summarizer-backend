@@ -218,50 +218,87 @@ RULES:
 Generate the SVG for slide ${slideIndex + 1} now:`;
 
   const raw = await callWithRotation(
-    () => [{ text: prompt }], 8192, "gemini-3.5-flash", null, "summarize", "text/plain"
+    () => [{ text: prompt }], 8192, "gemini-3.5-flash", null, "summarize", null
   );
 
-  const svgMatch = raw.match(/<svg[\s\S]*<\/svg>/);
-  if (!svgMatch) throw new Error(`Slide ${slideIndex + 1}: AI did not return valid SVG`);
-  return svgMatch[0];
+  const svgContent = extractValidSvg(raw);
+  if (!svgContent) {
+    console.warn(`⚠️ Raw AI output for slide ${slideIndex + 1}: ${String(raw).slice(0, 150)}`);
+    throw new Error(`Slide ${slideIndex + 1}: AI did not return valid SVG`);
+  }
+  return svgContent;
 }
 
-// ── Step C: Run Python finalize_svg.py ────────────────────────────────────────
-function finalizeSvgs(svgDir) {
-  return new Promise((resolve) => {
-    const scriptPath = path.join(__dirname, "../python/finalize_svg.py");
-    if (!fs.existsSync(scriptPath)) {
-      console.warn("finalize_svg.py script not found, skipping finalization.");
-      return resolve();
-    }
-    execFile("python", [scriptPath, svgDir], (err, stdout, stderr) => {
-      if (err) console.warn("finalize_svg warning:", stderr || err.message);
-      resolve(stdout);
-    });
-  });
+function extractValidSvg(raw) {
+  if (!raw || typeof raw !== "string") return null;
+  let cleaned = raw.trim();
+  cleaned = cleaned.replace(/^```(?:xml|svg)?\s*/i, "").replace(/\s*```$/i, "").trim();
+  const fullMatch = cleaned.match(/<svg[\s\S]*?<\/svg>/i);
+  if (fullMatch) return fullMatch[0];
+  const partialMatch = cleaned.match(/<svg[\s\S]*/i);
+  if (partialMatch) {
+    let svgStr = partialMatch[0].trim().replace(/```\s*$/, "").trim();
+    if (!/<\/svg>/i.test(svgStr)) svgStr += "\n</svg>";
+    return svgStr;
+  }
+  return null;
 }
 
-// ── Step D: Run Python SVG to PPTX converter ────────────────────────────────
-function convertSvgsToPptx(svgDir, outputPath) {
+function getPythonBinary() {
+  if (process.env.PYTHON_PATH) return process.env.PYTHON_PATH;
+  return process.platform === "win32" ? "python" : "python3";
+}
+
+function runPythonScript(scriptPath, args, options = {}) {
   return new Promise((resolve, reject) => {
-    const fullConverter = path.join(__dirname, "../python/svg_to_pptx.py");
-    const simpleConverter = path.join(__dirname, "../python/inject_native_charts.py");
-
-    const scriptPath = fs.existsSync(simpleConverter) ? simpleConverter : fullConverter;
-    const args = scriptPath === fullConverter
-      ? [scriptPath, svgDir, "--output", outputPath]
-      : [scriptPath, svgDir, outputPath];
-
-    execFile("python", args, { timeout: 120000 }, (err, stdout, stderr) => {
-      if (err) {
-        console.error("PPTX conversion error:", stderr || err.message);
-        reject(new Error("Conversion failed: " + (stderr || err.message).slice(0, 500)));
+    const pythonCmd = getPythonBinary();
+    execFile(pythonCmd, [scriptPath, ...args], options, (err, stdout, stderr) => {
+      if (err && pythonCmd !== "python") {
+        execFile("python", [scriptPath, ...args], options, (err2, stdout2, stderr2) => {
+          if (err2) return reject(new Error(stderr2 || stderr || err2.message || err.message));
+          resolve(stdout2);
+        });
+      } else if (err) {
+        reject(new Error(stderr || err.message));
       } else {
-        console.log("✅ PPTX conversion complete");
-        resolve(outputPath);
+        resolve(stdout);
       }
     });
   });
+}
+
+// ── Step C: Run Python finalize_svg.py ────────────────────────────────────────
+async function finalizeSvgs(svgDir) {
+  const scriptPath = path.join(__dirname, "../python/finalize_svg.py");
+  if (!fs.existsSync(scriptPath)) {
+    console.warn("finalize_svg.py script not found, skipping finalization.");
+    return;
+  }
+  try {
+    await runPythonScript(scriptPath, [svgDir]);
+  } catch (err) {
+    console.warn("finalize_svg warning:", err.message);
+  }
+}
+
+// ── Step D: Run Python SVG to PPTX converter ────────────────────────────────
+async function convertSvgsToPptx(svgDir, outputPath) {
+  const fullConverter = path.join(__dirname, "../python/svg_to_pptx.py");
+  const simpleConverter = path.join(__dirname, "../python/inject_native_charts.py");
+
+  const scriptPath = fs.existsSync(simpleConverter) ? simpleConverter : fullConverter;
+  const args = scriptPath === fullConverter
+    ? [svgDir, "--output", outputPath]
+    : [svgDir, outputPath];
+
+  try {
+    await runPythonScript(scriptPath, args, { timeout: 120000 });
+    console.log("✅ PPTX conversion complete");
+    return outputPath;
+  } catch (err) {
+    console.error("PPTX conversion error:", err.message);
+    throw new Error("Conversion failed: " + err.message.slice(0, 500));
+  }
 }
 
 // ── Fallback SVG Generator ───────────────────────────────────────────────────

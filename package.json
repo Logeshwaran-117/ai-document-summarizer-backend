@@ -5,7 +5,8 @@
   "main": "index.js",
   "scripts": {
     "start": "node --dns-result-order=ipv4first server.js",
-    "dev": "nodemon --exec \"node --dns-result-order=ipv4first\" server.js"
+    "dev": "nodemon --exec \"node --dns-result-order=ipv4first\" server.js",
+    "postinstall": "pip install -r python/requirements.txt || pip3 install -r python/requirements.txt || python3 -m pip install -r python/requirements.txt || true"
   },
   "keywords": [],
   "author": "",
