@@ -26,6 +26,9 @@ def process_svg_file(filepath):
     # Sanitize XML entities
     content = sanitize_xml(content)
 
+    # Remove incomplete trailing open tag at the end (e.g., `<text x="100" y=`)
+    content = re.sub(r'<[a-zA-Z0-9_-]+(?:\s+[^>]*?)?$', '', content.strip())
+
     # Ensure xmlns, viewBox, width, and height exist on <svg> root tag
     if '<svg' in content and 'xmlns' not in content:
         content = re.sub(r'<svg\b', '<svg xmlns="http://www.w3.org/2000/svg"', content, count=1)
@@ -34,15 +37,11 @@ def process_svg_file(filepath):
         content = re.sub(r'<svg\b', '<svg viewBox="0 0 1280 720" width="1280" height="720"', content, count=1)
 
     # Balance unclosed tags if present
-    open_text = len(re.findall(r'<text\b', content, re.IGNORECASE))
-    close_text = len(re.findall(r'</text>', content, re.IGNORECASE))
-    if open_text > close_text:
-        content += "</text>" * (open_text - close_text)
-
-    open_g = len(re.findall(r'<g\b', content, re.IGNORECASE))
-    close_g = len(re.findall(r'</g>', content, re.IGNORECASE))
-    if open_g > close_g:
-        content += "</g>" * (open_g - close_g)
+    for tag in ["tspan", "text", "g", "defs", "linearGradient"]:
+        open_c = len(re.findall(fr'<{tag}\b', content, re.IGNORECASE))
+        close_c = len(re.findall(fr'</{tag}>', content, re.IGNORECASE))
+        if open_c > close_c:
+            content += f"</{tag}>" * (open_c - close_c)
 
     if not re.search(r'</svg>\s*$', content, re.IGNORECASE):
         content += "\n</svg>"

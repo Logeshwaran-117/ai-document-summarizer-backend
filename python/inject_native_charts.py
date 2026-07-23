@@ -286,31 +286,80 @@ def parse_svg_shapes_to_pptx(svg_path, slide):
                 font_weight = elem.get("font-weight", "normal")
                 text_anchor = elem.get("text-anchor", "left")
 
-                top_y = max(0, y - font_size * 0.8)
-                width = max(100, 1200 - x) if text_anchor != "end" else max(100, x)
+                tspans = [child for child in elem if (child.tag.split("}")[-1] if "}" in child.tag else child.tag) == "tspan"]
+                num_lines = len(tspans) if tspans else max(1, len(raw_text) // 35 + 1)
+
+                top_y = max(0.0, y - font_size * 0.85)
+                box_height = font_size * 1.35 * num_lines + 12.0
+
+                if elem.get("data-max-width"):
+                    width = float(elem.get("data-max-width"))
+                    left_x = x
+                elif elem.get("data-width"):
+                    width = float(elem.get("data-width"))
+                    left_x = x
+                elif text_anchor == "end":
+                    width = min(1160.0, max(100.0, x - 60.0))
+                    left_x = max(60.0, x - width)
+                elif text_anchor in ["middle", "center"]:
+                    half_avail = min(max(100.0, x - 60.0), max(100.0, 1220.0 - x))
+                    width = max(100.0, min(1160.0, half_avail * 2.0))
+                    left_x = max(60.0, x - width / 2.0)
+                else:
+                    left_x = max(60.0, min(1220.0, x))
+                    width = max(100.0, min(1220.0 - left_x, 1160.0))
 
                 txBox = slide.shapes.add_textbox(
-                    Inches(px_to_in(x)), Inches(px_to_in(top_y)),
-                    Inches(px_to_in(width)), Inches(px_to_in(font_size * 2))
+                    Inches(px_to_in(left_x)), Inches(px_to_in(top_y)),
+                    Inches(px_to_in(width)), Inches(px_to_in(box_height))
                 )
                 tf = txBox.text_frame
                 tf.word_wrap = True
+                tf.margin_left = Inches(0)
+                tf.margin_right = Inches(0)
+                tf.margin_top = Inches(0)
+                tf.margin_bottom = Inches(0)
 
-                p = tf.paragraphs[0]
-                if text_anchor == "middle":
-                    p.alignment = PP_ALIGN.CENTER
-                elif text_anchor == "end":
-                    p.alignment = PP_ALIGN.RIGHT
+                if tspans:
+                    for idx, ts in enumerate(tspans):
+                        ts_text = "".join(ts.itertext()).strip()
+                        if not ts_text:
+                            continue
+                        p = tf.paragraphs[0] if idx == 0 else tf.add_paragraph()
+                        p.space_before = Pt(0)
+                        p.space_after = Pt(0)
+                        if text_anchor == "middle":
+                            p.alignment = PP_ALIGN.CENTER
+                        elif text_anchor == "end":
+                            p.alignment = PP_ALIGN.RIGHT
+                        else:
+                            p.alignment = PP_ALIGN.LEFT
+
+                        run = p.add_run()
+                        run.text = ts_text
+                        run.font.name = font_family
+                        run.font.size = Pt(font_size * 0.75)
+                        run.font.color.rgb = hex_to_rgb(fill_hex)
+                        if font_weight in ["bold", "600", "700", "800", "900"]:
+                            run.font.bold = True
                 else:
-                    p.alignment = PP_ALIGN.LEFT
+                    p = tf.paragraphs[0]
+                    p.space_before = Pt(0)
+                    p.space_after = Pt(0)
+                    if text_anchor == "middle":
+                        p.alignment = PP_ALIGN.CENTER
+                    elif text_anchor == "end":
+                        p.alignment = PP_ALIGN.RIGHT
+                    else:
+                        p.alignment = PP_ALIGN.LEFT
 
-                run = p.add_run()
-                run.text = raw_text
-                run.font.name = font_family
-                run.font.size = Pt(font_size * 0.75)
-                run.font.color.rgb = hex_to_rgb(fill_hex)
-                if font_weight in ["bold", "600", "700", "800", "900"]:
-                    run.font.bold = True
+                    run = p.add_run()
+                    run.text = raw_text
+                    run.font.name = font_family
+                    run.font.size = Pt(font_size * 0.75)
+                    run.font.color.rgb = hex_to_rgb(fill_hex)
+                    if font_weight in ["bold", "600", "700", "800", "900"]:
+                        run.font.bold = True
 
                 shapes_added += 1
             except Exception:
