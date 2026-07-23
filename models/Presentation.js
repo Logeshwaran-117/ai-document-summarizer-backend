@@ -18,7 +18,7 @@ const presentationSchema = new mongoose.Schema(
     sizeBytes:  { type: Number, default: 0 },
 
     // ── NEW: AI Wizard fields ────────────────────────────────────────────────
-    generatedBy:   { type: String, default: "legacy", enum: ["legacy", "claude-ai"] },
+    generatedBy:   { type: String, default: "legacy", enum: ["legacy", "claude-ai", "svg-pipeline", "ai-wizard"] },
     wizardOptions: { type: mongoose.Schema.Types.Mixed, default: null },
     // ────────────────────────────────────────────────────────────────────────
 
