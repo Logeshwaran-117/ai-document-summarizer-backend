@@ -225,6 +225,11 @@ Generate the complete SVG now. Remember: close ALL tags.`;
     throw new Error(`Slide ${slideIndex + 1} SVG validation failed: ${finalCheck.error}`);
   }
 
+  // 4. Content richness check: reject near-empty SVGs (< 500 chars means AI returned a stub)
+  if (svgContent.length < 500) {
+    throw new Error(`Slide ${slideIndex + 1} SVG content too sparse (${svgContent.length} chars) — triggering rich fallback`);
+  }
+
   return svgContent;
 }
 
@@ -342,6 +347,13 @@ function validateSvgXml(svgStr) {
   const closeG = (trimmed.match(/<\/g>/gi) || []).length;
   if (openG > closeG) {
     return { valid: false, error: `Truncated <g> tags (${openG} opened vs ${closeG} closed)` };
+  }
+
+  // Minimum content richness: must have at least 1 rect and 1 text element (real slide content)
+  const hasRect = /<rect\b/i.test(trimmed);
+  const hasText = /<text\b/i.test(trimmed);
+  if (!hasRect || !hasText) {
+    return { valid: false, error: `SVG lacks minimum content (hasRect=${hasRect}, hasText=${hasText}) — stub SVG` };
   }
 
   return { valid: true };
@@ -604,8 +616,15 @@ async function generatePresentationViaSVG(documentText, wizardOptions = {}) {
       try {
         svgContent = await generateSlideSVG(slides[i], designSpec, documentText, i, slides.length);
       } catch (err) {
-        console.warn(`⚠️ SVG generation fallback for slide ${i + 1}: ${err.message}`);
-        svgContent = generateFallbackSVG(slides[i], designSpec, i, slides.length);
+        // First attempt failed — retry once before using fallback
+        console.warn(`⚠️ SVG generation attempt 1 failed for slide ${i + 1}: ${err.message}. Retrying...`);
+        try {
+          svgContent = await generateSlideSVG(slides[i], designSpec, documentText, i, slides.length);
+          console.log(`✅ [SVG Pipeline] Slide ${i + 1} succeeded on retry.`);
+        } catch (retryErr) {
+          console.warn(`⚠️ SVG generation retry also failed for slide ${i + 1}: ${retryErr.message}. Using rich fallback.`);
+          svgContent = generateFallbackSVG(slides[i], designSpec, i, slides.length);
+        }
       }
 
       console.log(`  📊 Slide ${i + 1} SVG size: ${svgContent.length} chars`);
@@ -616,12 +635,24 @@ async function generatePresentationViaSVG(documentText, wizardOptions = {}) {
 
       // Pre-render high-res PNG for CairoSVG-less Python environments (e.g. Windows)
       const pngPath = svgPath.replace(/\.svg$/i, ".png");
-      const rendered = await renderSvgToPngCanvas(svgContent, pngPath, svgPath);
+      let rendered = await renderSvgToPngCanvas(svgContent, pngPath, svgPath);
       if (rendered) {
         const stats = fs.statSync(pngPath);
         console.log(`  🖼️ Slide ${i + 1} PNG pre-rendered successfully (${Math.round(stats.size / 1024)} KB)`);
       } else {
-        console.log(`  ⚠️ Slide ${i + 1} PNG pre-render skipped or failed, falling through to Python vector parsing`);
+        // PNG pre-render failed (too small or canvas error). Swap in the rich fallback SVG
+        // so Python has something solid to parse, then re-attempt the PNG render.
+        console.log(`  ⚠️ Slide ${i + 1} PNG pre-render failed — upgrading to rich fallback SVG and retrying`);
+        const richFallback = generateFallbackSVG(slides[i], designSpec, i, slides.length);
+        fs.writeFileSync(svgPath, richFallback, "utf8");
+        svgContent = richFallback;
+        rendered = await renderSvgToPngCanvas(richFallback, pngPath, svgPath);
+        if (rendered) {
+          const stats = fs.statSync(pngPath);
+          console.log(`  🖼️ Slide ${i + 1} fallback PNG rendered successfully (${Math.round(stats.size / 1024)} KB)`);
+        } else {
+          console.log(`  ⚠️ Slide ${i + 1} fallback PNG also failed, falling through to Python vector parsing`);
+        }
       }
     }
 
