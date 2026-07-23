@@ -4,6 +4,7 @@
 
 module.exports = function buildPlannerPrompt(context, storyStrategy, outline) {
   const outlineStr = JSON.stringify(outline, null, 2);
+  const narrativeMapStr = storyStrategy.slideNarrativeMap ? JSON.stringify(storyStrategy.slideNarrativeMap, null, 2) : "[]";
   
   return `You are an elite McKinsey slide presentation designer. Create rich, detailed slide content for each slide in the outline below.
 Extract EXACT metrics, numbers, structured bullet points, card structures, tables, and charts from the document text.
@@ -14,7 +15,10 @@ DOCUMENT TEXT:
 ${context.documentSample}
 """
 
-OUTLINE:
+PRESENTATION NARRATIVE MAP:
+${narrativeMapStr}
+
+OUTLINE TO PLAN:
 ${outlineStr}
 
 Return ONLY a JSON array of slide content objects matching the schema below:
@@ -23,39 +27,49 @@ JSON SCHEMA REQUIRED:
 [
   {
     "slideNumber": 1,
-    "slideType": "title|executiveSummary|comparison|process|scorecard|cards|timeline|chart|table|quote|closing",
+    "slideType": "cover|executiveSummary|twoColumn|process|scorecard|kpi|timeline|chart|recommendations|swot|quote|section|closing",
     "headline": "<Action Headline summarizing key insight max 70 chars>",
     "subtitle": "<Subheading context max 90 chars>",
     "keyInsight": "<Key strategic takeaway max 120 chars>",
     "bullets": ["<Finding 1 with data>", "<Finding 2 with data>", "<Finding 3 with data>"],
-    "cards": [
+    "metrics": [
+      { "label": "REVENUE", "value": "$4.2M", "trend": "up" }
+    ],
+    "items": [
       {
-        "title": "<Card Title>",
-        "value": "$1.2M or 84%",
-        "subtitle": "<Metric context>",
-        "description": "<Card takeaway>",
-        "icon": "trending-up|dollar-sign|check-circle|users|shield|alert-circle",
-        "trend": { "direction": "up|down|flat", "value": "+14%" }
+        "title": "<Recommendation / Scorecard Item Title>",
+        "description": "<Actionable detail with target data>",
+        "status": "good|warning|critical",
+        "score": 90,
+        "maxScore": 100,
+        "category": "<Category Name>"
       }
     ],
     "processSteps": [
       { "stepNumber": 1, "title": "<Step 1>", "description": "<Action 1>", "icon": "check" }
     ],
-    "table": {
-      "headers": ["Metric", "Q1", "Q2", "Growth"],
-      "rows": [["Revenue", "$1.2M", "$1.8M", "+50%"]]
+    "twoColumns": {
+      "left": { "title": "<Column 1 Title>", "bullets": ["<Point A>", "<Point B>"] },
+      "right": { "title": "<Column 2 Title>", "bullets": ["<Point X>", "<Point Y>"] }
     },
-    "chart": {
-      "chartType": "bar|pie|donut|line",
+    "swotData": {
+      "strengths": ["<Strength 1>"],
+      "weaknesses": ["<Weakness 1>"],
+      "opportunities": ["<Opportunity 1>"],
+      "threats": ["<Threat 1>"]
+    },
+    "timeline": [
+      { "date": "Q1 2025", "event": "<Milestone>", "detail": "<Details>" }
+    ],
+    "chartData": {
+      "type": "bar|line|pie|donut",
       "title": "<Chart Title>",
-      "categories": ["Cat 1", "Cat 2", "Cat 3"],
-      "series": [{ "name": "2025", "values": [12, 24, 36] }],
-      "unit": "$"
+      "labels": ["Cat 1", "Cat 2", "Cat 3"],
+      "values": [12, 24, 36]
     },
     "quote": {
       "text": "<Strategic quote>",
-      "author": "<Author/Source>",
-      "role": "<Role>"
+      "attribution": "<Author/Source>"
     },
     "speakerNotes": "<Concise speaker talking points>"
   }

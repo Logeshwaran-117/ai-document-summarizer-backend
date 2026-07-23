@@ -7,6 +7,7 @@ const os = require("os");
 const Presentation = require("../models/Presentation");
 
 const { generatePresentationPlan } = require("../services/presentationAiService");
+const { generatePresentationViaSVG, buildDesignSpec, generateSlideSVG } = require("../services/svgPipelineService");
 const { uploadAndExtract } = require("../controllers/pptController");
 const upload = require("../middleware/upload");
 const Document = require("../models/Document");
@@ -1602,6 +1603,7 @@ function buildAIDeck({ aiSlides, strategy, docTitle, heroTitle, themeKey, wizard
   pres.title = cleanMarkdown(docTitle);
 
   let slideCounter = 0;
+  let sectionCounter = 0;
 
   for (const slide of aiSlides) {
     const s = pres.addSlide();
@@ -1676,6 +1678,7 @@ function buildAIDeck({ aiSlides, strategy, docTitle, heroTitle, themeKey, wizard
     // ── SECTION DIVIDER ──────────────────────────────────────────────────────
     if (slide.slideType === "section") {
       s.background = { color: COLORS.accent }; // Master PDF Amber Background
+      sectionCounter++;
 
       // Grid overlay
       for (let gx = 0; gx < 10; gx += 0.8) {
@@ -1685,7 +1688,7 @@ function buildAIDeck({ aiSlides, strategy, docTitle, heroTitle, themeKey, wizard
         s.addShape(pres.shapes.RECTANGLE, { x: 0, y: gy, w: 10, h: 0.01, fill: { color: COLORS.bgDark, transparency: 92 }, line: { color: COLORS.bgDark, transparency: 92 } });
       }
 
-      s.addText("1", {
+      s.addText(String(sectionCounter), {
         x: 6.0, y: -0.5, w: 4.5, h: 5.5,
         fontSize: 220, color: COLORS.bgDark, bold: true,
         fontFace: "Cambria", transparency: 88, align: "right",
@@ -1696,7 +1699,7 @@ function buildAIDeck({ aiSlides, strategy, docTitle, heroTitle, themeKey, wizard
       const titleFontSize = titleLen > 80 ? 20 : titleLen > 45 ? 24 : 32;
       const titleH = titleLen > 80 ? 1.5 : titleLen > 45 ? 1.2 : 0.9;
 
-      s.addText("S E C T I O N  0 1", { x: 0.6, y: 0.8, w: 5.0, h: 0.3, fontSize: 10, color: COLORS.bgDark, bold: true, charSpacing: 4, fontFace: "Calibri" });
+      s.addText(`S E C T I O N  ${String(sectionCounter).padStart(2, "0")}`, { x: 0.6, y: 0.8, w: 5.0, h: 0.3, fontSize: 10, color: COLORS.bgDark, bold: true, charSpacing: 4, fontFace: "Calibri" });
       s.addText(secTitle, { x: 0.6, y: 1.2, w: 6.5, h: titleH, fontSize: titleFontSize, color: COLORS.bgDark, bold: true, fontFace: "Cambria", lineSpacing: titleFontSize + 4 });
 
       const subText = cleanMarkdown(slide.subtitle || slide.contentFocus || "");
@@ -1714,7 +1717,8 @@ function buildAIDeck({ aiSlides, strategy, docTitle, heroTitle, themeKey, wizard
 
     // ── All content slides share a dark header ───────────────────────────────
     s.background = { color: COLORS.bgLight };
-    addAISlideHeader(s, pres, COLORS, slide.title || "Slide", slide.icon || "📄");
+    const headerSub = slide.contentFocus || slide.purpose || slide.subtitle || "";
+    addAISlideHeader(s, pres, COLORS, slide.title || "Slide", slide.icon || "📄", headerSub);
 
     const SAFE_Y = 1.45;
     const SAFE_H = 3.72;
@@ -2128,51 +2132,90 @@ function addAISlideHeader(s, pres, COLORS, title, icon, subtitle) {
   });
 }
 
-router.post("/generate-ppt-ai", async (req, res) => {
+router.post("/generate-ppt-svg", async (req, res) => {
   try {
     if (!req.user) return res.status(401).json({ message: "Not authenticated" });
-    const { summary, filename = "Document", documentId = null, options = {} } = req.body;
-    if (!summary) return res.status(400).json({ message: "Summary is required" });
 
-    // Delegate to AI pipeline
-    const docTitle = (options.title || filename).replace(/\.[^/.]+$/, "");
-    const { strategy, outline, slides } = await generatePresentationPlan(summary, {
-      ...options,
+    const { documentText, filename = "Document", documentId, wizardOptions = {} } = req.body;
+    if (!documentText || documentText.trim().length < 30) {
+      return res.status(400).json({ message: "Document text is required for SVG presentation generation." });
+    }
+
+    const docTitle = (wizardOptions.title || filename).replace(/\.[^/.]+$/, "");
+
+    const { buffer, slideCount, title } = await generatePresentationViaSVG(documentText, {
+      ...wizardOptions,
       title: docTitle,
-      slideCount: options.slideCount || 12,
-      contentDensity: options.detailLevel || "Balanced",
-      speakerNotes: options.includeNotes !== false ? "Yes" : "No",
     });
-
-    const { pres, slideCount } = buildAIDeck({
-      aiSlides: slides, strategy,
-      docTitle, heroTitle: docTitle,
-      themeKey: options.theme || "Professional",
-      wizardOptions: options,
-    });
-
-    const tmpFile = path.join(os.tmpdir(), `pres-${Date.now()}.pptx`);
-    await pres.writeFile({ fileName: tmpFile });
-    const buffer = fs.readFileSync(tmpFile);
-    fs.unlink(tmpFile, () => {});
 
     const saved = await Presentation.create({
-      userId: req.user._id, documentId: documentId || null,
-      filename: `${docTitle}.pptx`, sourceFilename: filename,
-      theme: options.theme || "Professional", detailLevel: options.detailLevel || "Balanced",
-      chartDensity: "auto", includeAgenda: options.includeAgenda !== false,
-      includeNotes: options.includeNotes !== false,
-      slideCount, sizeBytes: buffer.length, data: buffer,
+      userId: req.user._id,
+      documentId: documentId || null,
+      filename: `${docTitle}.pptx`,
+      sourceFilename: filename,
+      theme: wizardOptions.theme || "Professional",
+      slideCount,
+      sizeBytes: buffer.length,
+      data: buffer,
+      generatedBy: "svg-pipeline",
+      wizardOptions,
     });
 
     const safeFilename = docTitle.replace(/[^a-zA-Z0-9\-_. ]/g, "_");
     res.setHeader("Content-Disposition", `attachment; filename="${safeFilename}.pptx"`);
     res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.presentationml.presentation");
     res.setHeader("X-Presentation-Id", saved._id.toString());
+    res.setHeader("X-Slide-Count", String(slideCount));
     res.send(buffer);
+
   } catch (err) {
-    console.error("PPT generation error:", err);
-    res.status(500).json({ message: err.message || "Failed to generate presentation" });
+    console.error("SVG pipeline route error:", err);
+    res.status(500).json({ message: err.message || "Failed to generate presentation via SVG pipeline" });
+  }
+});
+
+router.post("/generate-ppt-svg/preview", async (req, res) => {
+  try {
+    if (!req.user) return res.status(401).json({ message: "Not authenticated" });
+
+    const { documentText, wizardOptions = {} } = req.body;
+    if (!documentText || documentText.trim().length < 30) {
+      return res.status(400).json({ message: "Document text is required for slide preview." });
+    }
+
+    const designSpec = await buildDesignSpec(documentText, wizardOptions);
+    const previews = [];
+    const previewCount = Math.min(3, designSpec.slides.length);
+
+    for (let i = 0; i < previewCount; i++) {
+      let svg = "";
+      try {
+        svg = await generateSlideSVG(
+          designSpec.slides[i], designSpec, documentText, i, designSpec.slides.length
+        );
+      } catch (err) {
+        console.warn(`Preview generation warning for slide ${i + 1}: ${err.message}`);
+      }
+      if (svg) {
+        previews.push({
+          slideNumber: i + 1,
+          title: designSpec.slides[i].title,
+          svgBase64: Buffer.from(svg).toString("base64"),
+          svgRaw: svg,
+        });
+      }
+    }
+
+    res.json({
+      success: true,
+      totalSlides: designSpec.slides.length,
+      title: designSpec.presentationTitle || "Presentation Preview",
+      previews,
+    });
+
+  } catch (err) {
+    console.error("SVG preview route error:", err);
+    res.status(500).json({ message: err.message || "Failed to generate presentation preview" });
   }
 });
 

@@ -15,6 +15,18 @@ class ResponseValidator {
     return s;
   }
 
+  static partialJsonExtract(s) {
+    const result = {};
+    const strRe = /"([a-zA-Z_][a-zA-Z0-9_]*)"\s*:\s*"((?:[^"\\]|\\.)*)"/g;
+    let m;
+    while ((m = strRe.exec(s)) !== null) result[m[1]] = m[2];
+    const numRe = /"([a-zA-Z_][a-zA-Z0-9_]*)"\s*:\s*([0-9]+(?:\.[0-9]+)?)/g;
+    while ((m = numRe.exec(s)) !== null) { if (!(m[1] in result)) result[m[1]] = parseFloat(m[2]); }
+    const boolRe = /"([a-zA-Z_][a-zA-Z0-9_]*)"\s*:\s*(true|false)/g;
+    while ((m = boolRe.exec(s)) !== null) { if (!(m[1] in result)) result[m[1]] = m[2] === "true"; }
+    return Object.keys(result).length > 0 ? result : null;
+  }
+
   static parseAndValidate(raw, schemaKey = null) {
     if (!raw) throw new Error("Empty AI response received.");
 
@@ -35,6 +47,9 @@ class ResponseValidator {
         if (objMatch) {
           try { parsed = JSON.parse(objMatch[1]); } catch {}
         }
+      }
+      if (!parsed) {
+        parsed = this.partialJsonExtract(cleaned);
       }
     }
 

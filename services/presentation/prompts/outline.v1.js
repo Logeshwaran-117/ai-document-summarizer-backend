@@ -10,13 +10,28 @@ SUMMARY: ${storyStrategy.executiveSummary}
 NARRATIVE: ${storyStrategy.narrativeFlow}
 DOC TYPE: ${context.documentType}
 
+SUPPORTED SLIDE TYPES:
+- cover (Slide 1 title slide)
+- executiveSummary (Overview & high-level takeaway)
+- kpi (6-card key performance indicator dashboard)
+- chart (Data visualization: bar, line, pie, donut)
+- twoColumn (Side-by-side comparison or before/after)
+- swot (2x2 matrix: Strengths, Weaknesses, Opportunities, Threats)
+- timeline (Horizontal timeline of chronological events)
+- process (Step-by-step sequential workflow)
+- scorecard (Metric performance evaluation with progress bars & status tags)
+- recommendations (Numbered amber callout cards with strategic recommendations & next steps)
+- quote (Hero quote / key takeaway)
+- section (Section divider between main topics)
+- closing (Final conclusion & thank you slide)
+
 Return ONLY a JSON array of slide objects. Do not include markdown formatting outside JSON.
 
 JSON SCHEMA REQUIRED:
 [
   {
     "slideNumber": 1,
-    "slideType": "title",
+    "slideType": "cover",
     "title": "${storyStrategy.presentationTitle}",
     "contentFocus": "Cover & presentation overview",
     "purpose": "Set context & orient audience"
@@ -28,6 +43,6 @@ JSON SCHEMA REQUIRED:
     "contentFocus": "${storyStrategy.executiveSummary}",
     "purpose": "Deliver core message immediately"
   }
-  ... (up to ${context.slideCount} slides including a final closing slide)
+  ... (up to ${context.slideCount} slides, ensuring recommendations slide appears near the end before closing)
 ]`;
 };
