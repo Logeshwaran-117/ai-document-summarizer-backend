@@ -236,7 +236,15 @@ function cleanSvgString(svgStr) {
     .split("\n")
     .filter(line => {
       const t = line.trim();
-      if (t.startsWith("->") || t.startsWith("*   Let's") || t.includes("Good catch") || t.includes("Wait, I missed")) {
+      if (
+        t.startsWith("->") ||
+        t.startsWith("* ") ||
+        t.startsWith("•") ||
+        t.includes("Good catch") ||
+        t.includes("Wait, I missed") ||
+        t.includes("Value: `x=") ||
+        t.includes("Label: `x=")
+      ) {
         return false;
       }
       return true;
