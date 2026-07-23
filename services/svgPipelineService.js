@@ -206,22 +206,23 @@ ${documentText.slice(0, 6000)}
 
 ${nativeMarkerInstructions}
 
-RULES:
-1. Output ONLY raw valid SVG code starting with <svg> and ending with </svg>. No markdown formatting or explanations.
-2. Every <text> element MUST explicitly declare x, y, font-family, font-size, fill, and font-weight.
-3. Typography Scale: Title font-size 32px (bold), Subtitle font-size 15px, Card Headings 18px (bold), Body text font-size 13px, Metric values 28-34px (bold).
-4. Surround content elements in rounded rectangular containers (<rect rx="10" ry="10" fill="${c.cardBg}" stroke="${c.cardBorder}">).
-5. Slide footer must render page number "${slideIndex + 1} / ${totalSlides}" on the right.
-6. NO foreignObject tags. Use standard SVG tags (<rect>, <circle>, <path>, <text>, <line>, <g>).
-7. ${isDataSlide ? "Use native marker <g> blocks for charts/tables as shown above with fallback shapes." : "Use standard SVG elements."}
+RULES (CRITICAL):
+1. Output MUST BE ONLY THE RAW SVG CODE starting with <svg> and ending with </svg>.
+2. Absolutely NO conversational text, chain-of-thought, self-corrections (e.g. "Wait, I missed..."), or explanations.
+3. Every <text> element MUST explicitly declare x, y, font-family, font-size, fill, and font-weight.
+4. Typography Scale: Title font-size 32px (bold), Subtitle font-size 15px, Card Headings 18px (bold), Body text font-size 13px, Metric values 28-34px (bold).
+5. Surround content elements in rounded rectangular containers (<rect rx="10" ry="10" fill="${c.cardBg}" stroke="${c.cardBorder}">).
+6. Slide footer must render page number "${slideIndex + 1} / ${totalSlides}" on the right.
+7. NO foreignObject tags. Use standard SVG tags (<rect>, <circle>, <path>, <text>, <line>, <g>).
+8. ${isDataSlide ? "Use native marker <g> blocks for charts/tables as shown above with fallback shapes." : "Use standard SVG elements."}
 
-Generate the SVG for slide ${slideIndex + 1} now:`;
+Generate the raw SVG for slide ${slideIndex + 1} now:`;
 
   const raw = await callWithRotation(
     () => [{ text: prompt }], 8192, "gemini-3.5-flash", null, "summarize", null
   );
 
-  const svgContent = extractValidSvg(raw);
+  const svgContent = extractValidSvg(raw, c);
   if (!svgContent) {
     console.warn(`⚠️ Raw AI output for slide ${slideIndex + 1}: ${String(raw).slice(0, 150)}`);
     throw new Error(`Slide ${slideIndex + 1}: AI did not return valid SVG`);
@@ -229,18 +230,52 @@ Generate the SVG for slide ${slideIndex + 1} now:`;
   return svgContent;
 }
 
-function extractValidSvg(raw) {
+function cleanSvgString(svgStr) {
+  if (!svgStr) return "";
+  return svgStr
+    .split("\n")
+    .filter(line => {
+      const t = line.trim();
+      if (t.startsWith("->") || t.startsWith("*   Let's") || t.includes("Good catch") || t.includes("Wait, I missed")) {
+        return false;
+      }
+      return true;
+    })
+    .join("\n");
+}
+
+function extractValidSvg(raw, palette = null) {
   if (!raw || typeof raw !== "string") return null;
   let cleaned = raw.trim();
   cleaned = cleaned.replace(/^```(?:xml|svg)?\s*/i, "").replace(/\s*```$/i, "").trim();
+
+  // 1. Direct match for <svg ... </svg>
   const fullMatch = cleaned.match(/<svg[\s\S]*?<\/svg>/i);
-  if (fullMatch) return fullMatch[0];
+  if (fullMatch) {
+    return cleanSvgString(fullMatch[0]);
+  }
+
+  // 2. Unclosed <svg ...
   const partialMatch = cleaned.match(/<svg[\s\S]*/i);
   if (partialMatch) {
     let svgStr = partialMatch[0].trim().replace(/```\s*$/, "").trim();
     if (!/<\/svg>/i.test(svgStr)) svgStr += "\n</svg>";
-    return svgStr;
+    return cleanSvgString(svgStr);
   }
+
+  // 3. Fallback: If AI returned SVG elements without opening <svg> root tag
+  if (/<(rect|g|text|path|circle|line)/i.test(cleaned)) {
+    const elemMatch = cleaned.match(/<(?:rect|g|text|path|circle|line)[\s\S]*/i);
+    if (elemMatch) {
+      let innerContent = cleanSvgString(elemMatch[0]).replace(/<\/svg>/gi, "");
+      const bg = palette && palette.background ? palette.background : "#0F1B38";
+      return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" width="1280" height="720">
+  <rect width="1280" height="720" fill="${bg}"/>
+  ${innerContent}
+</svg>`;
+    }
+  }
+
   return null;
 }
 

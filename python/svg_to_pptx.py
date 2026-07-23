@@ -17,16 +17,21 @@ try:
 except ModuleNotFoundError:
     import subprocess
     print("⚠️ python-pptx missing in Python environment. Auto-installing required packages...")
+    pkgs = ["python-pptx>=0.6.23", "lxml>=4.9", "Pillow>=10.0"]
     try:
-        subprocess.check_call([sys.executable, "-m", "pip", "install", "python-pptx>=0.6.23", "lxml>=4.9", "Pillow>=10.0"])
-        from pptx import Presentation
-        from pptx.util import Inches, Pt
-        from pptx.dml.color import RGBColor
-        from pptx.enum.text import PP_ALIGN
-        print("✅ python-pptx auto-installed successfully.")
-    except Exception as _inst_err:
-        print(f"❌ Failed to auto-install python-pptx: {_inst_err}", file=sys.stderr)
-        raise
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "--break-system-packages"] + pkgs)
+    except Exception:
+        try:
+            subprocess.check_call([sys.executable, "-m", "pip", "install"] + pkgs)
+        except Exception as _inst_err:
+            print(f"❌ Failed to auto-install python-pptx: {_inst_err}", file=sys.stderr)
+            raise
+
+    from pptx import Presentation
+    from pptx.util import Inches, Pt
+    from pptx.dml.color import RGBColor
+    from pptx.enum.text import PP_ALIGN
+    print("✅ python-pptx auto-installed successfully.")
 
 try:
     # pyrefly: ignore [missing-import]
