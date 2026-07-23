@@ -178,7 +178,7 @@ const BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models";
  * @param {string}   feature       - "summarize"|"banking"|"table" for breakdown
  * @param {string|null} responseMimeType - optional "application/json"
  */
-async function callGeminiREST(parts, maxOutputTokens = 8192, model = "gemini-3.5-flash", onUsage = null, feature = "summarize", responseMimeType = null) {
+async function callGeminiREST(parts, maxOutputTokens = 8192, model = "gemini-2.5-flash", onUsage = null, feature = "summarize", responseMimeType = null) {
     const activeIndex = currentKeyIndex;
     const key = getCurrentKey();
     const url = `${BASE_URL}/${model}:generateContent?key=${key}`;
@@ -200,6 +200,11 @@ async function callGeminiREST(parts, maxOutputTokens = 8192, model = "gemini-3.5
     const data = await res.json();
 
     if (!res.ok) {
+        // Fallback for 404 model not found
+        if (res.status === 404 && model !== "gemini-2.5-flash") {
+            console.warn(`⚠️ Model ${model} returned 404. Falling back to gemini-2.5-flash...`);
+            return callGeminiREST(parts, maxOutputTokens, "gemini-2.5-flash", onUsage, feature, responseMimeType);
+        }
         const err = new Error(data?.error?.message || `HTTP ${res.status}`);
         err.status = res.status;
         err.body = data;
@@ -271,7 +276,7 @@ function parseRetryAfter(error) {
  * @param {string}   feature        - "summarize"|"banking"|"table"
  * @param {string|null} responseMimeType - optional "application/json"
  */
-async function callWithRotation(buildParts, maxOutputTokens = 8192, model = "gemini-3.5-flash", onUsage = null, feature = "summarize", responseMimeType = null) {
+async function callWithRotation(buildParts, maxOutputTokens = 8192, model = "gemini-2.5-flash", onUsage = null, feature = "summarize", responseMimeType = null) {
     const MAX_ATTEMPTS = GEMINI_KEYS.length * 2; // allow re-trying keys after cooldown expires
     let attempts = 0;
     let overloadRetries = 0;

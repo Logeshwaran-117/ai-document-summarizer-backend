@@ -11,7 +11,6 @@ const path = require("path");
 const os = require("os");
 
 const AIContentExtractor = require("./presentation/engine/AIContentExtractor");
-const ContentNormalizer = require("./presentation/engine/ContentNormalizer");
 const LayoutPlanner = require("./presentation/engine/LayoutPlanner");
 const SVGBuilder = require("./presentation/engine/SVGBuilder");
 
@@ -29,9 +28,6 @@ async function buildDesignSpec(documentText, wizardOptions = {}) {
   console.log("📄 [SVG Pipeline] Extracting structured slide content via AI Content Extractor...");
   const content = await AIContentExtractor.extractPresentationContent(documentText, wizardOptions);
 
-  // Paginate oversized slides to prevent content loss or crowding
-  const paginatedSlides = ContentNormalizer.paginatePresentationSlides(content.slides || []);
-
   const themeName = wizardOptions.theme && THEME_PALETTES[wizardOptions.theme]
     ? wizardOptions.theme
     : (content.theme && THEME_PALETTES[content.theme] ? content.theme : "Professional");
@@ -40,13 +36,13 @@ async function buildDesignSpec(documentText, wizardOptions = {}) {
 
   return {
     presentationTitle: content.presentationTitle || wizardOptions.title || "Executive Presentation",
-    slideCount: paginatedSlides.length,
+    slideCount: content.slides ? content.slides.length : (wizardOptions.slideCount || 10),
     colorPalette: palette,
     themeName,
     fonts: { heading: "Cambria", body: "Calibri" },
     slideWidth: 1280,
     slideHeight: 720,
-    slides: paginatedSlides,
+    slides: content.slides || [],
   };
 }
 
@@ -217,7 +213,7 @@ REPAIR INSTRUCTIONS:
 Repaired SVG:`;
 
   const raw = await callWithRotation(
-    () => [{ text: prompt }], 16384, "gemini-3.5-flash", null, "summarize", null
+    () => [{ text: prompt }], 16384, "gemini-2.5-flash", null, "summarize", null
   );
 
   return extractValidSvg(raw);
@@ -288,19 +284,9 @@ function getPythonBinary() {
 function runPythonScript(scriptPath, args, options = {}) {
   return new Promise((resolve, reject) => {
     const pythonCmd = getPythonBinary();
-    const execOpts = {
-      ...options,
-      env: {
-        ...process.env,
-        PYTHONIOENCODING: "utf-8",
-        PYTHONUTF8: "1",
-        ...(options.env || {}),
-      },
-    };
-
-    execFile(pythonCmd, [scriptPath, ...args], execOpts, (err, stdout, stderr) => {
+    execFile(pythonCmd, [scriptPath, ...args], options, (err, stdout, stderr) => {
       if (err && pythonCmd !== "python") {
-        execFile("python", [scriptPath, ...args], execOpts, (err2, stdout2, stderr2) => {
+        execFile("python", [scriptPath, ...args], options, (err2, stdout2, stderr2) => {
           if (err2) return reject(new Error(stderr2 || stderr || err2.message || err.message));
           resolve(stdout2);
         });

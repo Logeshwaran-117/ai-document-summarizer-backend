@@ -79,7 +79,7 @@ RETURN ONLY VALID JSON MATCHING THIS EXACT SCHEMA:
 
     try {
       const raw = await callWithRotation(
-        () => [{ text: prompt }], 16384, "gemini-3.5-flash", null, "summarize", "application/json"
+        () => [{ text: prompt }], 16384, "gemini-2.5-flash", null, "summarize", "application/json"
       );
       const parsed = ResponseValidator.parseAndValidate(raw);
       if (parsed && Array.isArray(parsed.slides) && parsed.slides.length > 0) {
