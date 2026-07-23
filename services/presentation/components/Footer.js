@@ -26,7 +26,7 @@ class FooterComponent {
     const badgeW = 1.0;
     const badgeH = 0.3;
 
-    slide.addShape(slide.shapes.ROUNDED_RECTANGLE, {
+    slide.addShape("roundRect", {
       x: badgeX,
       y: footerY,
       w: badgeW,

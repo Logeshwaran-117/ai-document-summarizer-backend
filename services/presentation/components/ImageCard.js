@@ -13,7 +13,7 @@ class ImageCardComponent {
     const imageH = Math.min(availH, 3.2);
 
     // Outer Container Frame
-    slide.addShape(slide.shapes.ROUNDED_RECTANGLE, {
+    slide.addShape("roundRect", {
       x: 0.8,
       y: startY,
       w: imageW,
@@ -35,7 +35,7 @@ class ImageCardComponent {
     });
 
     // Caption Bar
-    slide.addShape(slide.shapes.RECTANGLE, {
+    slide.addShape("rect", {
       x: 0.8,
       y: startY + imageH - 0.5,
       w: imageW,

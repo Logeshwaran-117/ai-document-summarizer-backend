@@ -22,7 +22,7 @@ class ProcessArrowComponent {
       const accentColor = palette[idx % palette.length];
 
       // Card Container
-      slide.addShape(slide.shapes.ROUNDED_RECTANGLE, {
+      slide.addShape("roundRect", {
         x,
         y: startY,
         w: stepW,
@@ -33,7 +33,7 @@ class ProcessArrowComponent {
       });
 
       // Top Header Strip
-      slide.addShape(slide.shapes.RECTANGLE, {
+      slide.addShape("rect", {
         x,
         y: startY,
         w: stepW,

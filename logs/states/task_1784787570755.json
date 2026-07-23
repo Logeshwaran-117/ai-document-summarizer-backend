@@ -1,0 +1,42 @@
+{
+  "taskId": "task_1784787570755",
+  "status": "failed",
+  "currentStage": "documentAnalysis",
+  "completedStages": [
+    "documentAnalysis"
+  ],
+  "stageData": {
+    "documentAnalysis": {
+      "result": {
+        "type": "financial_report",
+        "confidence": "high",
+        "keyTopics": [
+          "Q2 2026 Revenue Performance",
+          "Profitability and Margins",
+          "Operating Expense Management",
+          "Strategic Enterprise Expansion",
+          "R&D and AI Automation"
+        ],
+        "primaryLanguage": "English",
+        "dataRichness": "high",
+        "hasTabularData": false,
+        "hasCharts": false,
+        "suggestedSlideTypes": [
+          "kpi",
+          "scorecard",
+          "bullets"
+        ],
+        "documentTitle": "ACME Financial Quarterly Report 2026",
+        "estimatedAudience": "Executives, Investors, and Strategic Partners",
+        "topMetrics": [
+          "Revenue of $12.4M (Up 24% YoY)",
+          "Gross Profit of $8.43M (68% Margin)",
+          "Net Profit of $2.8M (22.5% Margin)"
+        ]
+      },
+      "latencyMs": 6328
+    }
+  },
+  "createdDate": "2026-07-23T06:19:30.755Z",
+  "updatedDate": "2026-07-23T06:19:41.868Z"
+}

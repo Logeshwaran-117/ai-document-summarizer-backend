@@ -15,7 +15,7 @@ class TimelineComponent {
     const itemW = totalW / count;
 
     // Horizontal Central Spine Line
-    slide.addShape(slide.shapes.RECTANGLE, {
+    slide.addShape("rect", {
       x: 0.8,
       y: spineY,
       w: totalW,
@@ -32,7 +32,7 @@ class TimelineComponent {
       const nodeColor = palette[idx % palette.length];
 
       // Outer Halo Circle
-      slide.addShape(slide.shapes.OVAL, {
+      slide.addShape("oval", {
         x: cx - 0.22,
         y: spineY - 0.22,
         w: 0.44,
@@ -42,7 +42,7 @@ class TimelineComponent {
       });
 
       // Inner Core Node Circle
-      slide.addShape(slide.shapes.OVAL, {
+      slide.addShape("oval", {
         x: cx - 0.12,
         y: spineY - 0.12,
         w: 0.24,

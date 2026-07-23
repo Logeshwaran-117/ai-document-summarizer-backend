@@ -17,7 +17,7 @@ class QuoteComponent {
     const cardH = Math.min(availH, 3.2);
 
     // Card Container
-    slide.addShape(slide.shapes.ROUNDED_RECTANGLE, {
+    slide.addShape("roundRect", {
       x: 0.8,
       y: startY,
       w: containerW,

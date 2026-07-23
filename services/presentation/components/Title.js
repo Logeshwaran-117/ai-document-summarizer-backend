@@ -53,7 +53,7 @@ class TitleComponent {
     }
 
     // Accent Line
-    slide.addShape(slide.shapes.RECTANGLE, {
+    slide.addShape("rect", {
       x: 0.8,
       y: 4.7,
       w: 2.2,
@@ -97,7 +97,7 @@ class TitleComponent {
 
     // Key Insight Callout Banner
     if (slideData.keyInsight) {
-      slide.addShape(slide.shapes.RECTANGLE, {
+      slide.addShape("rect", {
         x: 0.8,
         y: 1.45,
         w: 11.7,

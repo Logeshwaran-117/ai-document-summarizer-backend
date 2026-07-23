@@ -24,7 +24,7 @@ class ComparisonComponent {
       const { data, x, accentColor } = col;
 
       // Card Container
-      slide.addShape(slide.shapes.ROUNDED_RECTANGLE, {
+      slide.addShape("roundRect", {
         x,
         y: startY,
         w: colW,
@@ -35,7 +35,7 @@ class ComparisonComponent {
       });
 
       // Header Banner
-      slide.addShape(slide.shapes.ROUNDED_RECTANGLE, {
+      slide.addShape("roundRect", {
         x,
         y: startY,
         w: colW,
@@ -88,7 +88,7 @@ class ComparisonComponent {
     const midX = 0.8 + colW + gap * 0.5 - 0.25;
     const midY = startY + cardH * 0.5 - 0.25;
 
-    slide.addShape(slide.shapes.OVAL, {
+    slide.addShape("oval", {
       x: midX,
       y: midY,
       w: 0.5,

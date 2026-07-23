@@ -106,7 +106,7 @@ class ChartComponent {
     const panelW = 3.9;
 
     // Container Card
-    slide.addShape(slide.shapes.ROUNDED_RECTANGLE, {
+    slide.addShape("roundRect", {
       x: panelX,
       y: startY,
       w: panelW,
