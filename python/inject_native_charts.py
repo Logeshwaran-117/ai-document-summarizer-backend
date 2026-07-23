@@ -374,7 +374,10 @@ def svg_folder_to_pptx(svg_dir, output_path):
         bg_added = False
 
         # 1. Check for pre-rendered PNG background (e.g. created by node-canvas)
-        if png_path.exists():
+        # Require at least 5KB — a valid 1280x720 slide PNG will always be much larger.
+        # A 0-byte or tiny file means node-canvas failed; skip it so we fall through to vector fallback.
+        PNG_MIN_BYTES = 5 * 1024
+        if png_path.exists() and png_path.stat().st_size >= PNG_MIN_BYTES:
             try:
                 pic = slide.shapes.add_picture(
                     str(png_path),
@@ -386,6 +389,8 @@ def svg_folder_to_pptx(svg_dir, output_path):
                 print(f"  🖼️ Embedded pre-rendered PNG slide background for slide {i+1}")
             except Exception as e:
                 print(f"  ⚠️ Error embedding pre-rendered PNG: {e}")
+        elif png_path.exists():
+            print(f"  ⚠️ Skipping tiny/corrupt PNG for slide {i+1} ({png_path.stat().st_size} bytes), falling through to vector fallback")
 
         # 2. Fallback to CairoSVG if PNG not present
         if not bg_added and cairosvg_available:

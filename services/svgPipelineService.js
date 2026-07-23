@@ -368,11 +368,20 @@ function escapeXml(str) {
 
 // ── Main Orchestrator Function ───────────────────────────────────────────────
 async function renderSvgToPngCanvas(svgContent, pngPath) {
+  // Ensure the SVG root tag always has explicit width/height (node-canvas requires them)
+  let svgStr = svgContent.trim();
+  if (/<svg/i.test(svgStr) && !/\bwidth\s*=/.test(svgStr.match(/<svg[^>]*/i)?.[0] || "")) {
+    svgStr = svgStr.replace(/<svg/i, '<svg width="1280" height="720"');
+  }
+  if (/<svg/i.test(svgStr) && !/\bheight\s*=/.test(svgStr.match(/<svg[^>]*/i)?.[0] || "")) {
+    svgStr = svgStr.replace(/<svg/i, '<svg height="720"');
+  }
+
   try {
     const { createCanvas, loadImage } = require("canvas");
     const canvas = createCanvas(1280, 720);
     const ctx = canvas.getContext("2d");
-    const imgBuf = Buffer.from(svgContent.trim(), "utf8");
+    const imgBuf = Buffer.from(svgStr, "utf8");
     const img = await loadImage(imgBuf);
     ctx.drawImage(img, 0, 0, 1280, 720);
     const pngBuffer = canvas.toBuffer("image/png");
@@ -380,6 +389,10 @@ async function renderSvgToPngCanvas(svgContent, pngPath) {
     return true;
   } catch (err) {
     console.warn(`⚠️ [SVG Pipeline] node-canvas PNG render warning: ${err.message}`);
+    // CRITICAL: Delete any partial/corrupt PNG so Python falls through to CairoSVG or vector fallback
+    if (fs.existsSync(pngPath)) {
+      try { fs.unlinkSync(pngPath); } catch (_) {}
+    }
     return false;
   }
 }
