@@ -1,11 +1,13 @@
 {
   "taskId": "task_1784787401642",
-  "status": "running",
-  "currentStage": "slideOutline",
+  "status": "completed",
+  "currentStage": "slideReview",
   "completedStages": [
     "documentAnalysis",
     "storyStrategy",
-    "slideOutline"
+    "slideOutline",
+    "slidePlanning",
+    "slideReview"
   ],
   "stageData": {
     "documentAnalysis": {
@@ -106,8 +108,594 @@
         }
       ],
       "latencyMs": 8170
+    },
+    "slidePlanning": {
+      "result": [
+        {
+          "slideNumber": 1,
+          "slideType": "title",
+          "headline": "ACME Financial Q2 2026 Financial Performance & Growth Strategy",
+          "subtitle": "Strong top-line acceleration paired with sector-leading profitability and scale",
+          "keyInsight": "ACME achieved a record $12.4M in Q2 revenue (up 24% YoY), backed by $15.2M in cash reserves to fund future initiatives.",
+          "bullets": [
+            "Revenue reached $12.4M in Q2 2026, driven by consistent enterprise demand.",
+            "Gross profit margin sustained at 68% ($8.43M), reflecting solid pricing power.",
+            "Robust cash position of $15.2M provides ample capital for strategic objectives."
+          ],
+          "cards": [
+            {
+              "title": "Q2 2026 Revenue",
+              "value": "$12.4M",
+              "subtitle": "Up 24% YoY",
+              "description": "Solid customer acquisition and expanded volume.",
+              "icon": "trending-up",
+              "trend": {
+                "direction": "up",
+                "value": "+24%"
+              }
+            },
+            {
+              "title": "Cash Reserves",
+              "value": "$15.2M",
+              "subtitle": "Unleveraged Capital",
+              "description": "Substantial balance sheet strength to fund R&D.",
+              "icon": "dollar-sign",
+              "trend": {
+                "direction": "flat",
+                "value": "Stable"
+              }
+            }
+          ],
+          "processSteps": [],
+          "table": null,
+          "chart": null,
+          "quote": null,
+          "speakerNotes": "Welcome everyone to our Q2 2026 financial review. Today we will walk through our strong growth numbers, our industry-leading profitability, and our core strategic objectives to drive future efficiency and expansion."
+        },
+        {
+          "slideNumber": 2,
+          "slideType": "executiveSummary",
+          "headline": "Record Q2 Revenue Growth and Healthy Margins Anchor Financial Results",
+          "subtitle": "ACME delivers $12.4M in revenue with 68% gross margin while keeping operating costs lean",
+          "keyInsight": "A balanced approach to revenue expansion and cost control yielded an 18% EBITDA increase and $2.8M in net profit.",
+          "bullets": [
+            "Top-line expansion: Delivered $12.4M in revenue, marking a strong 24% YoY increase.",
+            "Operational leverage: Gross profit expanded to $8.43M (68% margin) while OpEx was controlled at $4.2M.",
+            "Bottom-line efficiency: Generated EBITDA of $4.2M (up 18%) and net profit of $2.8M (22.5% margin)."
+          ],
+          "cards": [
+            {
+              "title": "Revenue",
+              "value": "$12.4M",
+              "subtitle": "24% YoY Growth",
+              "description": "Driven by robust enterprise contract expansion.",
+              "icon": "trending-up",
+              "trend": {
+                "direction": "up",
+                "value": "+24%"
+              }
+            },
+            {
+              "title": "Gross Profit Margin",
+              "value": "68%",
+              "subtitle": "$8.43M Gross Profit",
+              "description": "Healthy pricing power and service delivery cost management.",
+              "icon": "check-circle",
+              "trend": {
+                "direction": "up",
+                "value": "Stable"
+              }
+            },
+            {
+              "title": "EBITDA",
+              "value": "$4.2M",
+              "subtitle": "Up 18% YoY",
+              "description": "Strong operating efficiency flow-through.",
+              "icon": "trending-up",
+              "trend": {
+                "direction": "up",
+                "value": "+18%"
+              }
+            },
+            {
+              "title": "Net Profit",
+              "value": "22.5%",
+              "subtitle": "$2.8M Net Profit",
+              "description": "Maintained double-digit bottom-line margins.",
+              "icon": "dollar-sign",
+              "trend": {
+                "direction": "up",
+                "value": "22.5%"
+              }
+            }
+          ],
+          "processSteps": [],
+          "table": null,
+          "chart": null,
+          "quote": null,
+          "speakerNotes": "This quarter demonstrates our dual ability to scale top-line revenue while maintaining high operational efficiency. Our gross margin remains a key strength at 68%, and our $15.2M cash balance gives us ample runway to pursue targeted strategic initiatives."
+        },
+        {
+          "slideNumber": 3,
+          "slideType": "chart",
+          "headline": "Strong Top-Line Trajectory with 24% YoY Revenue Expansion",
+          "subtitle": "Analyzing the $12.4M revenue milestone and historical momentum",
+          "keyInsight": "Consistent upward momentum reflects growing enterprise adoption and resilient expansion in key territories.",
+          "bullets": [
+            "Year-over-year top-line expansion of 24%, driven by core product demand.",
+            "Solid validation of product-market fit across enterprise segments.",
+            "Healthy runway established to fund subsequent product rollouts and R&D pipelines."
+          ],
+          "cards": [],
+          "processSteps": [],
+          "table": null,
+          "chart": {
+            "chartType": "bar",
+            "title": "Revenue Performance ($M)",
+            "categories": [
+              "Q2 2025",
+              "Q2 2026"
+            ],
+            "series": [
+              {
+                "name": "Revenue",
+                "values": [
+                  10,
+                  12.4
+                ]
+              }
+            ],
+            "unit": "M"
+          },
+          "quote": null,
+          "speakerNotes": "Looking at our top-line metrics, our revenue of $12.4M represents a 24% YoY growth rate. This confirms that our current sales strategy is translating into solid, predictable recurring and transactional volume."
+        },
+        {
+          "slideNumber": 4,
+          "slideType": "table",
+          "headline": "Superior Operational Leverage Yields 68% Gross Profit Margin",
+          "subtitle": "Deep dive into financial highlights, expense management, and bottom-line profit margins",
+          "keyInsight": "Controlled operating expenses of $4.2M allow top-line expansion to flow directly to EBITDA and Net Profit.",
+          "bullets": [
+            "Gross profit generated of $8.43M provides a resilient buffer for downstream growth operations.",
+            "EBITDA growth of 18% shows close alignment with top-line growth trends, avoiding cost creep.",
+            "Net profit margin of 22.5% ($2.8M) places ACME in the top quartile of its financial peers."
+          ],
+          "cards": [],
+          "processSteps": [],
+          "table": {
+            "headers": [
+              "Metric",
+              "Q2 2026 Value",
+              "Margin/Growth",
+              "Strategic Health Check"
+            ],
+            "rows": [
+              [
+                "Revenue",
+                "$12.40M",
+                "Up 24% YoY",
+                "Strong top-line acceleration"
+              ],
+              [
+                "Gross Profit",
+                "$8.43M",
+                "68.0% Margin",
+                "High pricing power & delivery efficiency"
+              ],
+              [
+                "EBITDA",
+                "$4.20M",
+                "Up 18% YoY",
+                "Excellent operational discipline"
+              ],
+              [
+                "Net Profit",
+                "$2.80M",
+                "22.5% Margin",
+                "Robust bottom-line flow-through"
+              ],
+              [
+                "Cash Balance",
+                "$15.20M",
+                "N/A",
+                "Highly liquid capital reserves structure"
+              ]
+            ]
+          },
+          "chart": null,
+          "quote": null,
+          "speakerNotes": "This table provides a comprehensive overview of our income statement efficiency. At a 68% gross margin and 22.5% net profit margin, our business model scales efficiently. We are translating revenue growth directly into clean EBITDA and cash reserves."
+        },
+        {
+          "slideNumber": 5,
+          "slideType": "process",
+          "headline": "Strategic Value Creation Through Enterprise Expansion and COGS Optimization",
+          "subtitle": "Translating high cash reserves and strong gross margins into systematic growth levers",
+          "keyInsight": "Targeted cloud optimization and R&D investments will solidify margin resilience as we accelerate North American sales.",
+          "bullets": [
+            "North America targeted for aggressive enterprise market-share acquisition.",
+            "Cloud optimization acts as a primary lever to lift future gross margin targets beyond 70%.",
+            "AI pipelines designed to reduce internal processing costs and improve client delivery speeds."
+          ],
+          "cards": [],
+          "processSteps": [
+            {
+              "stepNumber": 1,
+              "title": "Enterprise Sales Expansion",
+              "description": "Accelerate enterprise sales expansion efforts specifically targeted within North American markets.",
+              "icon": "check"
+            },
+            {
+              "stepNumber": 2,
+              "title": "Cloud Infrastructure Optimization",
+              "description": "Optimize infrastructure deployment to reduce Cost of Goods Sold (COGS) by 8%.",
+              "icon": "check"
+            },
+            {
+              "stepNumber": 3,
+              "title": "R&D AI Automation Pipelines",
+              "description": "Expand structural research and development investment directly into AI automation pipelines.",
+              "icon": "check"
+            }
+          ],
+          "table": null,
+          "chart": null,
+          "quote": null,
+          "speakerNotes": "Looking forward, we have three clear strategic objectives. First, we will accelerate North American enterprise sales. Second, we are optimization-focused with an 8% COGS reduction target via cloud infrastructure tuning. Third, we are deploying strategic R&D capital into AI automation pipelines."
+        },
+        {
+          "slideNumber": 6,
+          "slideType": "closing",
+          "headline": "Poised for a Strong Finish to FY 2026 with $15.2M Cash Cushion",
+          "subtitle": "Capital allocation framework aligned with high-margin expansion targets",
+          "keyInsight": "ACME possesses the financial health and strategic clarity to scale rapidly while defending high profitability metrics.",
+          "bullets": [
+            "Outstanding growth of 24% YoY establishes a robust baseline for upcoming quarters.",
+            "Operational discipline yields controlled expenses and strong EBITDA of $4.2M.",
+            "Strategic transition into cloud infrastructure optimization (8% reduction) and NA enterprise sales."
+          ],
+          "cards": [
+            {
+              "title": "Gross Margin",
+              "value": "68%+",
+              "subtitle": "Margin Defense",
+              "description": "Maintaining superior margin profile via cloud optimization.",
+              "icon": "shield",
+              "trend": {
+                "direction": "up",
+                "value": "+8% COGS"
+              }
+            },
+            {
+              "title": "EBITDA Growth",
+              "value": "Up 18%",
+              "subtitle": "Scale Acceleration",
+              "description": "Focusing on sustainable EBITDA compounding.",
+              "icon": "trending-up",
+              "trend": {
+                "direction": "up",
+                "value": "+18%"
+              }
+            },
+            {
+              "title": "Liquidity Reserve",
+              "value": "$15.2M",
+              "subtitle": "Cash Balance",
+              "description": "Unleveraged dry powder ready for tactical allocation.",
+              "icon": "dollar-sign",
+              "trend": {
+                "direction": "flat",
+                "value": "Strong"
+              }
+            }
+          ],
+          "processSteps": [],
+          "table": null,
+          "chart": null,
+          "quote": null,
+          "speakerNotes": "In summary, our Q2 2026 performance lays down an exceptional blueprint. With $15.2M in cash and a highly repeatable model, we are well-positioned. Thank you, and I would now like to open the floor to any questions."
+        }
+      ],
+      "latencyMs": 17677
+    },
+    "slideReview": {
+      "result": [
+        {
+          "slideNumber": 1,
+          "slideType": "title",
+          "headline": "ACME Financial Q2 2026 Financial Performance & Growth Strategy",
+          "subtitle": "Strong top-line acceleration paired with sector-leading profitability and scale",
+          "keyInsight": "ACME achieved a record $12.4M in Q2 revenue (up 24% YoY), backed by $15.2M in cash reserves to fund future initiatives.",
+          "bullets": [
+            "**Revenue reached**: $12.4M in Q2 2026, driven by consistent enterprise demand.",
+            "**Gross profit**: margin sustained at 68% ($8.43M), reflecting solid pricing power.",
+            "**Robust cash**: position of $15.2M provides ample capital for strategic objectives."
+          ],
+          "cards": [
+            {
+              "title": "Q2 2026 Revenue",
+              "value": "$12.4M",
+              "subtitle": "Up 24% YoY",
+              "description": "Solid customer acquisition and expanded volume.",
+              "icon": "trending-up",
+              "trend": {
+                "direction": "up",
+                "value": "+24%"
+              }
+            },
+            {
+              "title": "Cash Reserves",
+              "value": "$15.2M",
+              "subtitle": "Unleveraged Capital",
+              "description": "Substantial balance sheet strength to fund R&D.",
+              "icon": "dollar-sign",
+              "trend": {
+                "direction": "flat",
+                "value": "Stable"
+              }
+            }
+          ],
+          "processSteps": [],
+          "table": null,
+          "chart": null,
+          "quote": null,
+          "speakerNotes": "Welcome everyone to our Q2 2026 financial review. Today we will walk through our strong growth numbers, our industry-leading profitability, and our core strategic objectives to drive future efficiency and expansion.",
+          "slideQualityScore": 100
+        },
+        {
+          "slideNumber": 2,
+          "slideType": "executiveSummary",
+          "headline": "Record Q2 Revenue Growth and Healthy Margins Anchor Financial Results",
+          "subtitle": "ACME delivers $12.4M in revenue with 68% gross margin while keeping operating costs lean",
+          "keyInsight": "A balanced approach to revenue expansion and cost control yielded an 18% EBITDA increase and $2.8M in net profit.",
+          "bullets": [
+            "**Top-line expansion**: Delivered $12.4M in revenue, marking a strong 24% YoY increase.",
+            "**Operational leverage**: Gross profit expanded to $8.43M (68% margin) while OpEx was controlled at $4.2M.",
+            "**Bottom-line efficiency**: Generated EBITDA of $4.2M (up 18%) and net profit of $2.8M (22.5% margin)."
+          ],
+          "cards": [
+            {
+              "title": "Revenue",
+              "value": "$12.4M",
+              "subtitle": "24% YoY Growth",
+              "description": "Driven by robust enterprise contract expansion.",
+              "icon": "trending-up",
+              "trend": {
+                "direction": "up",
+                "value": "+24%"
+              }
+            },
+            {
+              "title": "Gross Profit Margin",
+              "value": "68%",
+              "subtitle": "$8.43M Gross Profit",
+              "description": "Healthy pricing power and service delivery cost management.",
+              "icon": "check-circle",
+              "trend": {
+                "direction": "up",
+                "value": "Stable"
+              }
+            },
+            {
+              "title": "EBITDA",
+              "value": "$4.2M",
+              "subtitle": "Up 18% YoY",
+              "description": "Strong operating efficiency flow-through.",
+              "icon": "trending-up",
+              "trend": {
+                "direction": "up",
+                "value": "+18%"
+              }
+            },
+            {
+              "title": "Net Profit",
+              "value": "22.5%",
+              "subtitle": "$2.8M Net Profit",
+              "description": "Maintained double-digit bottom-line margins.",
+              "icon": "dollar-sign",
+              "trend": {
+                "direction": "up",
+                "value": "22.5%"
+              }
+            }
+          ],
+          "processSteps": [],
+          "table": null,
+          "chart": null,
+          "quote": null,
+          "speakerNotes": "This quarter demonstrates our dual ability to scale top-line revenue while maintaining high operational efficiency. Our gross margin remains a key strength at 68%, and our $15.2M cash balance gives us ample runway to pursue targeted strategic initiatives.",
+          "slideQualityScore": 100
+        },
+        {
+          "slideNumber": 3,
+          "slideType": "chart",
+          "headline": "Strong Top-Line Trajectory with 24% YoY Revenue Expansion",
+          "subtitle": "Analyzing the $12.4M revenue milestone and historical momentum",
+          "keyInsight": "Consistent upward momentum reflects growing enterprise adoption and resilient expansion in key territories.",
+          "bullets": [
+            "**Year-over-year top-line**: expansion of 24%, driven by core product demand.",
+            "**Solid validation**: of product-market fit across enterprise segments.",
+            "**Healthy runway**: established to fund subsequent product rollouts and R&D pipelines."
+          ],
+          "cards": [],
+          "processSteps": [],
+          "table": null,
+          "chart": {
+            "chartType": "bar",
+            "title": "Revenue Performance ($M)",
+            "categories": [
+              "Q2 2025",
+              "Q2 2026"
+            ],
+            "series": [
+              {
+                "name": "Revenue",
+                "values": [
+                  10,
+                  12.4
+                ]
+              }
+            ],
+            "unit": "M"
+          },
+          "quote": null,
+          "speakerNotes": "Looking at our top-line metrics, our revenue of $12.4M represents a 24% YoY growth rate. This confirms that our current sales strategy is translating into solid, predictable recurring and transactional volume.",
+          "slideQualityScore": 100
+        },
+        {
+          "slideNumber": 4,
+          "slideType": "table",
+          "headline": "Superior Operational Leverage Yields 68% Gross Profit Margin",
+          "subtitle": "Deep dive into financial highlights, expense management, and bottom-line profit margins",
+          "keyInsight": "Controlled operating expenses of $4.2M allow top-line expansion to flow directly to EBITDA and Net Profit.",
+          "bullets": [
+            "**Gross profit**: generated of $8.43M provides a resilient buffer for downstream growth operations.",
+            "**EBITDA growth**: of 18% shows close alignment with top-line growth trends, avoiding cost creep.",
+            "**Net profit**: margin of 22.5% ($2.8M) places ACME in the top quartile of its financial peers."
+          ],
+          "cards": [],
+          "processSteps": [],
+          "table": {
+            "headers": [
+              "Metric",
+              "Q2 2026 Value",
+              "Margin/Growth",
+              "Strategic Health Check"
+            ],
+            "rows": [
+              [
+                "Revenue",
+                "$12.40M",
+                "Up 24% YoY",
+                "Strong top-line acceleration"
+              ],
+              [
+                "Gross Profit",
+                "$8.43M",
+                "68.0% Margin",
+                "High pricing power & delivery efficiency"
+              ],
+              [
+                "EBITDA",
+                "$4.20M",
+                "Up 18% YoY",
+                "Excellent operational discipline"
+              ],
+              [
+                "Net Profit",
+                "$2.80M",
+                "22.5% Margin",
+                "Robust bottom-line flow-through"
+              ],
+              [
+                "Cash Balance",
+                "$15.20M",
+                "N/A",
+                "Highly liquid capital reserves structure"
+              ]
+            ]
+          },
+          "chart": null,
+          "quote": null,
+          "speakerNotes": "This table provides a comprehensive overview of our income statement efficiency. At a 68% gross margin and 22.5% net profit margin, our business model scales efficiently. We are translating revenue growth directly into clean EBITDA and cash reserves.",
+          "slideQualityScore": 100
+        },
+        {
+          "slideNumber": 5,
+          "slideType": "process",
+          "headline": "Strategic Value Creation Through Enterprise Expansion and COGS Optimization",
+          "subtitle": "Translating high cash reserves and strong gross margins into systematic growth levers",
+          "keyInsight": "Targeted cloud optimization and R&D investments will solidify margin resilience as we accelerate North American sales.",
+          "bullets": [
+            "**North America**: targeted for aggressive enterprise market-share acquisition.",
+            "**Cloud optimization**: acts as a primary lever to lift future gross margin targets beyond 70%.",
+            "**AI pipelines**: designed to reduce internal processing costs and improve client delivery speeds."
+          ],
+          "cards": [],
+          "processSteps": [
+            {
+              "stepNumber": 1,
+              "title": "Enterprise Sales Expansion",
+              "description": "Accelerate enterprise sales expansion efforts specifically targeted within North American markets.",
+              "icon": "check"
+            },
+            {
+              "stepNumber": 2,
+              "title": "Cloud Infrastructure Optimization",
+              "description": "Optimize infrastructure deployment to reduce Cost of Goods Sold (COGS) by 8%.",
+              "icon": "check"
+            },
+            {
+              "stepNumber": 3,
+              "title": "R&D AI Automation Pipelines",
+              "description": "Expand structural research and development investment directly into AI automation pipelines.",
+              "icon": "check"
+            }
+          ],
+          "table": null,
+          "chart": null,
+          "quote": null,
+          "speakerNotes": "Looking forward, we have three clear strategic objectives. First, we will accelerate North American enterprise sales. Second, we are optimization-focused with an 8% COGS reduction target via cloud infrastructure tuning. Third, we are deploying strategic R&D capital into AI automation pipelines.",
+          "slideQualityScore": 100
+        },
+        {
+          "slideNumber": 6,
+          "slideType": "closing",
+          "headline": "Poised for a Strong Finish to FY 2026 with $15.2M Cash Cushion",
+          "subtitle": "Capital allocation framework aligned with high-margin expansion targets",
+          "keyInsight": "ACME possesses the financial health and strategic clarity to scale rapidly while defending high profitability metrics.",
+          "bullets": [
+            "**Outstanding growth**: of 24% YoY establishes a robust baseline for upcoming quarters.",
+            "**Operational discipline**: yields controlled expenses and strong EBITDA of $4.2M.",
+            "**Strategic transition**: into cloud infrastructure optimization (8% reduction) and NA enterprise sales."
+          ],
+          "cards": [
+            {
+              "title": "Gross Margin",
+              "value": "68%+",
+              "subtitle": "Margin Defense",
+              "description": "Maintaining superior margin profile via cloud optimization.",
+              "icon": "shield",
+              "trend": {
+                "direction": "up",
+                "value": "+8% COGS"
+              }
+            },
+            {
+              "title": "EBITDA Growth",
+              "value": "Up 18%",
+              "subtitle": "Scale Acceleration",
+              "description": "Focusing on sustainable EBITDA compounding.",
+              "icon": "trending-up",
+              "trend": {
+                "direction": "up",
+                "value": "+18%"
+              }
+            },
+            {
+              "title": "Liquidity Reserve",
+              "value": "$15.2M",
+              "subtitle": "Cash Balance",
+              "description": "Unleveraged dry powder ready for tactical allocation.",
+              "icon": "dollar-sign",
+              "trend": {
+                "direction": "flat",
+                "value": "Strong"
+              }
+            }
+          ],
+          "processSteps": [],
+          "table": null,
+          "chart": null,
+          "quote": null,
+          "speakerNotes": "In summary, our Q2 2026 performance lays down an exceptional blueprint. With $15.2M in cash and a highly repeatable model, we are well-positioned. Thank you, and I would now like to open the floor to any questions.",
+          "slideQualityScore": 100
+        }
+      ],
+      "latencyMs": 2
     }
   },
   "createdDate": "2026-07-23T06:16:41.643Z",
-  "updatedDate": "2026-07-23T06:16:58.603Z"
+  "updatedDate": "2026-07-23T06:17:16.289Z"
 }
