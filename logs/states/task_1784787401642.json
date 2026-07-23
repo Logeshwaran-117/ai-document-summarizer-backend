@@ -1,0 +1,113 @@
+{
+  "taskId": "task_1784787401642",
+  "status": "running",
+  "currentStage": "slideOutline",
+  "completedStages": [
+    "documentAnalysis",
+    "storyStrategy",
+    "slideOutline"
+  ],
+  "stageData": {
+    "documentAnalysis": {
+      "result": {
+        "type": "financial_report",
+        "confidence": "high",
+        "keyTopics": [
+          "Q2 2026 Financial Highlights",
+          "Revenue Growth",
+          "Strategic Objectives",
+          "Cloud Infrastructure Optimization",
+          "AI Automation Investment"
+        ],
+        "primaryLanguage": "English",
+        "dataRichness": "high",
+        "hasTabularData": false,
+        "hasCharts": false,
+        "suggestedSlideTypes": [
+          "kpi",
+          "scorecard",
+          "bullets"
+        ],
+        "documentTitle": "ACME Financial Quarterly Report 2026",
+        "estimatedAudience": "Investors, Executive Leadership, and Financial Analysts",
+        "topMetrics": [
+          "Revenue: $12.4M (Up 24% YoY)",
+          "Gross Profit: $8.43M (68% Margin)",
+          "Net Profit: $2.8M (22.5% Margin)"
+        ]
+      },
+      "latencyMs": 5148
+    },
+    "storyStrategy": {
+      "result": {
+        "presentationTitle": "Q2 2026 Financial Performance & Growth Strategy",
+        "executiveSummary": "ACME delivered strong Q2 2026 results with $12.4M revenue, up 24% YoY, and a 68% gross margin, positioned well for strategic expansion.",
+        "keyMessages": [
+          "Revenue surged 24% YoY to $12.4M, driven by strong market demand.",
+          "Gross profit reached $8.43M with robust 68% margin expansion.",
+          "EBITDA increased 18% to $4.2M, maintaining high cash of $15.2M."
+        ],
+        "narrativeFlow": "Performance Review -> Profitability Metrics -> Efficiency Targets -> Strategic Growth",
+        "targetSlideCount": 6,
+        "audience": "Board of Directors",
+        "tone": "Professional",
+        "topQuantitativeFindings": [
+          "$12.4M Q2 Revenue (Up 24% YoY)",
+          "68% Gross Profit Margin ($8.43M)",
+          "$15.2M Cash Balance to fund expansion"
+        ],
+        "mostImportantInsight": "Strong profit margins and $15.2M cash enable immediate investment in NA and AI pipelines."
+      },
+      "latencyMs": 3636
+    },
+    "slideOutline": {
+      "result": [
+        {
+          "slideNumber": 1,
+          "slideType": "title",
+          "title": "Q2 2026 Financial Performance & Growth Strategy",
+          "contentFocus": "Cover and overview of ACME's Q2 2026 performance and future expansion plans",
+          "purpose": "Set context & orient audience"
+        },
+        {
+          "slideNumber": 2,
+          "slideType": "executiveSummary",
+          "title": "Executive Summary",
+          "contentFocus": "ACME delivered strong Q2 2026 results with $12.4M revenue, up 24% YoY, and a 68% gross margin, positioned well for strategic expansion.",
+          "purpose": "Deliver core message immediately"
+        },
+        {
+          "slideNumber": 3,
+          "slideType": "performanceReview",
+          "title": "Performance Review: Top-Line Growth",
+          "contentFocus": "Analysis of the $12.4M revenue milestone and the drivers behind the 24% YoY growth trend",
+          "purpose": "Establish revenue validation and historical trajectory"
+        },
+        {
+          "slideNumber": 4,
+          "slideType": "profitabilityMetrics",
+          "title": "Profitability & Margin Analysis",
+          "contentFocus": "Deep dive into the 68% gross margin achievement and underlying cost structures",
+          "purpose": "Demonstrate operational leverage and financial health"
+        },
+        {
+          "slideNumber": 5,
+          "slideType": "efficiencyTargets",
+          "title": "Efficiency Targets & Strategic Growth",
+          "contentFocus": "Identification of new efficiency targets to optimize scaling as we enter the next phase of strategic growth",
+          "purpose": "Outline operational optimization plans alongside expansion goals"
+        },
+        {
+          "slideNumber": 6,
+          "slideType": "closing",
+          "title": "Outlook & Strategic Alignment",
+          "contentFocus": "Summary of next steps, guidance for the remainder of FY 2026, and transition to Q&A",
+          "purpose": "Reinforce long-term value creation and open floor for discussion"
+        }
+      ],
+      "latencyMs": 8170
+    }
+  },
+  "createdDate": "2026-07-23T06:16:41.643Z",
+  "updatedDate": "2026-07-23T06:16:58.603Z"
+}

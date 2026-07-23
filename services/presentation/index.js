@@ -1,5 +1,13 @@
 /**
  * presentation/index.js — Master Pipeline Facade & Orchestration Controller
+ * Runs the 7-stage Enterprise Presentation Engine:
+ *   1. Document Analysis
+ *   2. Story Strategy
+ *   3. Outline & Story Sequence Validation
+ *   4. Slide Content Planning
+ *   5. AI Slide Review & Polish
+ *   6. Render Dry Run Bounding Box Optimization
+ *   7. Overall & Slide-Level Quality Scoring
  */
 
 const { PresentationModel } = require("./canonical/presentationModel");
@@ -13,15 +21,18 @@ const { analyzeDocument } = require("./pipeline/documentAnalyzer");
 const { generateStory } = require("./pipeline/storyGenerator");
 const { generateOutline } = require("./pipeline/outlineGenerator");
 const { planSlideContent } = require("./pipeline/slidePlanner");
+const SlideReviewer = require("./pipeline/slideReviewer");
+const StoryValidator = require("./pipeline/storyValidator");
 
-// Utilities & Exports
+// Renderers & Utilities
+const DryRunSimulator = require("./renderer/dryRunSimulator");
 const QualityScorer = require("./utils/qualityScorer");
 const DebugViewer = require("./utils/debugViewer");
 const { exportToPptx } = require("./export/pptExport");
 
 async function generatePresentationPlan(documentText, wizardOptions = {}, onProgress = null) {
   const taskId = wizardOptions.taskId || `task_${Date.now()}`;
-  console.log(`🚀 [PresentationEngine] Starting multi-stage pipeline for Task ID: ${taskId}`);
+  console.log(`🚀 [PresentationEngine v2.0] Starting 7-stage pipeline for Task ID: ${taskId}`);
 
   const stateManager = new StateManager(taskId);
   const emitter = new ProgressEmitter(onProgress);
@@ -38,22 +49,30 @@ async function generatePresentationPlan(documentText, wizardOptions = {}, onProg
     // Build shared context with document analysis
     const context = ContextBuilder.buildContext(documentText, wizardOptions, docAnalysis);
 
-    // Stage 2: Story Strategy (30%)
+    // Stage 2: Story Strategy (25%)
     const storyStrategy = await StageRunner.runStage(
-      "storyStrategy", stateManager, emitter, 30, "Building strategic narrative arc & key messages...",
+      "storyStrategy", stateManager, emitter, 25, "Building strategic narrative arc & key messages...",
       () => generateStory(context)
     );
 
-    // Stage 3: Slide Outline (50%)
-    const outline = await StageRunner.runStage(
-      "slideOutline", stateManager, emitter, 50, `Fitting outline to target ${context.slideCount} slides...`,
+    // Stage 3: Slide Outline & Story Sequence Validation (45%)
+    const rawOutline = await StageRunner.runStage(
+      "slideOutline", stateManager, emitter, 45, `Fitting outline to target ${context.slideCount} slides...`,
       () => generateOutline(context, storyStrategy)
     );
 
-    // Stage 4: Slide Content Planning (75%)
-    const slidesData = await StageRunner.runStage(
-      "slidePlanning", stateManager, emitter, 75, "Planning rich slide content, cards & charts...",
-      () => planSlideContent(context, storyStrategy, outline)
+    StoryValidator.validateNarrativeSequence(rawOutline, storyStrategy);
+
+    // Stage 4: Slide Content Planning (65%)
+    const rawSlidesData = await StageRunner.runStage(
+      "slidePlanning", stateManager, emitter, 65, "Planning rich slide content, cards & charts...",
+      () => planSlideContent(context, storyStrategy, rawOutline)
+    );
+
+    // Stage 5: AI Slide Review & Lead-in Quality Polish (75%)
+    const polishedSlidesData = await StageRunner.runStage(
+      "slideReview", stateManager, emitter, 75, "Running AI slide review & lead-in formatting polish...",
+      () => SlideReviewer.reviewAndPolishSlides(rawSlidesData, context)
     );
 
     // Assemble Canonical Presentation Model
@@ -70,18 +89,22 @@ async function generatePresentationPlan(documentText, wizardOptions = {}, onProg
         keyMessages: storyStrategy.keyMessages,
       },
       theme: {
-        name: wizardOptions.theme || "executive",
+        name: wizardOptions.theme || docAnalysis.type || "executive",
       },
-      slides: slidesData,
+      slides: polishedSlidesData,
     });
 
-    // Stage 5: Quality Scoring & Debug Trace (85%)
-    emitter.emit("qualityScoring", 85, "Evaluating presentation visual quality & whitespace...");
+    // Stage 6: Render Dry Run Bounding Box Optimization (85%)
+    emitter.emit("dryRun", 85, "Executing pre-render dry-run simulation & font scaling...");
+    DryRunSimulator.simulateAndAdjust(presentationModel);
+
+    // Stage 7: Quality Scoring (Overall + Per-Slide) & Debug Trace (95%)
+    emitter.emit("qualityScoring", 95, "Evaluating presentation visual quality & per-slide density scores...");
     QualityScorer.evaluate(presentationModel);
     DebugViewer.generateDebugReport(taskId, presentationModel);
 
     stateManager.setStatus("completed");
-    emitter.emit("completed", 100, "Presentation planning complete!");
+    emitter.emit("completed", 100, "Enterprise Presentation Engine planning complete!");
 
     return presentationModel.toJSON();
   } catch (err) {

@@ -1,21 +1,24 @@
 /**
- * themes/index.js — Theme Engine Resolver
+ * themes/index.js
+ * Theme registry and asset pack resolver.
  */
 
-const executive = require("./executive");
+const { assetPacks, getAssetPack } = require("./assetPacks");
+const executiveTheme = require("./executive");
 
-const THEMES = {
-  executive,
-  navyGold: executive,
-  minimal: { ...executive, name: "minimal", bgDark: "0F3D3E", accent: "3FBFAE" },
-  corporate: { ...executive, name: "corporate", bgDark: "1A1A2E", accent: "7C3AED" },
-  banking: { ...executive, name: "banking", bgDark: "0A2540", accent: "00D4B2" },
-  dark: { ...executive, name: "dark", bgDark: "0F1B38", accent: "F5A623" },
-  light: executive,
+const themeRegistry = {
+  executive: executiveTheme,
+  ...assetPacks,
 };
 
-function resolveTheme(key) {
-  return THEMES[key] || THEMES.executive;
+function resolveTheme(themeName = "executive") {
+  const key = String(themeName).toLowerCase();
+  if (themeRegistry[key]) return themeRegistry[key].colors ? themeRegistry[key] : getAssetPack(key);
+  return getAssetPack("executive");
 }
 
-module.exports = { resolveTheme, THEMES };
+module.exports = {
+  resolveTheme,
+  getAssetPack,
+  themeRegistry,
+};
