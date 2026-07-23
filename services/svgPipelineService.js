@@ -288,9 +288,19 @@ function getPythonBinary() {
 function runPythonScript(scriptPath, args, options = {}) {
   return new Promise((resolve, reject) => {
     const pythonCmd = getPythonBinary();
-    execFile(pythonCmd, [scriptPath, ...args], options, (err, stdout, stderr) => {
+    const execOpts = {
+      ...options,
+      env: {
+        ...process.env,
+        PYTHONIOENCODING: "utf-8",
+        PYTHONUTF8: "1",
+        ...(options.env || {}),
+      },
+    };
+
+    execFile(pythonCmd, [scriptPath, ...args], execOpts, (err, stdout, stderr) => {
       if (err && pythonCmd !== "python") {
-        execFile("python", [scriptPath, ...args], options, (err2, stdout2, stderr2) => {
+        execFile("python", [scriptPath, ...args], execOpts, (err2, stdout2, stderr2) => {
           if (err2) return reject(new Error(stderr2 || stderr || err2.message || err.message));
           resolve(stdout2);
         });

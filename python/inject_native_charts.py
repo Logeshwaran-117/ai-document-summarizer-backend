@@ -11,6 +11,11 @@ import re
 from pathlib import Path
 from xml.etree import ElementTree as ET
 
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+if hasattr(sys.stderr, 'reconfigure'):
+    sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+
 try:
     from pptx import Presentation
     from pptx.util import Inches, Pt, Emu
