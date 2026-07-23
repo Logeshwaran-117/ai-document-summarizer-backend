@@ -16,6 +16,8 @@ try:
     from pptx.util import Inches, Pt, Emu
     from pptx.dml.color import RGBColor
     from pptx.enum.chart import XL_CHART_TYPE
+    from pptx.enum.shapes import MSO_SHAPE
+    from pptx.enum.text import PP_ALIGN
     from pptx.chart.data import ChartData
 except ModuleNotFoundError:
     import subprocess
@@ -34,6 +36,8 @@ except ModuleNotFoundError:
     from pptx.util import Inches, Pt, Emu
     from pptx.dml.color import RGBColor
     from pptx.enum.chart import XL_CHART_TYPE
+    from pptx.enum.shapes import MSO_SHAPE
+    from pptx.enum.text import PP_ALIGN
     from pptx.chart.data import ChartData
     print("✅ python-pptx auto-installed successfully.")
 
@@ -177,6 +181,128 @@ def add_native_table(slide, payload):
             except Exception:
                 pass
 
+def parse_svg_shapes_to_pptx(svg_path, slide):
+    """Fallback vector parser: parses SVG elements directly into native python-pptx shapes."""
+    try:
+        ET.register_namespace("", "http://www.w3.org/2000/svg")
+        tree = ET.parse(svg_path)
+        root = tree.getroot()
+    except Exception as e:
+        print(f"  ⚠️ Error parsing SVG XML in {svg_path}: {e}")
+        return
+
+    def clean_tag(tag):
+        return tag.split("}")[-1] if "}" in tag else tag
+
+    # Process elements
+    for elem in root.iter():
+        tag = clean_tag(elem.tag)
+
+        if elem.get("data-pptx-replace-with"):
+            continue
+
+        if tag == "rect":
+            try:
+                w = float(elem.get("width", 0))
+                h = float(elem.get("height", 0))
+                if w <= 0 or h <= 0:
+                    continue
+                x = float(elem.get("x", 0))
+                y = float(elem.get("y", 0))
+
+                fill_hex = elem.get("fill")
+                stroke_hex = elem.get("stroke")
+                rx = float(elem.get("rx", 0))
+
+                shape_type = MSO_SHAPE.ROUNDED_RECTANGLE if rx > 0 else MSO_SHAPE.RECTANGLE
+                shape = slide.shapes.add_shape(
+                    shape_type,
+                    Inches(px_to_in(x)), Inches(px_to_in(y)),
+                    Inches(px_to_in(w)), Inches(px_to_in(h))
+                )
+
+                if fill_hex and fill_hex != "none":
+                    shape.fill.solid()
+                    shape.fill.fore_color.rgb = hex_to_rgb(fill_hex)
+                else:
+                    shape.fill.background()
+
+                if stroke_hex and stroke_hex != "none":
+                    shape.line.color.rgb = hex_to_rgb(stroke_hex)
+                    sw = float(elem.get("stroke-width", 1))
+                    shape.line.width = Pt(sw)
+                else:
+                    shape.line.fill.background()
+            except Exception:
+                pass
+
+        elif tag == "text":
+            try:
+                raw_text = "".join(elem.itertext()).strip()
+                if not raw_text:
+                    continue
+
+                x = float(elem.get("x", 60))
+                y = float(elem.get("y", 100))
+                font_size = float(elem.get("font-size", 14))
+                font_family = elem.get("font-family", "Calibri")
+                fill_hex = elem.get("fill", "#FFFFFF")
+                font_weight = elem.get("font-weight", "normal")
+                text_anchor = elem.get("text-anchor", "left")
+
+                top_y = max(0, y - font_size * 0.8)
+                width = max(100, 1200 - x) if text_anchor != "end" else max(100, x)
+
+                txBox = slide.shapes.add_textbox(
+                    Inches(px_to_in(x)), Inches(px_to_in(top_y)),
+                    Inches(px_to_in(width)), Inches(px_to_in(font_size * 2))
+                )
+                tf = txBox.text_frame
+                tf.word_wrap = True
+
+                p = tf.paragraphs[0]
+                if text_anchor == "middle":
+                    p.alignment = PP_ALIGN.CENTER
+                elif text_anchor == "end":
+                    p.alignment = PP_ALIGN.RIGHT
+                else:
+                    p.alignment = PP_ALIGN.LEFT
+
+                run = p.add_run()
+                run.text = raw_text
+                run.font.name = font_family
+                run.font.size = Pt(font_size * 0.75)
+                run.font.color.rgb = hex_to_rgb(fill_hex)
+                if font_weight in ["bold", "600", "700", "800", "900"]:
+                    run.font.bold = True
+            except Exception:
+                pass
+
+        elif tag == "line":
+            try:
+                x1 = float(elem.get("x1", 0))
+                y1 = float(elem.get("y1", 0))
+                x2 = float(elem.get("x2", 0))
+                y2 = float(elem.get("y2", 0))
+                stroke_hex = elem.get("stroke", "#F5A623")
+                sw = float(elem.get("stroke-width", 2))
+
+                w = max(abs(x2 - x1), sw)
+                h = max(abs(y2 - y1), sw)
+                min_x = min(x1, x2)
+                min_y = min(y1, y2)
+
+                shape = slide.shapes.add_shape(
+                    MSO_SHAPE.RECTANGLE,
+                    Inches(px_to_in(min_x)), Inches(px_to_in(min_y)),
+                    Inches(px_to_in(w)), Inches(px_to_in(h))
+                )
+                shape.fill.solid()
+                shape.fill.fore_color.rgb = hex_to_rgb(stroke_hex)
+                shape.line.fill.background()
+            except Exception:
+                pass
+
 def process_svg_file(svg_path, slide):
     """Parse one SVG, find native markers, add to slide."""
     try:
@@ -237,16 +363,32 @@ def svg_folder_to_pptx(svg_dir, output_path):
     try:
         import cairosvg
         cairosvg_available = True
-    except ImportError:
+    except (ImportError, Exception):
         cairosvg_available = False
 
     for i, svg_file in enumerate(svg_files):
         print(f"  🎨 Slide {i+1}: {svg_file.name}")
         slide = prs.slides.add_slide(blank_layout)
 
-        # Convert SVG to PNG if cairosvg is available for exact visual background
         png_path = svg_file.with_suffix(".png")
-        if cairosvg_available:
+        bg_added = False
+
+        # 1. Check for pre-rendered PNG background (e.g. created by node-canvas)
+        if png_path.exists():
+            try:
+                pic = slide.shapes.add_picture(
+                    str(png_path),
+                    left=Inches(0), top=Inches(0),
+                    width=Inches(SLIDE_W), height=Inches(SLIDE_H)
+                )
+                pic.name = f"svg_background_{i+1}"
+                bg_added = True
+                print(f"  🖼️ Embedded pre-rendered PNG slide background for slide {i+1}")
+            except Exception as e:
+                print(f"  ⚠️ Error embedding pre-rendered PNG: {e}")
+
+        # 2. Fallback to CairoSVG if PNG not present
+        if not bg_added and cairosvg_available:
             try:
                 cairosvg.svg2png(url=str(svg_file), write_to=str(png_path), output_width=1920, output_height=1080)
                 pic = slide.shapes.add_picture(
@@ -255,10 +397,16 @@ def svg_folder_to_pptx(svg_dir, output_path):
                     width=Inches(SLIDE_W), height=Inches(SLIDE_H)
                 )
                 pic.name = f"svg_background_{i+1}"
+                bg_added = True
                 if os.path.exists(png_path):
                     os.remove(png_path)
             except Exception as e:
                 print(f"  ⚠️ CairoSVG background rendering error: {e}")
+
+        # 3. Vector element fallback: parse SVG XML directly into native DrawingML shapes
+        if not bg_added:
+            print(f"  📐 Parsing SVG vector elements directly into PowerPoint shapes for slide {i+1}...")
+            parse_svg_shapes_to_pptx(svg_file, slide)
 
         # Now inject native chart/table objects on top
         process_svg_file(svg_file, slide)

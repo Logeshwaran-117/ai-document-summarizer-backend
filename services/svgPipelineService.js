@@ -367,6 +367,24 @@ function escapeXml(str) {
 }
 
 // ── Main Orchestrator Function ───────────────────────────────────────────────
+async function renderSvgToPngCanvas(svgContent, pngPath) {
+  try {
+    const { createCanvas, loadImage } = require("canvas");
+    const canvas = createCanvas(1280, 720);
+    const ctx = canvas.getContext("2d");
+    const imgBuf = Buffer.from(svgContent.trim(), "utf8");
+    const img = await loadImage(imgBuf);
+    ctx.drawImage(img, 0, 0, 1280, 720);
+    const pngBuffer = canvas.toBuffer("image/png");
+    fs.writeFileSync(pngPath, pngBuffer);
+    return true;
+  } catch (err) {
+    console.warn(`⚠️ [SVG Pipeline] node-canvas PNG render warning: ${err.message}`);
+    return false;
+  }
+}
+
+// ── Main Orchestrator Function ───────────────────────────────────────────────
 async function generatePresentationViaSVG(documentText, wizardOptions = {}) {
   const workDir = path.join(os.tmpdir(), `ppt-svg-${Date.now()}`);
   fs.mkdirSync(workDir, { recursive: true });
@@ -391,7 +409,12 @@ async function generatePresentationViaSVG(documentText, wizardOptions = {}) {
       }
 
       const filename = `slide_${String(i + 1).padStart(3, "0")}.svg`;
-      fs.writeFileSync(path.join(svgDir, filename), svgContent, "utf8");
+      const svgPath = path.join(svgDir, filename);
+      fs.writeFileSync(svgPath, svgContent, "utf8");
+
+      // Pre-render high-res PNG for CairoSVG-less Python environments (e.g. Windows)
+      const pngPath = svgPath.replace(/\.svg$/i, ".png");
+      await renderSvgToPngCanvas(svgContent, pngPath);
     }
 
     console.log("🔧 [SVG Pipeline] Finalizing SVG vectors...");

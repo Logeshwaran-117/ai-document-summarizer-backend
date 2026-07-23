@@ -40,43 +40,10 @@ try:
 except Exception:
     CAIRO_AVAILABLE = False
 
+from inject_native_charts import svg_folder_to_pptx
+
 def convert_svg_folder_to_pptx(svg_dir, output_path):
-    prs = Presentation()
-    prs.slide_width = Inches(13.333)
-    prs.slide_height = Inches(7.5)
-
-    blank_slide_layout = prs.slide_layouts[6]
-    svg_files = sorted(glob.glob(os.path.join(svg_dir, "*.svg")))
-
-    if not svg_files:
-        raise ValueError(f"No SVG files found in {svg_dir}")
-
-    print(f"Found {len(svg_files)} SVG slide files for conversion.")
-
-    for idx, svg_path in enumerate(svg_files):
-        slide = prs.slides.add_slide(blank_slide_layout)
-        png_path = os.path.splitext(svg_path)[0] + ".png"
-
-        if CAIRO_AVAILABLE:
-            try:
-                cairosvg.svg2png(url=svg_path, write_to=png_path, output_width=1920, output_height=1080)
-                slide.shapes.add_picture(png_path, Inches(0), Inches(0), Inches(13.333), Inches(7.5))
-                if os.path.exists(png_path):
-                    os.remove(png_path)
-                continue
-            except Exception as e:
-                print(f"CairoSVG conversion warning for slide {idx + 1}: {e}. Falling back to shapes.")
-
-        # Fallback shape rendering if cairosvg is unavailable
-        with open(svg_path, 'r', encoding='utf-8') as f:
-            svg_content = f.read()
-
-        txBox = slide.shapes.add_textbox(Inches(0.5), Inches(0.5), Inches(12.333), Inches(6.5))
-        tf = txBox.text_frame
-        tf.text = f"Slide {idx + 1}"
-
-    prs.save(output_path)
-    print(f"Successfully generated presentation: {output_path}")
+    svg_folder_to_pptx(svg_dir, output_path)
 
 def main():
     parser = argparse.ArgumentParser(description="Convert directory of SVG files to PPTX.")
