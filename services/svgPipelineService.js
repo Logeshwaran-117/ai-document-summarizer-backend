@@ -4,6 +4,7 @@
  */
 
 const { callWithRotation } = require("./geminiService");
+const ResponseValidator = require("./ai/ResponseValidator");
 const { execFile } = require("child_process");
 const fs = require("fs");
 const path = require("path");
@@ -18,13 +19,48 @@ const THEME_PALETTES = {
   Corporate:    { background: "#1A1A2E", primary: "#7C3AED", secondary: "#06B6D4", text: "#FFFFFF", textDark: "#1A1A2E", cardBg: "#2A2A4E", cardBorder: "#3A3A5E", muted: "#8A80B0" },
 };
 
+function generateFallbackDesignSpec(documentText, wizardOptions = {}) {
+  const slideCount = Math.max(3, Math.min(20, parseInt(wizardOptions.slideCount) || 10));
+  const themeName = wizardOptions.theme && THEME_PALETTES[wizardOptions.theme] ? wizardOptions.theme : "Professional";
+  const palette = THEME_PALETTES[themeName];
+
+  const lines = (documentText || "").split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 10);
+  const title = wizardOptions.title || (lines[0] ? lines[0].slice(0, 60) : "Executive Presentation");
+
+  const slideTypes = ["cover", "executiveSummary", "kpi", "twoColumn", "process", "scorecard", "chart", "swot", "recommendations", "closing"];
+  const slides = [];
+
+  for (let i = 0; i < slideCount; i++) {
+    const sType = i === 0 ? "cover" : i === slideCount - 1 ? "closing" : slideTypes[i % slideTypes.length];
+    const sampleSnippet = lines[(i + 1) % lines.length] || `Section ${i + 1} Strategic Findings`;
+    slides.push({
+      slideNumber: i + 1,
+      slideType: sType,
+      title: sType === "cover" ? title : (sampleSnippet.slice(0, 45) || `Slide ${i + 1}`),
+      contentFocus: sampleSnippet.slice(0, 90),
+      visualLayoutPattern: sType === "kpi" ? "3-card metric grid" : "2-column container layout",
+      keyMetrics: [`Metric ${i + 1}`, `Data Point ${i * 15 + 10}`],
+    });
+  }
+
+  return {
+    presentationTitle: title,
+    slideCount,
+    colorPalette: palette,
+    fonts: { heading: "Cambria", body: "Calibri" },
+    slideWidth: 1280,
+    slideHeight: 720,
+    slides,
+  };
+}
+
 // ── Step A: Build Design Specification ───────────────────────────────────────
 async function buildDesignSpec(documentText, wizardOptions = {}) {
   const prompt = `You are an executive presentation designer. Analyze this document and generate a JSON design specification.
 
 DOCUMENT SAMPLE:
 """
-${documentText.slice(0, 8000)}
+${(documentText || "").slice(0, 8000)}
 """
 
 TARGET SLIDE COUNT: ${wizardOptions.slideCount || 10}
@@ -62,11 +98,21 @@ Return ONLY a valid JSON object matching this schema:
   ]
 }`;
 
-  const raw = await callWithRotation(
-    () => [{ text: prompt }], 4096, "gemini-3.5-flash", null, "summarize", "application/json"
-  );
-  
-  const parsed = JSON.parse(raw.replace(/```json|```/g, "").trim());
+  let parsed = null;
+  try {
+    const raw = await callWithRotation(
+      () => [{ text: prompt }], 8192, "gemini-3.5-flash", null, "summarize", "application/json"
+    );
+    parsed = ResponseValidator.parseAndValidate(raw);
+  } catch (err) {
+    console.warn(`⚠️ [buildDesignSpec] AI design spec generation failed or returned invalid JSON: ${err.message}`);
+  }
+
+  if (!parsed || !Array.isArray(parsed.slides) || parsed.slides.length === 0) {
+    console.log("ℹ️ [buildDesignSpec] Utilizing structured fallback design spec.");
+    parsed = generateFallbackDesignSpec(documentText, wizardOptions);
+  }
+
   if (wizardOptions.theme && THEME_PALETTES[wizardOptions.theme]) {
     parsed.colorPalette = THEME_PALETTES[wizardOptions.theme];
   }

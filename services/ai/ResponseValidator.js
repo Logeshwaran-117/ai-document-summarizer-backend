@@ -15,6 +15,109 @@ class ResponseValidator {
     return s;
   }
 
+  static repairAndParseJson(raw) {
+    if (!raw || typeof raw !== "string") return null;
+
+    let text = raw.trim();
+
+    // 1. Strip markdown code fences
+    text = text.replace(/^```[a-z]*\s*/i, "").replace(/\s*```$/g, "").trim();
+
+    // Direct JSON parse attempt
+    try {
+      return JSON.parse(text);
+    } catch (e) {
+      // Continue to repair
+    }
+
+    // 2. Extract bounding JSON structure (first '{' or '[' to last '}' or ']')
+    const firstBrace = text.indexOf("{");
+    const lastBrace = text.lastIndexOf("}");
+    const firstBracket = text.indexOf("[");
+    const lastBracket = text.lastIndexOf("]");
+
+    let cleaned = text;
+    if (firstBrace !== -1 && (firstBracket === -1 || firstBrace < firstBracket)) {
+      cleaned = lastBrace > firstBrace ? text.substring(firstBrace, lastBrace + 1) : text.substring(firstBrace);
+    } else if (firstBracket !== -1) {
+      cleaned = lastBracket > firstBracket ? text.substring(firstBracket, lastBracket + 1) : text.substring(firstBracket);
+    }
+
+    try {
+      return JSON.parse(cleaned);
+    } catch (e) {}
+
+    // 3. Clean quotes, control chars, trailing commas
+    let repaired = cleaned
+      .replace(/[\u201C\u201D]/g, '"')
+      .replace(/[\u2018\u2019]/g, "'")
+      .replace(/,\s*([}\]])/g, "$1")
+      .replace(/[\u0000-\u001F]+/g, (m) => (m === "\n" || m === "\r" || m === "\t") ? " " : "");
+
+    // 4. Missing commas between properties (e.g. "val" "key": or 123 "key": or true "key":)
+    repaired = repaired.replace(/("(?:[^"\\]|\\.)*"\s*|\b(?:true|false|null|[0-9]+(?:\.[0-9]+)?)\s*)("[a-zA-Z_][a-zA-Z0-9_]*"\s*:)/g, "$1, $2");
+
+    // 5. Missing commas between elements (e.g. } { or ] [ or "val" {)
+    repaired = repaired.replace(/(\}|\]|"(?:[^"\\]|\\.)*")\s*(\{|\[|"(?:[^"\\]|\\.)*")/g, "$1, $2");
+
+    try {
+      return JSON.parse(repaired);
+    } catch (e) {}
+
+    // 6. Handle truncation: auto-close open quotes, brackets, and braces
+    let stack = [];
+    let inString = false;
+    let escaped = false;
+    let truncateFixed = "";
+
+    for (let i = 0; i < repaired.length; i++) {
+      const char = repaired[i];
+      if (escaped) {
+        escaped = false;
+        truncateFixed += char;
+        continue;
+      }
+      if (char === "\\") {
+        escaped = true;
+        truncateFixed += char;
+        continue;
+      }
+      if (char === '"') {
+        inString = !inString;
+        truncateFixed += char;
+        continue;
+      }
+      if (inString) {
+        truncateFixed += char;
+        continue;
+      }
+      if (char === "{" || char === "[") {
+        stack.push(char === "{" ? "}" : "]");
+      } else if (char === "}" || char === "]") {
+        if (stack.length > 0 && stack[stack.length - 1] === char) {
+          stack.pop();
+        }
+      }
+      truncateFixed += char;
+    }
+
+    if (inString) truncateFixed += '"';
+    truncateFixed = truncateFixed.trim().replace(/,\s*$/, "");
+    while (stack.length > 0) {
+      truncateFixed += stack.pop();
+    }
+
+    try {
+      return JSON.parse(truncateFixed);
+    } catch (e) {}
+
+    // 7. Partial extract fallback
+    const partial = this.partialJsonExtract(repaired);
+    if (partial && Object.keys(partial).length > 0) return partial;
+
+    return null;
+  }
+
   static partialJsonExtract(s) {
     const result = {};
     const strRe = /"([a-zA-Z_][a-zA-Z0-9_]*)"\s*:\s*"((?:[^"\\]|\\.)*)"/g;
@@ -30,14 +133,11 @@ class ResponseValidator {
   static parseAndValidate(raw, schemaKey = null) {
     if (!raw) throw new Error("Empty AI response received.");
 
-    let parsed = null;
-    const cleaned = this.cleanJsonString(raw);
+    let parsed = this.repairAndParseJson(raw);
 
-    // 1. Direct JSON parse
-    try {
-      parsed = JSON.parse(cleaned);
-    } catch (e) {
-      // 2. Regex extract object/array
+    if (!parsed) {
+      const cleaned = this.cleanJsonString(raw);
+      // Regex extract object/array fallback
       const arrMatch = cleaned.match(/(\[[\s\S]*\])/);
       if (arrMatch) {
         try { parsed = JSON.parse(arrMatch[1]); } catch {}
@@ -48,16 +148,13 @@ class ResponseValidator {
           try { parsed = JSON.parse(objMatch[1]); } catch {}
         }
       }
-      if (!parsed) {
-        parsed = this.partialJsonExtract(cleaned);
-      }
     }
 
     if (!parsed) {
       throw new Error(`JSON parse failed for response snippet: ${raw.slice(0, 100)}...`);
     }
 
-    // 3. Schema validation / structural normalization
+    // Schema validation / structural normalization
     if (schemaKey) {
       parsed = this.enforceSchema(parsed, schemaKey);
     }
