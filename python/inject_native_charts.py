@@ -182,7 +182,7 @@ def add_native_table(slide, payload):
                 pass
 
 def safe_parse_svg_xml(svg_path):
-    """Safely reads, sanitizes XML entities, and parses SVG file into ElementTree root."""
+    """Safely reads, sanitizes XML entities, auto-balances tags, and parses SVG file into ElementTree root."""
     try:
         with open(svg_path, 'r', encoding='utf-8') as f:
             content = f.read()
@@ -195,7 +195,24 @@ def safe_parse_svg_xml(svg_path):
         content = re.sub(r'&(?!amp;|lt;|gt;|quot;|apos;|#[0-9]+;|#x[0-9a-fA-F]+;)', '&amp;', content)
 
         ET.register_namespace("", "http://www.w3.org/2000/svg")
-        return ET.fromstring(content)
+        try:
+            return ET.fromstring(content)
+        except ET.ParseError:
+            # Auto-balance unclosed tags if ET parse fails initially
+            open_text = len(re.findall(r'<text\b', content, re.IGNORECASE))
+            close_text = len(re.findall(r'</text>', content, re.IGNORECASE))
+            if open_text > close_text:
+                content += "</text>" * (open_text - close_text)
+
+            open_g = len(re.findall(r'<g\b', content, re.IGNORECASE))
+            close_g = len(re.findall(r'</g>', content, re.IGNORECASE))
+            if open_g > close_g:
+                content += "</g>" * (open_g - close_g)
+
+            if not re.search(r'</svg>\s*$', content, re.IGNORECASE):
+                content += "\n</svg>"
+
+            return ET.fromstring(content)
     except Exception as e:
         print(f"  ⚠️ safe_parse_svg_xml error in {os.path.basename(svg_path)}: {e}")
         return None
@@ -489,9 +506,8 @@ def svg_folder_to_pptx(svg_dir, output_path):
         if not bg_added:
             print(f"  📐 Parsing SVG vector elements directly into PowerPoint shapes for slide {i+1}...")
             shapes_parsed = parse_svg_shapes_to_pptx(svg_file, slide)
-
-        # Now inject native chart/table objects on top
-        process_svg_file(svg_file, slide)
+            # Only inject native chart/table objects when in pure vector fallback mode (not when pre-rendered PNG background is used)
+            process_svg_file(svg_file, slide)
 
         # 4. Emergency visual slide fallback if no picture or vector elements were parsed
         if not bg_added and shapes_parsed == 0:

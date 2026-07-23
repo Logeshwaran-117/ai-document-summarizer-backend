@@ -33,6 +33,20 @@ def process_svg_file(filepath):
     if '<svg' in content and 'viewBox' not in content:
         content = re.sub(r'<svg\b', '<svg viewBox="0 0 1280 720" width="1280" height="720"', content, count=1)
 
+    # Balance unclosed tags if present
+    open_text = len(re.findall(r'<text\b', content, re.IGNORECASE))
+    close_text = len(re.findall(r'</text>', content, re.IGNORECASE))
+    if open_text > close_text:
+        content += "</text>" * (open_text - close_text)
+
+    open_g = len(re.findall(r'<g\b', content, re.IGNORECASE))
+    close_g = len(re.findall(r'</g>', content, re.IGNORECASE))
+    if open_g > close_g:
+        content += "</g>" * (open_g - close_g)
+
+    if not re.search(r'</svg>\s*$', content, re.IGNORECASE):
+        content += "\n</svg>"
+
     with open(filepath, 'w', encoding='utf-8') as f:
         f.write(content.strip())
 

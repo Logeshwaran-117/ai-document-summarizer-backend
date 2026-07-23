@@ -128,7 +128,7 @@ function getLayoutHint(slideType) {
     case "twoColumn":
       return "Left column x=60 w=560, right column x=660 w=560, divider line at x=640";
     case "chart":
-      return "Draw actual bars/lines using rect or path elements with real data values proportionally scaled";
+      return "Draw actual horizontal bars using rect elements. Place category labels cleanly at x=60 (w=180), start bars at x=260, place metric value text immediately to the right of each bar (x = bar_x + bar_width + 15). Place legends cleanly at top-right (x=850, y=160). Do NOT overlap text or stack labels over bars.";
     case "swot":
       return "4 quadrants: top-left Strengths (green), top-right Weaknesses (red), bottom-left Opportunities (blue), bottom-right Threats (orange)";
     case "executiveSummary":
@@ -153,14 +153,6 @@ async function generateSlideSVG(slideSpec, designSpec, documentText, slideIndex,
   const slideType = slideSpec.slideType || "executiveSummary";
   const slideTitle = slideSpec.title || `Slide ${slideNumber}`;
   const slideContent = `${slideSpec.contentFocus || ""}\nContext from document:\n${documentText.slice(0, 3000)}`;
-
-  const isDataSlide = ["chart", "kpi", "table"].includes(slideType);
-
-  const nativeMarkerInstructions = isDataSlide ? `
-NATIVE CHART & TABLE MARKERS (Optional native PPTX enhancement):
-If this slide contains charts or tables, embed a marker <g> with JSON metadata:
-For CHART: <g data-pptx-replace-with="chart" id="chart-${slideIndex}"><rect x="100" y="200" width="80" height="150" fill="${palette.primary}"/><metadata type="application/json">{"chartType":"bar","title":"${slideTitle}","x":60,"y":150,"width":700,"height":400,"series":[{"name":"Series 1","labels":["A","B"],"values":[50,100]}],"colors":["${palette.primary}"]}</metadata></g>
-` : "";
 
   const prompt = `You are an expert SVG slide designer. Generate a SINGLE complete, valid SVG for slide ${slideNumber} of ${totalSlides}.
 
@@ -189,8 +181,6 @@ SLIDE DESIGN RULES:
 - For ${slideType} slides specifically:
   ${getLayoutHint(slideType)}
 
-${nativeMarkerInstructions}
-
 Generate the complete SVG now. Remember: close ALL tags.`;
 
   const raw = await callWithRotation(
@@ -203,18 +193,18 @@ Generate the complete SVG now. Remember: close ALL tags.`;
     throw new Error(`Slide ${slideIndex + 1}: AI did not return valid SVG`);
   }
 
-  // Sanitize XML entities and normalize SVG structure
-  svgContent = sanitizeXmlEntities(svgContent);
+  // 1. Programmatic auto-repair first
+  svgContent = repairSvgXmlProgrammatically(svgContent);
   svgContent = normalizeSvgAttributes(svgContent, palette);
 
-  // Validate XML well-formedness and check for truncation
+  // 2. Validate XML well-formedness and check for truncation
   let validation = validateSvgXml(svgContent);
   if (!validation.valid) {
     console.warn(`⚠️ [SVG Pipeline] Slide ${slideIndex + 1} XML validation failed (${validation.error}). Attempting targeted AI repair retry...`);
     try {
       const repaired = await repairSvgXmlWithAi(svgContent, validation.error);
       if (repaired) {
-        let sanitizedRepaired = sanitizeXmlEntities(repaired);
+        let sanitizedRepaired = repairSvgXmlProgrammatically(repaired);
         sanitizedRepaired = normalizeSvgAttributes(sanitizedRepaired, palette);
         const reCheck = validateSvgXml(sanitizedRepaired);
         if (reCheck.valid) {
@@ -229,7 +219,60 @@ Generate the complete SVG now. Remember: close ALL tags.`;
     }
   }
 
+  // 3. Final validation check: if still invalid XML after repair, throw to trigger fallback SVG
+  const finalCheck = validateSvgXml(svgContent);
+  if (!finalCheck.valid) {
+    throw new Error(`Slide ${slideIndex + 1} SVG validation failed: ${finalCheck.error}`);
+  }
+
   return svgContent;
+}
+
+/**
+ * Programmatically repairs common XML tag truncation and syntax issues in SVG markup.
+ */
+function repairSvgXmlProgrammatically(svgStr) {
+  if (!svgStr || typeof svgStr !== "string") return "";
+  let result = svgStr.trim();
+
+  // 1. Ensure opening <svg> tag exists
+  if (!/<svg/i.test(result)) {
+    result = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" width="1280" height="720">\n` + result;
+  }
+
+  // 2. Escape unescaped ampersands
+  result = sanitizeXmlEntities(result);
+
+  // 3. Remove truncated trailing open tag if present at the end (e.g., `<text x="100" y=`)
+  result = result.replace(/<[a-zA-Z0-9_-]+\s*[^>]*$/, "");
+
+  // 4. Balance unclosed <tspan> tags
+  const openTspan = (result.match(/<tspan\b/gi) || []).length;
+  const closeTspan = (result.match(/<\/tspan>/gi) || []).length;
+  for (let i = 0; i < openTspan - closeTspan; i++) {
+    result += "</tspan>";
+  }
+
+  // 5. Balance unclosed <text> tags
+  const openText = (result.match(/<text\b/gi) || []).length;
+  const closeText = (result.match(/<\/text>/gi) || []).length;
+  for (let i = 0; i < openText - closeText; i++) {
+    result += "</text>";
+  }
+
+  // 6. Balance unclosed <g> tags
+  const openG = (result.match(/<g\b/gi) || []).length;
+  const closeG = (result.match(/<\/g>/gi) || []).length;
+  for (let i = 0; i < openG - closeG; i++) {
+    result += "</g>";
+  }
+
+  // 7. Ensure closing </svg> tag
+  if (!/<\/svg>\s*$/i.test(result)) {
+    result = result.replace(/<\/svg>[\s\S]*/i, "") + "\n</svg>";
+  }
+
+  return result;
 }
 
 /**
@@ -450,6 +493,24 @@ function generateFallbackSVG(slideSpec, designSpec, index, total) {
   const title = escapeXml(slideSpec.title || `Slide ${index + 1}`);
   const focus = escapeXml(slideSpec.contentFocus || "");
 
+  const metrics = (slideSpec.keyMetrics && slideSpec.keyMetrics.length > 0)
+    ? slideSpec.keyMetrics
+    : ["Strategic Metric 1", "Performance Metric 2"];
+
+  let cardsHtml = "";
+  if (metrics.length >= 1) {
+    const count = Math.min(3, metrics.length);
+    const cardWidth = Math.floor((1160 - (count - 1) * 20) / count);
+    cardsHtml = metrics.slice(0, count).map((m, i) => {
+      const cx = 60 + i * (cardWidth + 20);
+      return `<g>
+        <rect x="${cx}" y="180" width="${cardWidth}" height="140" fill="${c.cardBg}" stroke="${c.cardBorder}" rx="8" ry="8"/>
+        <text x="${cx + 20}" y="220" font-family="Calibri" font-size="14" fill="${c.muted}">INDICATOR ${i + 1}</text>
+        <text x="${cx + 20}" y="265" font-family="Cambria" font-size="22" fill="${c.primary}" font-weight="bold">${escapeXml(m)}</text>
+      </g>`;
+    }).join("\n");
+  }
+
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" width="1280" height="720">
   <rect width="1280" height="720" fill="${c.background}"/>
   <rect x="0" y="0" width="1280" height="120" fill="${c.background}"/>
@@ -457,7 +518,14 @@ function generateFallbackSVG(slideSpec, designSpec, index, total) {
   <text x="60" y="70" font-family="Cambria" font-size="32" fill="${c.text}" font-weight="bold">${title}</text>
   <text x="60" y="102" font-family="Calibri" font-size="15" fill="${c.primary}" font-weight="bold">${focus}</text>
   <rect x="60" y="160" width="1160" height="480" fill="${c.cardBg}" stroke="${c.cardBorder}" rx="10" ry="10"/>
-  <text x="100" y="240" font-family="Calibri" font-size="18" fill="${c.text}">Executive Content &amp; Quantitative Findings</text>
+  ${cardsHtml}
+  <g>
+    <rect x="100" y="350" width="1080" height="240" fill="${c.background}" rx="8" ry="8"/>
+    <text x="130" y="400" font-family="Cambria" font-size="20" fill="${c.text}" font-weight="bold">Executive Summary &amp; Key Analysis Findings</text>
+    <text x="130" y="440" font-family="Calibri" font-size="16" fill="${c.muted}">• Strategic overview compiled from primary financial statement data and account records.</text>
+    <text x="130" y="475" font-family="Calibri" font-size="16" fill="${c.muted}">• Key operational risk indicators, cash flow velocity, and account liquidity verified.</text>
+    <text x="130" y="510" font-family="Calibri" font-size="16" fill="${c.muted}">• Actionable recommendations prioritized based on debt structure and compliance rules.</text>
+  </g>
   <text x="1220" y="690" font-family="Calibri" font-size="14" fill="${c.muted}" text-anchor="end">${index + 1} / ${total}</text>
 </svg>`;
 }
@@ -467,7 +535,7 @@ function escapeXml(str) {
 }
 
 // ── Main Orchestrator Function ───────────────────────────────────────────────
-async function renderSvgToPngCanvas(svgContent, pngPath) {
+async function renderSvgToPngCanvas(svgContent, pngPath, svgPath = null) {
   // Ensure explicit dimensions
   let svgStr = normalizeSvgAttributes(svgContent);
 
@@ -476,11 +544,22 @@ async function renderSvgToPngCanvas(svgContent, pngPath) {
     const canvas = createCanvas(1280, 720);
     const ctx = canvas.getContext("2d");
     
-    // Pass Base64 data URI to node-canvas for maximum OS & stream compatibility
-    const base64Svg = Buffer.from(svgStr, "utf8").toString("base64");
-    const dataUri = `data:image/svg+xml;base64,${base64Svg}`;
-    
-    const img = await loadImage(dataUri);
+    let img;
+    // Prefer loading directly from local filesystem if svgPath exists
+    if (svgPath && fs.existsSync(svgPath)) {
+      try {
+        img = await loadImage(path.resolve(svgPath));
+      } catch (fileErr) {
+        const base64Svg = Buffer.from(svgStr, "utf8").toString("base64");
+        const dataUri = `data:image/svg+xml;charset=utf-8;base64,${base64Svg}`;
+        img = await loadImage(dataUri);
+      }
+    } else {
+      const base64Svg = Buffer.from(svgStr, "utf8").toString("base64");
+      const dataUri = `data:image/svg+xml;charset=utf-8;base64,${base64Svg}`;
+      img = await loadImage(dataUri);
+    }
+
     ctx.drawImage(img, 0, 0, 1280, 720);
     const pngBuffer = canvas.toBuffer("image/png");
 
@@ -537,7 +616,7 @@ async function generatePresentationViaSVG(documentText, wizardOptions = {}) {
 
       // Pre-render high-res PNG for CairoSVG-less Python environments (e.g. Windows)
       const pngPath = svgPath.replace(/\.svg$/i, ".png");
-      const rendered = await renderSvgToPngCanvas(svgContent, pngPath);
+      const rendered = await renderSvgToPngCanvas(svgContent, pngPath, svgPath);
       if (rendered) {
         const stats = fs.statSync(pngPath);
         console.log(`  🖼️ Slide ${i + 1} PNG pre-rendered successfully (${Math.round(stats.size / 1024)} KB)`);
