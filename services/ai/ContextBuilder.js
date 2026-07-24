@@ -24,6 +24,10 @@ class ContextBuilder {
       keyTopics: docAnalysis?.keyTopics || [],
       topMetrics: docAnalysis?.topMetrics || [],
       hasTabularData: docAnalysis?.hasTabularData || false,
+      // Chart control — passed through from wizardOptions
+      maxCharts: wizardOptions.maxCharts || "Auto",
+      chartType: wizardOptions.chartType || "Automatically Detect",
+      chartCounts: wizardOptions.chartCounts || {},
     };
   }
 }

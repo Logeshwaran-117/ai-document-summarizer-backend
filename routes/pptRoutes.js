@@ -1594,7 +1594,50 @@ function cleanMarkdown(str) {
 function buildAIDeck({ aiSlides, strategy, docTitle, heroTitle, themeKey, wizardOptions }) {
   const COLORS = resolveAITheme(themeKey);
   const includeNotes = wizardOptions.speakerNotes !== "No";
-  const totalSlides = aiSlides.length;
+
+  // ── Enforce chart count limits ─────────────────────────────────────────────
+  const chartCounts = wizardOptions.chartCounts || {};
+  const hasPerTypeCounts = Object.keys(chartCounts).length > 0;
+  const rawMaxCharts = wizardOptions.maxCharts;
+  let globalMaxCharts = 99;
+  if (rawMaxCharts && rawMaxCharts !== "Auto") {
+    const parsed = parseInt(String(rawMaxCharts).replace(/[^0-9]/g, ""), 10);
+    if (!isNaN(parsed)) globalMaxCharts = parsed;
+  }
+
+  // Track how many of each chart type we've rendered
+  const chartTypesSeen = {}; // { bar: 0, pie: 0, donut: 0, line: 0 }
+  let totalChartsSeen = 0;
+
+  const filteredSlides = aiSlides.filter(slide => {
+    if (slide.slideType !== "chart") return true;
+
+    const chartType = (slide.chartData?.type || "bar").toLowerCase();
+    const normalized = chartType === "donut" ? "pie" : chartType; // treat donut/pie together
+
+    if (hasPerTypeCounts) {
+      // Check per-type limit
+      const limit = chartCounts[chartType] ?? chartCounts[normalized] ?? 0;
+      const seen = chartTypesSeen[normalized] || 0;
+      if (seen >= limit) {
+        console.log(`[buildAIDeck] Dropping chart slide "${slide.title}" (type:${chartType}, limit:${limit} reached)`);
+        return false;
+      }
+      chartTypesSeen[normalized] = seen + 1;
+      totalChartsSeen++;
+      return true;
+    } else {
+      // Global limit
+      if (totalChartsSeen >= globalMaxCharts) {
+        console.log(`[buildAIDeck] Dropping chart slide "${slide.title}" (global limit:${globalMaxCharts} reached)`);
+        return false;
+      }
+      totalChartsSeen++;
+      return true;
+    }
+  });
+
+  const totalSlides = filteredSlides.length;
   const today = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
   const CARD_PALETTE = [COLORS.chart2, COLORS.chart3, COLORS.chart4, COLORS.chart5, COLORS.chart1, COLORS.teal, COLORS.chart6, COLORS.chart7];
 
@@ -1605,7 +1648,7 @@ function buildAIDeck({ aiSlides, strategy, docTitle, heroTitle, themeKey, wizard
   let slideCounter = 0;
   let sectionCounter = 0;
 
-  for (const slide of aiSlides) {
+  for (const slide of filteredSlides) {
     const s = pres.addSlide();
     slideCounter++;
 
