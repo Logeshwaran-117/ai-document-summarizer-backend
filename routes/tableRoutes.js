@@ -128,10 +128,12 @@ router.post("/tables/:id/chat", async (req, res) => {
     const table = await TableExtraction.findOne({ _id: req.params.id, userId: req.user._id });
     if (!table) return res.status(404).json({ message: "Table not found" });
 
+    if (!table.chatHistory) table.chatHistory = [];
+
     // Convert table rows to a readable text representation for the AI
     const tableText = buildTableText(table.fields, table.rows);
 
-    const historyText = (table.chatHistory || [])
+    const historyText = table.chatHistory
       .slice(-6)
       .map(m => `${m.role === "user" ? "User" : "Assistant"}: ${m.text}`)
       .join("\n");
@@ -149,8 +151,8 @@ RULES:
 ${historyText ? `Previous conversation:\n${historyText}\n` : ""}
 
 Table: ${table.filename}
-Fields: ${table.fields.join(", ")}
-Total rows: ${table.rows.length}
+Fields: ${table.fields ? table.fields.join(", ") : "N/A"}
+Total rows: ${table.rows ? table.rows.length : 0}
 
 Data:
 ${tableText}
@@ -159,7 +161,14 @@ Question: ${question.trim()}
 
 Answer:`;
 
-    const answer = await callWithRotation(() => [{ text: prompt }], 2048, "gemini-2.5-flash");
+    let answer;
+    try {
+      answer = await callWithRotation(() => [{ text: prompt }], 2048, "gemini-2.5-flash");
+      if (!answer || !answer.trim()) answer = "I analyzed the table data, but couldn't find a direct answer to your question.";
+    } catch (aiErr) {
+      console.error("[tableRoutes] AI error during table chat:", aiErr);
+      answer = "Sorry, I ran into an error analyzing the table for that question. Please try asking again.";
+    }
 
     table.chatHistory.push({ role: "user", text: question.trim() });
     table.chatHistory.push({ role: "assistant", text: answer });
@@ -167,7 +176,7 @@ Answer:`;
 
     res.json({ answer, chatHistory: table.chatHistory });
   } catch (err) {
-    console.error("Table chat error:", err);
+    console.error("[tableRoutes] Table chat error:", err);
     res.status(500).json({ message: err.message || "Failed to get answer" });
   }
 });

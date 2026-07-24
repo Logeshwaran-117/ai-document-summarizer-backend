@@ -80,21 +80,24 @@ router.post('/history/:id/chat', async (req, res) => {
     if (!question?.trim()) return res.status(400).json({ message: 'Question required' });
 
     const doc = await BankingDocument.findOne({ _id: req.params.id, userId: req.user._id });
-    if (!doc) return res.status(404).json({ message: 'Not found' });
+    if (!doc) return res.status(404).json({ message: 'Banking document not found' });
+
+    if (!doc.chatHistory) doc.chatHistory = [];
 
     const answer = await answerBankingQuestion(
       doc.extractedText,
       doc.transactions || [],
-      question,
-      doc.chatHistory || []
+      question.trim(),
+      doc.chatHistory
     );
 
-    doc.chatHistory.push({ role: 'user', text: question });
+    doc.chatHistory.push({ role: 'user', text: question.trim() });
     doc.chatHistory.push({ role: 'assistant', text: answer });
     await doc.save();
 
     res.json({ answer, chatHistory: doc.chatHistory });
   } catch (err) {
+    console.error('[bankingRoutes] Chat error:', err);
     res.status(500).json({ message: err.message || 'Failed to get answer' });
   }
 });

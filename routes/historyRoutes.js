@@ -197,15 +197,17 @@ router.post("/:id/chat", async (req, res) => {
     const doc = await Document.findOne({ _id: req.params.id, userId: req.user._id });
     if (!doc) return res.status(404).json({ message: "Document not found" });
 
-    const answer = await answerQuestion(doc.extractedText, question, doc.chatHistory || []);
+    if (!doc.chatHistory) doc.chatHistory = [];
 
-    doc.chatHistory.push({ role: "user", text: question });
+    const answer = await answerQuestion(doc.extractedText, question.trim(), doc.chatHistory);
+
+    doc.chatHistory.push({ role: "user", text: question.trim() });
     doc.chatHistory.push({ role: "assistant", text: answer });
     await doc.save();
 
     res.json({ answer, chatHistory: doc.chatHistory });
   } catch (err) {
-    console.error(err);
+    console.error("[historyRoutes] Chat error:", err);
     res.status(500).json({ message: err.message || "Failed to get answer" });
   }
 });

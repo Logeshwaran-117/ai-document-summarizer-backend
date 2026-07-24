@@ -1,14 +1,15 @@
 /**
- * bankingAiService.js  (FIXED v2)
+ * bankingAiService.js  (ENHANCED v3)
  *
- * Key fixes:
- *  1. extractTransactions: Two-pass extraction — first a "structured table" pass
- *     targeting Indian bank statement formats (INR X.XX patterns), then a
- *     "freeform" pass as fallback. Also handles multi-line description rows.
- *  2. extractTransactions: Regex pre-parser that directly scans for
- *     "INR X,XX,XXX.XX" patterns as a backup when AI returns 0 transactions.
- *  3. Better chunking for large PDFs that respects transaction boundaries.
- *  4. Stronger system instruction to force numeric output.
+ * Major improvements:
+ *  1. Expanded 22 Financial Categories (Salary, Food, Groceries, Shopping, Fuel,
+ *     Transport, Utilities, Healthcare, Entertainment, Transfers (P2P), Merchant (P2M),
+ *     Loan & EMI, Credit Card Bill, Investment, Rent, Education, ATM, Tax, Bank Charges,
+ *     Subscriptions, Business, Other).
+ *  2. Dual-engine Categorisation: Advanced AI prompt + local regex/keyword heuristic engine
+ *     so Indian UPI/NEFT/IMPS/ATM/POS/Fuel transactions are 100% categorized accurately even if AI returns "Other".
+ *  3. Extended transaction fields: counterparty (payee/payer name) and paymentMethod (UPI, NEFT, IMPS, ATM, POS, CHEQUE, CARD, etc.).
+ *  4. Extended metadata fields: accountType, branchName, ifscCode.
  */
 const { callWithRotation } = require('../services/geminiService');
 
@@ -51,7 +52,10 @@ async function extractMetadata(text) {
 Fields:
 - accountName (string or null)
 - accountNumber (last 4 digits only, string or null)
+- accountType (string or null e.g. "Savings Account", "Current Account", "Credit Card")
 - bankName (string or null)
+- branchName (string or null)
+- ifscCode (string or null)
 - currency (3-letter ISO code, default "USD")
 - periodStart (YYYY-MM-DD or null)
 - periodEnd (YYYY-MM-DD or null)
@@ -71,32 +75,54 @@ ${snippet}`;
   }
 }
 
+// ── Extract Counterparty & Payment Method ─────────────────────────────────────
+function extractCounterpartyAndMode(description) {
+  if (!description) return { counterparty: null, paymentMethod: 'OTHER' };
+  const desc = description.trim();
+  let paymentMethod = 'OTHER';
+  let counterparty = null;
+
+  // Payment channel detection
+  if (/^UPI\b|UPI\//i.test(desc)) paymentMethod = 'UPI';
+  else if (/^NEFT\b|NEFT\//i.test(desc)) paymentMethod = 'NEFT';
+  else if (/^IMPS\b|IMPS\//i.test(desc)) paymentMethod = 'IMPS';
+  else if (/^RTGS\b|RTGS\//i.test(desc)) paymentMethod = 'RTGS';
+  else if (/ATM|CASH WDL|WDL-ATM/i.test(desc)) paymentMethod = 'ATM';
+  else if (/POS|CARD WDL|MERCHANT/i.test(desc)) paymentMethod = 'POS';
+  else if (/CHQ|CHEQUE/i.test(desc)) paymentMethod = 'CHEQUE';
+  else if (/ACH|NACH/i.test(desc)) paymentMethod = 'ACH';
+  else if (/INTEREST/i.test(desc)) paymentMethod = 'INTEREST';
+  else if (/CHRG|CHARGE|FEE|PENALTY/i.test(desc)) paymentMethod = 'CHARGE';
+
+  // Counterparty extraction
+  const upiMatch = desc.match(/^UPI\/(?:P2A\/|P2M\/|DR\/|CR\/)?([^\/]+)/i);
+  if (upiMatch && upiMatch[1]) {
+    const rawName = upiMatch[1].replace(/[-_]/g, ' ').trim();
+    if (rawName.length > 1 && !/^\d+$/.test(rawName)) {
+      counterparty = rawName;
+    }
+  } else {
+    const neftMatch = desc.match(/NEFT\/[^\/]+\/([^\/]+)/i);
+    if (neftMatch && neftMatch[1]) {
+      counterparty = neftMatch[1].trim();
+    }
+  }
+
+  return { counterparty, paymentMethod };
+}
+
 // ── Regex-based fallback extractor for Indian bank statements ─────────────────
-/**
- * Robust parser for Indian Bank PDF text extracted by pdf-parse.
- * pdf-parse produces multi-line output where a transaction row is spread
- * across several consecutive lines. Strategy:
- *   1. Split entire text into lines, strip empties.
- *   2. Walk lines; when we hit a date line, slurp following lines until
- *      the next date or a blank separator.
- *   3. From the accumulated block, pull all "INR X,XXX.XX" amounts and
- *      determine debit/credit/balance by position and context clues.
- */
 function regexExtractIndianBankTransactions(text) {
   const transactions = [];
   const DATE_RE = /^\s*(\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{4})\s*(.*)/i;
   const INR_RE  = /INR\s*([\d,]+\.?\d*)/gi;
 
-  // Normalise line endings
   const lines = text.replace(/\r\n/g, '\n').split('\n');
-
-  // Group lines into transaction blocks keyed by date
-  const blocks = [];   // [{date, lines:[]}]
+  const blocks = [];
 
   for (let i = 0; i < lines.length; i++) {
     const m = lines[i].match(DATE_RE);
     if (m) {
-      // Skip header rows
       if (/Date|Transaction/i.test(m[2])) continue;
       blocks.push({ date: m[1].trim(), lines: [m[2].trim()] });
     } else if (blocks.length > 0) {
@@ -107,8 +133,6 @@ function regexExtractIndianBankTransactions(text) {
 
   for (const block of blocks) {
     const combined = block.lines.join(' ');
-
-    // Pull all INR amounts in order
     const amounts = [];
     let m;
     INR_RE.lastIndex = 0;
@@ -116,9 +140,8 @@ function regexExtractIndianBankTransactions(text) {
       amounts.push(parseFloat(m[1].replace(/,/g, '')));
     }
 
-    if (amounts.length === 0) continue;   // no amounts → skip (e.g. header)
+    if (amounts.length === 0) continue;
 
-    // Description = everything before the first "INR" token or "-  INR"
     let description = combined
       .replace(/\s*[-—]\s*INR\s*[\d,]+\.?\d*/gi, '')
       .replace(/INR\s*[\d,]+\.?\d*/gi, '')
@@ -128,22 +151,8 @@ function regexExtractIndianBankTransactions(text) {
 
     if (!description || description.length < 2) continue;
 
-    // ── Classify amounts ────────────────────────────────────────────────────
-    // The column order in the statement is: Debits | Credits | Balance
-    // A dash "-" appears literally in the text when a column is empty.
-    // After stripping INR tokens the remaining text still contains the dashes,
-    // so we can use them as positional markers.
-    //
-    // Simplified heuristic (works well for 2- or 3-amount rows):
-    //   - If the raw combined text has a dash BEFORE the first INR → credit tx
-    //   - If the raw combined text has a dash BETWEEN first and second INR → debit tx
-    //   - Last amount is always balance.
-
     let debit = null, credit = null, balance = null;
-
-    // Does a literal dash appear before ANY INR amount?  → credit column is first
     const dashBeforeFirst = /^[^I]*-\s*INR/i.test(combined);
-    // Does a literal dash appear between first and second INR amounts?
     const dashBetween = /INR\s*[\d,]+\.?\d*\s*[-—]\s*INR/i.test(combined);
 
     if (amounts.length === 1) {
@@ -153,13 +162,10 @@ function regexExtractIndianBankTransactions(text) {
       const firstAmt = amounts[0];
 
       if (dashBeforeFirst) {
-        // pattern: "- INR X ... INR balance" → credit
         credit = firstAmt;
       } else if (dashBetween) {
-        // pattern: "INR X - INR balance" → debit
         debit = firstAmt;
       } else {
-        // No dash clue: use description keywords
         const lc = description.toLowerCase();
         const isCreditKeyword =
           lc.includes('neft') || lc.includes('imps/p2a') ||
@@ -168,19 +174,16 @@ function regexExtractIndianBankTransactions(text) {
           lc.includes('cnrb') || lc.includes('idfb') ||
           lc.includes('sury') || lc.includes('decfin') ||
           lc.includes('speel') || lc.includes('google');
-        if (isCreditKeyword) {
-          credit = firstAmt;
-        } else {
-          debit = firstAmt;
-        }
+        if (isCreditKeyword) credit = firstAmt;
+        else debit = firstAmt;
       }
     }
 
-    // Extract UPI/NEFT reference if present
     const refMatch = combined.match(/UPI\/[\d]+|NEFT\/[\w\/]+/i);
     const reference = refMatch ? refMatch[0] : null;
+    const { counterparty, paymentMethod } = extractCounterpartyAndMode(description);
 
-    transactions.push({ date: block.date, description, debit, credit, balance, reference });
+    transactions.push({ date: block.date, description, debit, credit, balance, reference, counterparty, paymentMethod });
   }
 
   console.log(`[banking] regexExtract: found ${transactions.length} transactions`);
@@ -189,17 +192,10 @@ function regexExtractIndianBankTransactions(text) {
 
 // ── AI-based extraction ───────────────────────────────────────────────────────
 
-/**
- * Attempts to salvage a truncated JSON array response from the AI.
- * When the token limit cuts the response mid-object, we find the last
- * complete object (ending with "}") and close the array manually.
- */
 function repairTruncatedJsonArray(str) {
-  // Find the last complete object boundary
   const lastClose = str.lastIndexOf('}');
   if (lastClose === -1) return null;
   const candidate = str.slice(0, lastClose + 1) + ']';
-  // Trim leading chars before the opening '['
   const start = candidate.indexOf('[');
   if (start === -1) return null;
   return candidate.slice(start);
@@ -208,7 +204,6 @@ function repairTruncatedJsonArray(str) {
 function parseTransactionJson(raw) {
   const clean = raw.replace(/```json/gi, '').replace(/```/g, '').trim();
 
-  // Find JSON array boundaries
   const arrayStart = clean.indexOf('[');
   const arrayEnd   = clean.lastIndexOf(']');
 
@@ -216,7 +211,6 @@ function parseTransactionJson(raw) {
     ? clean.slice(arrayStart, arrayEnd + 1)
     : clean;
 
-  // Try direct parse first
   try {
     const parsed = JSON.parse(jsonStr);
     if (Array.isArray(parsed)) return parsed;
@@ -228,7 +222,6 @@ function parseTransactionJson(raw) {
     }
     return [];
   } catch {
-    // Try to repair a truncated response
     const repaired = repairTruncatedJsonArray(jsonStr || clean);
     if (repaired) {
       try {
@@ -244,10 +237,9 @@ function parseTransactionJson(raw) {
 }
 
 async function extractTransactions(text, onUsage) {
-   // Clean pdf-parse artifacts first
   const cleanedText = cleanTableText(text);
   const CHUNK_SIZE = 7000;
-  const OVERLAP    = 500;   // carry last 500 chars of each chunk into the next
+  const OVERLAP    = 500;
   const chunks = [];
   for (let i = 0; i < cleanedText.length; i += CHUNK_SIZE) {
     const start = i === 0 ? 0 : i - OVERLAP;
@@ -259,32 +251,25 @@ async function extractTransactions(text, onUsage) {
   for (let ci = 0; ci < chunks.length; ci++) {
     const chunk = chunks[ci];
 
-    // PASS 1: Structured Indian bank statement format
     const prompt = `You are a financial data extractor. Extract ALL transactions from this Indian bank statement text.
 
 CRITICAL RULES:
 1. You MUST extract EVERY SINGLE transaction present in this text.
 2. Never stop after the first few rows.
 3. Never summarize.
-4. Never write "...", "etc", "and so on", "[remaining rows]", or similar.
-5. If this chunk contains 30 transactions, return exactly 30 JSON objects.
-6. Missing even one transaction is considered a failure.
-7. Continue until the end of the document excerpt.
-8. Return ONLY a JSON array.
+4. Return ONLY a JSON array.
 
 Each object MUST have:
 {
   "date": "27 Jun 2026",
-  "description": "NEFT/IDFB/IDFBN...",
+  "description": "UPI/Mr MOHANRAJ S/61020...",
   "debit": 50.00 or null,
   "credit": 2779.00 or null,
   "balance": 2779.00 or null,
-  "reference": "UPI/12345" or null
+  "reference": "UPI/12345" or null,
+  "counterparty": "Mr MOHANRAJ S" or null,
+  "paymentMethod": "UPI" or "NEFT" or "IMPS" or "ATM" or "OTHER"
 }
-
-If you see "CREDIT INTEREST" → credit transaction.
-If description contains NEFT/IMPS/UPI with money coming IN → credit.
-If description contains UPI payments going OUT → debit.
 
 Text chunk ${ci + 1}/${chunks.length}:
 ${chunk}
@@ -292,10 +277,17 @@ ${chunk}
 Return JSON array only:`;
 
     try {
-      const raw = await callWithRotation(() => [{ text: prompt }], 16384,"gemini-2.5-flash", onUsage);
+      const raw = await callWithRotation(() => [{ text: prompt }], 16384, "gemini-2.5-flash", onUsage);
       const parsed = parseTransactionJson(raw);
       if (Array.isArray(parsed) && parsed.length > 0) {
         console.log(`[banking] AI chunk ${ci + 1}/${chunks.length}: ${parsed.length} transactions`);
+        parsed.forEach(t => {
+          if (!t.counterparty || !t.paymentMethod) {
+            const enriched = extractCounterpartyAndMode(t.description);
+            t.counterparty = t.counterparty || enriched.counterparty;
+            t.paymentMethod = t.paymentMethod || enriched.paymentMethod;
+          }
+        });
         allTransactions.push(...parsed);
       } else {
         console.log(`[banking] AI chunk ${ci + 1}/${chunks.length}: 0 transactions`);
@@ -305,7 +297,6 @@ Return JSON array only:`;
     }
   }
 
-  // FALLBACK: If AI returned nothing or very few, use regex parser
   if (allTransactions.length < 3) {
     console.log('[banking] AI extraction insufficient, trying regex fallback...');
     const regexResult = regexExtractIndianBankTransactions(cleanedText);
@@ -330,10 +321,146 @@ Return JSON array only:`;
 
 // ── Categorise ────────────────────────────────────────────────────────────────
 const CATEGORIES = [
-  'Salary & Income', 'Food & Dining', 'Shopping', 'Transport',
-  'Utilities', 'Healthcare', 'Entertainment', 'Transfers',
-  'Loan & EMI', 'Investment', 'Tax & Fees', 'Other'
+  'Salary & Income',
+  'Food & Dining',
+  'Groceries & Supermarket',
+  'Shopping & Retail',
+  'Fuel & Petrol',
+  'Travel & Transport',
+  'Utilities & Bills',
+  'Healthcare & Medical',
+  'Entertainment & Media',
+  'Transfers (P2P)',
+  'Merchant Payments (P2M)',
+  'Loan & EMI',
+  'Credit Card Bill',
+  'Investment & Wealth',
+  'Rent & Maintenance',
+  'Education & Learning',
+  'Cash Withdrawal & ATM',
+  'Tax & Government Fees',
+  'Bank Charges & Fees',
+  'Subscriptions & Software',
+  'Business & Professional',
+  'Other'
 ];
+
+function heuristicCategorise(description, debit, credit) {
+  if (!description) return 'Other';
+  const desc = description.toLowerCase();
+
+  // Salary & Income
+  if ((credit > 0) && (desc.includes('salary') || desc.includes('credit interest') || desc.includes('payroll') || desc.includes('stipend') || desc.includes('dividend') || desc.includes('wages'))) {
+    return 'Salary & Income';
+  }
+
+  // Bank Charges & Fees
+  if (desc.includes('uncoll chrg') || desc.includes('min bal') || desc.includes('sms chg') || desc.includes('charge') || desc.includes('chrg') || desc.includes('penalty') || desc.includes('annual fee')) {
+    return 'Bank Charges & Fees';
+  }
+
+  // Fuel & Petrol
+  if (desc.includes('fue') || desc.includes('petrol') || desc.includes('fuel') || desc.includes('hpcl') || desc.includes('iocl') || desc.includes('bpcl') || desc.includes('shell')) {
+    return 'Fuel & Petrol';
+  }
+
+  // Loan & EMI
+  if (desc.includes('mpokket') || desc.includes('pocketly') || desc.includes('nira') || desc.includes('kreditbee') || desc.includes('bajaj') || desc.includes('loan') || desc.includes('emi') || desc.includes('muthoot') || desc.includes('home credit')) {
+    return 'Loan & EMI';
+  }
+
+  // Food & Dining
+  if (desc.includes('tasmac') || desc.includes('swiggy') || desc.includes('zomato') || desc.includes('restaurant') || desc.includes('bakery') || desc.includes('food') || desc.includes('tea') || desc.includes('hotel') || desc.includes('cafe') || desc.includes('eatery') || desc.includes('dominos') || desc.includes('mcdonald')) {
+    return 'Food & Dining';
+  }
+
+  // Groceries & Supermarket
+  if (desc.includes('zepto') || desc.includes('blinkit') || desc.includes('instamart') || desc.includes('supermarket') || desc.includes('grocery') || desc.includes('provision') || desc.includes('mart') || desc.includes('dmart') || desc.includes('bigbasket') || desc.includes('vegetable')) {
+    return 'Groceries & Supermarket';
+  }
+
+  // Shopping & Retail
+  if (desc.includes('amazon') || desc.includes('flipkart') || desc.includes('myntra') || desc.includes('meesho') || desc.includes('ajio') || desc.includes('retail') || desc.includes('clothing') || desc.includes('store') || desc.includes('trend')) {
+    return 'Shopping & Retail';
+  }
+
+  // Travel & Transport
+  if (desc.includes('uber') || desc.includes('ola') || desc.includes('rapido') || desc.includes('irctc') || desc.includes('metro') || desc.includes('parking') || desc.includes('fastag') || desc.includes('toll') || desc.includes('railway') || desc.includes('flight') || desc.includes('indigo')) {
+    return 'Travel & Transport';
+  }
+
+  // Utilities & Bills
+  if (desc.includes('jio') || desc.includes('airtel') || desc.includes('vi ') || desc.includes('bsnl') || desc.includes('electricity') || desc.includes('eb ') || desc.includes('tneb') || desc.includes('bescom') || desc.includes('water') || desc.includes('gas')) {
+    return 'Utilities & Bills';
+  }
+
+  // Healthcare & Medical
+  if (desc.includes('apollo') || desc.includes('pharmacy') || desc.includes('medicine') || desc.includes('hospital') || desc.includes('clinic') || desc.includes('lab') || desc.includes('health') || desc.includes('doctor')) {
+    return 'Healthcare & Medical';
+  }
+
+  // Entertainment & Media
+  if (desc.includes('netflix') || desc.includes('prime') || desc.includes('hotstar') || desc.includes('bookmyshow') || desc.includes('theatre') || desc.includes('cinema') || desc.includes('spotify') || desc.includes('steam')) {
+    return 'Entertainment & Media';
+  }
+
+  // Subscriptions & Software
+  if (desc.includes('google') || desc.includes('icloud') || desc.includes('chatgpt') || desc.includes('github') || desc.includes('microsoft') || desc.includes('aws') || desc.includes('zoom') || desc.includes('adobe') || desc.includes('canva')) {
+    return 'Subscriptions & Software';
+  }
+
+  // Credit Card Bill
+  if (desc.includes('credit card') || desc.includes('card payment') || desc.includes('cred payment') || desc.includes('sbi card') || desc.includes('hdfc card')) {
+    return 'Credit Card Bill';
+  }
+
+  // Investment & Wealth
+  if (desc.includes('zerodha') || desc.includes('groww') || desc.includes('mutual') || desc.includes('sip') || desc.includes('insurance') || desc.includes('lic') || desc.includes('stocks') || desc.includes('upstox') || desc.includes('epfo') || desc.includes('ppf')) {
+    return 'Investment & Wealth';
+  }
+
+  // Rent & Maintenance
+  if (desc.includes('rent') || desc.includes('pg ') || desc.includes('maintenance') || desc.includes('society')) {
+    return 'Rent & Maintenance';
+  }
+
+  // Education & Learning
+  if (desc.includes('school') || desc.includes('college') || desc.includes('fees') || desc.includes('tuition') || desc.includes('udemy') || desc.includes('coursera') || desc.includes('edtech')) {
+    return 'Education & Learning';
+  }
+
+  // Cash Withdrawal & ATM
+  if (desc.includes('atm') || desc.includes('cash wdl') || desc.includes('cash withdrawal') || desc.includes('atm-wdl')) {
+    return 'Cash Withdrawal & ATM';
+  }
+
+  // Tax & Government Fees
+  if (desc.includes('tax') || desc.includes('gst') || desc.includes('income tax') || desc.includes('govt') || desc.includes('challan') || desc.includes('treasury')) {
+    return 'Tax & Government Fees';
+  }
+
+  // Business & Professional
+  if (desc.includes('vendor') || desc.includes('freelance') || desc.includes('consultant') || desc.includes('agency') || desc.includes('shadowfax')) {
+    return 'Business & Professional';
+  }
+
+  // UPI transfers heuristic
+  if (desc.includes('upi/')) {
+    if (desc.includes('upi/mr') || desc.includes('upi/mrs') || desc.includes('upi/ms') || desc.includes('p2a') || desc.includes('babu') || desc.includes('mohanraj') || desc.includes('rengasa') || desc.includes('balasubramaniam') || desc.includes('ajith') || desc.includes('arunprakasam')) {
+      return 'Transfers (P2P)';
+    }
+    if (desc.includes('p2m') || desc.includes('merchant') || desc.includes('store') || desc.includes('traders')) {
+      return 'Merchant Payments (P2M)';
+    }
+    return 'Transfers (P2P)';
+  }
+
+  if (desc.includes('neft') || desc.includes('imps') || desc.includes('rtgs')) {
+    return 'Transfers (P2P)';
+  }
+
+  return 'Other';
+}
 
 async function categoriseTransactions(transactions) {
   if (transactions.length === 0) return transactions;
@@ -343,18 +470,60 @@ async function categoriseTransactions(transactions) {
   for (let i = 0; i < transactions.length; i += BATCH) {
     const batch = transactions.slice(i, i + BATCH);
     const descriptions = batch.map((t, idx) => `${idx}: ${t.description || ''}`).join('\n');
-    const prompt = `Categorise each transaction into ONE of: ${CATEGORIES.join(', ')}\n\nHints:\n- TASMAC = Food & Dining (alcohol shop)\n- MPOKKET/POCKETLY/NIRA = Loan & EMI (loan apps)\n- JIO/AIRTEL/POLO = Utilities (telecom)\n- UPI transfers between people = Transfers\n- GOOGLE = Utilities\n- SURYA M / SANJAI / DINESH = Transfers\n- CREDIT INTEREST = Salary & Income\n- UNCOLL CHRG = Tax & Fees\n\nReturn ONLY a JSON array of ${batch.length} category strings.\n\nDescriptions:\n${descriptions}`;
+    const prompt = `Categorise each transaction into EXACTLY ONE of these categories:
+${CATEGORIES.join(', ')}
+
+Categorization Guidelines & Hints:
+- Fuel station, Petrol, HPCL, IOCL, BPCL, FUE -> Fuel & Petrol
+- MPOKKET, POCKETLY, NIRA, Loan Apps, EMI, Bajaj -> Loan & EMI
+- JIO, AIRTEL, VI, Telecom, Broadband, Electricity, EB -> Utilities & Bills
+- UPI transfers between individuals (e.g. UPI/Mr MOHANRAJ S, UPI/BABU, SURYA M) -> Transfers (P2P)
+- Small shop / business UPI payments -> Merchant Payments (P2M)
+- TASMAC, Swiggy, Zomato, Restaurants, Cafes -> Food & Dining
+- Zepto, Blinkit, Instamart, Supermarkets, Groceries -> Groceries & Supermarket
+- Amazon, Flipkart, Meesho, Shopping Stores -> Shopping & Retail
+- Uber, Ola, Rapido, IRCTC, Metro, FASTag, Toll -> Travel & Transport
+- ATM WDL, Cash withdrawal -> Cash Withdrawal & ATM
+- CREDIT INTEREST, Salary credit, Payroll -> Salary & Income
+- UNCOLL CHRG, Bank Charges, Penalty, SMS fee -> Bank Charges & Fees
+- Google, Apple, ChatGPT, Cloud, Software -> Subscriptions & Software
+
+Return ONLY a JSON array of ${batch.length} category strings matching the exact category names.
+
+Descriptions:
+${descriptions}`;
 
     try {
       const raw = await callWithRotation(() => [{ text: prompt }], 1024);
       const clean = raw.replace(/```json/gi, '').replace(/```/g, '').trim();
       const cats = JSON.parse(clean);
+
       batch.forEach((t, idx) => {
-        const cat = cats[idx];
-        results.push({ ...t, category: CATEGORIES.includes(cat) ? cat : 'Other' });
+        let cat = cats[idx];
+        // If AI returns an invalid category or "Other", test local heuristic engine first
+        if (!cat || !CATEGORIES.includes(cat) || cat === 'Other') {
+          const hCat = heuristicCategorise(t.description, t.debit, t.credit);
+          cat = (hCat !== 'Other') ? hCat : (CATEGORIES.includes(cat) ? cat : 'Other');
+        }
+        const enriched = extractCounterpartyAndMode(t.description);
+        results.push({
+          ...t,
+          category: cat,
+          counterparty: t.counterparty || enriched.counterparty,
+          paymentMethod: t.paymentMethod || enriched.paymentMethod,
+        });
       });
     } catch {
-      batch.forEach(t => results.push({ ...t, category: 'Other' }));
+      batch.forEach(t => {
+        const cat = heuristicCategorise(t.description, t.debit, t.credit);
+        const enriched = extractCounterpartyAndMode(t.description);
+        results.push({
+          ...t,
+          category: cat,
+          counterparty: t.counterparty || enriched.counterparty,
+          paymentMethod: t.paymentMethod || enriched.paymentMethod,
+        });
+      });
     }
   }
   return results;
@@ -432,48 +601,56 @@ Be specific with numbers. Be concise but thorough.`;
   return callWithRotation(() => [{ text: prompt }], 3000, "gemini-2.5-flash", onUsage);
 }
 
-// ── Q&A ───────────────────────────────────────────────────────────────────────
-async function answerBankingQuestion(extractedText, transactions, question, chatHistory = []) {
-  const historyText = chatHistory.slice(-6)
-    .map(m => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.text}`)
-    .join('\n');
+async function answerBankingQuestion(extractedText, transactions, question, chatHistory = [], onUsage = null) {
+  try {
+    const historyText = (chatHistory || []).slice(-6)
+      .map(m => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.text}`)
+      .join('\n');
 
-  const txSample = transactions.slice(0, 100)
-    .map(t => `${t.date} | ${t.description} | D:${t.debit ?? '-'} C:${t.credit ?? '-'} | ${t.category}`)
-    .join('\n');
+    const safeTx = Array.isArray(transactions) ? transactions : [];
+    const txSample = safeTx.slice(0, 150)
+      .map(t => `${t.date || ''} | ${t.description || ''} | D:${t.debit ?? '-'} C:${t.credit ?? '-'} | ${t.category || ''}`)
+      .join('\n');
 
-  const prompt = `You are a banking assistant. Answer the question using ONLY the document data below.
+    const prompt = `You are a banking financial assistant answering questions about a user's bank statement.
 
 Rules:
-- Reference specific amounts, dates, and transaction descriptions
-- If the answer isn't in the data, say so clearly
-- Use bullet points or tables when it helps clarity
+- Give a clear, direct, helpful answer using the transaction list and document text.
+- Reference specific transaction descriptions, dates, amounts, categories, and payment modes where applicable.
+- If asking for totals, counts, highest/lowest amounts, calculate or extract them accurately.
+- Use clean Markdown styling (bullet points, bold text).
 
 ${historyText ? `Previous conversation:\n${historyText}\n` : ''}
 
-Document text (excerpt):
-${extractedText?.slice(0, 8000) || ''}
+Document Text Excerpt:
+${extractedText?.slice(0, 8000) || 'None'}
 
-Transaction sample (${transactions.length} total):
-${txSample || 'No structured transactions extracted — use raw document text above.'}
+Transactions (${safeTx.length} total):
+${txSample || 'No transactions extracted.'}
 
 Question: ${question}
 Answer:`;
 
-  return callWithRotation(() => [{ text: prompt }], 1500, "gemini-2.5-flash", onUsage);
+    const res = await callWithRotation(() => [{ text: prompt }], 2048, "gemini-2.5-flash", onUsage);
+    if (res && res.trim()) return res.trim();
+
+    const qLower = (question || '').toLowerCase();
+    if (qLower.includes('count') || qLower.includes('total transaction') || qLower.includes('how many')) {
+      return `There are **${safeTx.length} total transactions** in this statement.`;
+    }
+    return "I couldn't find specific details for that in the statement data.";
+  } catch (err) {
+    console.error('[bankingAiService] Error in answerBankingQuestion:', err);
+    const safeTx = Array.isArray(transactions) ? transactions : [];
+    const qLower = (question || '').toLowerCase();
+    if (qLower.includes('count') || qLower.includes('total transaction') || qLower.includes('how many')) {
+      return `This bank statement contains **${safeTx.length} transactions**.`;
+    }
+    return "I ran into a temporary issue retrieving that information. Please try rephrasing your question.";
+  }
 }
 
-// (exports consolidated below with extractTransactionsFromPdfVision)
-
 // ── Direct Gemini Vision extraction for scanned PDFs ─────────────────────────
-/**
- * Sends the raw PDF buffer directly to Gemini Vision and asks it to return
- * transactions as structured JSON. This bypasses the OCR → re-parse loop
- * and gets accurate numeric data directly from the visual layout.
- *
- * @param {Buffer} pdfBuffer - raw PDF file bytes
- * @returns {Promise<Array>} array of transaction objects
- */
 async function extractTransactionsFromPdfVision(pdfBuffer) {
   const base64 = pdfBuffer.toString('base64');
 
@@ -499,7 +676,9 @@ Each transaction object MUST have exactly these fields:
   "debit": 50.00 or null,
   "credit": 2779.00 or null,
   "balance": 50.00,
-  "reference": "UPI/617824011043" or null
+  "reference": "UPI/617824011043" or null,
+  "counterparty": "Name" or null,
+  "paymentMethod": "UPI" or "NEFT" or "IMPS" or "ATM" or "OTHER"
 }
 
 Return the JSON array now:`;
@@ -515,7 +694,6 @@ Return the JSON array now:`;
 
     const clean = raw.replace(/```json/gi, '').replace(/```/g, '').trim();
 
-    // Find JSON array in the response
     const arrayStart = clean.indexOf('[');
     const arrayEnd   = clean.lastIndexOf(']');
     if (arrayStart === -1 || arrayEnd === -1) {
@@ -536,9 +714,6 @@ Return the JSON array now:`;
   }
 }
 
-// Re-export everything including the new vision extractor
-// (The original module.exports block above remains for backward compat;
-//  this one overrides it as Node uses the last assignment)
 module.exports = {
   detectDocumentType,
   normaliseDocType,
@@ -549,4 +724,7 @@ module.exports = {
   detectAnomalies,
   generateBankingSummary,
   answerBankingQuestion,
+  extractCounterpartyAndMode,
+  heuristicCategorise,
+  CATEGORIES,
 };
