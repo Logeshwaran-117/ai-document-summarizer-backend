@@ -1,20 +1,37 @@
 /**
  * ContentNormalizer.js
  * Strict content cleaning and normalization before layout computation.
- * Sanitizes markdown artifacts, normalizes text strings, and caps item list lengths.
+ * Sanitizes markdown artifacts, normalizes text strings, strips raw CSV noise, and caps item list lengths.
  */
 
 class ContentNormalizer {
   /**
-   * Sanitizes a text string by stripping markdown symbols and excessive whitespace.
+   * Sanitizes a text string by stripping markdown symbols, raw CSV commas, and PDF instructions.
    */
   static cleanText(str) {
     if (!str || typeof str !== "string") return "";
-    return str
+    let res = str
       .replace(/[*_#`~]+/g, "") // Remove bold, italic, header, code formatting
       .replace(/^[\s•\-\*]+/, "") // Remove leading bullet chars
+      .replace(/\(to be filled as in CIF[^\)]*\)/gi, "") // Remove PDF CIF instructions
+      .replace(/\(\d+-character alphanumeric[^\)]*\)/gi, "") // Remove PDF field instructions
+      .replace(/\(DD\/MM\/YYYY\)/gi, "") // Remove format tags
+      .replace(/Strategic analysis generated from primary financial[^\.]*\./gi, "") // Remove stale financial boilerplate
+      .replace(/Key operational risk indicators, cash flow[^\.]*\./gi, "")
+      .replace(/Actionable recommendations prioritized based on debt[^\.]*\./gi, "")
+      .replace(/^["'\s,;:-]+/, "") // Strip leading quotes/commas
+      .replace(/["'\s,;:-]+$/, "") // Strip trailing quotes/commas
+      .replace(/[,;]{2,}/g, " ") // Collapse multiple commas/semicolons
       .replace(/\s+/g, " ") // Normalize multiple spaces
       .trim();
+
+    // If string is a raw CSV record (e.g. TN-VLR-26-001,7.01.2026,Latheri PHC,Latheri,Nila,F...), convert to human summary
+    if (res.includes(",") && res.split(",").length >= 4 && /TN-VLR|PHC|UPHC|DOB/i.test(res)) {
+      const parts = res.split(",").map(p => p.trim()).filter(Boolean);
+      res = parts.slice(0, 4).join(" — ");
+    }
+
+    return res;
   }
 
   /**
@@ -59,7 +76,7 @@ class ContentNormalizer {
     if (Array.isArray(slide.cards)) {
       cleanedSlide.cards = slide.cards
         .map(c => ({
-          title: this.cleanText(c.title || "Key Point"),
+          title: this.cleanText(c.title || "Key Action"),
           value: this.cleanText(c.value || ""),
           detail: this.cleanText(c.detail || c.description || ""),
           bullets: Array.isArray(c.bullets) ? c.bullets.map(b => this.cleanText(b)).slice(0, 3) : [],
@@ -86,17 +103,18 @@ class ContentNormalizer {
     if (slide.quadrants && typeof slide.quadrants === "object") {
       const q = slide.quadrants;
       cleanedSlide.quadrants = {
-        strengths: (Array.isArray(q.strengths) ? q.strengths : []).map(b => this.cleanText(b)).slice(0, 3),
-        weaknesses: (Array.isArray(q.weaknesses) ? q.weaknesses : []).map(b => this.cleanText(b)).slice(0, 3),
-        opportunities: (Array.isArray(q.opportunities) ? q.opportunities : []).map(b => this.cleanText(b)).slice(0, 3),
-        threats: (Array.isArray(q.threats) ? q.threats : []).map(b => this.cleanText(b)).slice(0, 3),
+        strengths: (Array.isArray(q.strengths) ? q.strengths : []).map(b => this.cleanText(b)).filter(Boolean).slice(0, 3),
+        weaknesses: (Array.isArray(q.weaknesses) ? q.weaknesses : []).map(b => this.cleanText(b)).filter(Boolean).slice(0, 3),
+        opportunities: (Array.isArray(q.opportunities) ? q.opportunities : []).map(b => this.cleanText(b)).filter(Boolean).slice(0, 3),
+        threats: (Array.isArray(q.threats) ? q.threats : []).map(b => this.cleanText(b)).filter(Boolean).slice(0, 3),
       };
     }
 
     // Normalize Chart Data
     if (slide.chart && typeof slide.chart === "object") {
-      const categories = (Array.isArray(slide.chart.categories) ? slide.chart.categories : ["Cat A", "Cat B", "Cat C"])
+      const categories = (Array.isArray(slide.chart.categories) ? slide.chart.categories : ["Category 1", "Category 2", "Category 3"])
         .map(c => this.cleanText(c))
+        .filter(Boolean)
         .slice(0, 5);
 
       const series = Array.isArray(slide.chart.series) && slide.chart.series.length > 0
@@ -106,7 +124,22 @@ class ContentNormalizer {
           }))
         : [{ name: "Actual", values: [80, 65, 90, 75] }];
 
-      cleanedSlide.chart = { categories, series };
+      cleanedSlide.chart = { categories: categories.length > 0 ? categories : ["Category 1", "Category 2", "Category 3"], series };
+    }
+
+    // Normalize Table Data
+    if (slide.table && typeof slide.table === "object") {
+      const headers = (Array.isArray(slide.table.headers) ? slide.table.headers : ["Indicator / Sector", "Target Volume", "Coverage Rate", "Status & Remarks"])
+        .map(h => this.cleanText(h))
+        .filter(Boolean)
+        .slice(0, 5);
+
+      const rows = (Array.isArray(slide.table.rows) ? slide.table.rows : [])
+        .map(r => (Array.isArray(r) ? r.map(cell => this.cleanText(cell)) : [this.cleanText(r)]).slice(0, headers.length))
+        .filter(r => r.length > 0 && r.some(cell => cell.length > 0))
+        .slice(0, 8);
+
+      cleanedSlide.table = { headers: headers.length > 0 ? headers : ["Indicator / Sector", "Target Volume", "Coverage Rate", "Status & Remarks"], rows };
     }
 
     return cleanedSlide;

@@ -14,25 +14,15 @@ const AIContentExtractor = require("./presentation/engine/AIContentExtractor");
 const LayoutPlanner = require("./presentation/engine/LayoutPlanner");
 const SVGBuilder = require("./presentation/engine/SVGBuilder");
 
-// ── Theme map helper ─────────────────────────────────────────────────────────
-const THEME_PALETTES = {
-  Professional: { background: "#0F1B38", primary: "#F5A623", secondary: "#008080", text: "#FFFFFF", textDark: "#0F1B38", cardBg: "#1A2B50", cardBorder: "#2A3B60", muted: "#8099C0" },
-  Modern:       { background: "#0D1B2A", primary: "#00B4D8", secondary: "#0077B6", text: "#FFFFFF", textDark: "#0D1B2A", cardBg: "#1B2A4A", cardBorder: "#2B3A5A", muted: "#8099C0" },
-  Minimal:      { background: "#0F3D3E", primary: "#3FBFAE", secondary: "#1F7A72", text: "#FFFFFF", textDark: "#17302F", cardBg: "#1A4D4E", cardBorder: "#2A5D5E", muted: "#6E8E8C" },
-  Dark:         { background: "#0F0F0F", primary: "#C0392B", secondary: "#E67E22", text: "#FFFFFF", textDark: "#0F0F0F", cardBg: "#1F1F1F", cardBorder: "#2F2F2F", muted: "#808080" },
-  Corporate:    { background: "#1A1A2E", primary: "#7C3AED", secondary: "#06B6D4", text: "#FFFFFF", textDark: "#1A1A2E", cardBg: "#2A2A4E", cardBorder: "#3A3A5E", muted: "#8A80B0" },
-};
+const { THEME_PALETTES, resolveThemePalette } = require("./presentation/engine/ThemeRegistry");
 
 // ── Step A: Build Design Specification ───────────────────────────────────────
 async function buildDesignSpec(documentText, wizardOptions = {}) {
   console.log("📄 [SVG Pipeline] Extracting structured slide content via AI Content Extractor...");
   const content = await AIContentExtractor.extractPresentationContent(documentText, wizardOptions);
 
-  const themeName = wizardOptions.theme && THEME_PALETTES[wizardOptions.theme]
-    ? wizardOptions.theme
-    : (content.theme && THEME_PALETTES[content.theme] ? content.theme : "Professional");
-
-  const palette = THEME_PALETTES[themeName];
+  const palette = resolveThemePalette(wizardOptions.theme || content.theme);
+  const themeName = wizardOptions.theme || content.theme || "Professional";
 
   return {
     presentationTitle: content.presentationTitle || wizardOptions.title || "Executive Presentation",
