@@ -81,13 +81,9 @@ const DETAIL_LEVELS = {
   detailed: { maxBullets: 10, bodyLen: 600, label: "Detailed" },
 };
 
-const CHART_DENSITY = {
-  minimal: { maxCharts: 2, forceCharts: false },
-  auto:    { maxCharts: 4, forceCharts: false },
-  rich:    { maxCharts: 99, forceCharts: true },
-};
+const { resolvePptxTheme } = require("../services/presentation/engine/ThemeRegistry");
 
-function resolveTheme(key)        { return THEMES[key]        || THEMES.navyGold; }
+function resolveTheme(key)        { return resolvePptxTheme(key); }
 function resolveDetail(key)       { return DETAIL_LEVELS[key] || DETAIL_LEVELS.standard; }
 function resolveChartDensity(key) { return CHART_DENSITY[key] || CHART_DENSITY.auto; }
 
@@ -1473,7 +1469,7 @@ const AI_THEMES = {
 };
 
 function resolveAITheme(key) {
-  return AI_THEMES[WIZARD_THEME_MAP[key] || key] || AI_THEMES.navyGold;
+  return resolvePptxTheme(key);
 }
 
 // ── MASTER LAYOUT REGISTRY (Parsed from Master Presentation Template) ─────────

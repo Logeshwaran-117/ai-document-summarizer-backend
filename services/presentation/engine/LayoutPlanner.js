@@ -737,17 +737,47 @@ class LayoutPlanner {
       const cells = Array.isArray(row) ? row : [String(row)];
       cells.slice(0, colCount).forEach((cellText, colIdx) => {
         const cx = 60 + colIdx * colW + 15;
-        const fit = TextLayoutEngine.fitText(String(cellText), colW - 30, rowH - 10, 13 - fontScaleReduction, 10, "Calibri", colIdx === 0 ? "bold" : "normal", 1);
+        const textStr = String(cellText).trim();
 
-        layoutTree.nodes.push({
-          type: "textBlock",
-          x: cx, y: ry + Math.max(6, Math.floor((rowH - fit.height) / 2)),
-          lines: fit.lines,
-          fontSize: fit.fontSize, fontFace: "Calibri",
-          fontWeight: colIdx === 0 ? "bold" : "normal",
-          fill: colIdx === 0 ? palette.primary : palette.text,
-          lineHeight: fit.lineHeight, height: fit.height,
-        });
+        // Check if status cell (e.g. Over Target, Near Target, Below Target, Critical Gap, Verified)
+        const isStatusCell = colIdx === colCount - 1 || /Over Target|Near Target|Below Target|Critical Gap|Verified|Target Met|Pending/i.test(textStr);
+
+        if (isStatusCell && textStr.length < 20) {
+          let badgeBg = "#E2E8F0";
+          let badgeText = "#475569";
+          if (/Over Target|Target Met|Verified/i.test(textStr)) { badgeBg = "#EBF3FF"; badgeText = "#0077B6"; }
+          else if (/Near Target/i.test(textStr)) { badgeBg = "#F1F5F9"; badgeText = "#475569"; }
+          else if (/Below Target/i.test(textStr)) { badgeBg = "#FFF3E0"; badgeText = "#E67E22"; }
+          else if (/Critical/i.test(textStr)) { badgeBg = "#FFEBEE"; badgeText = "#C0392B"; }
+
+          const badgeW = Math.min(colW - 30, Math.max(100, textStr.length * 8 + 20));
+          const badgeH = 26;
+          const badgeY = ry + Math.floor((rowH - badgeH) / 2);
+
+          layoutTree.nodes.push({
+            type: "rect", x: cx, y: badgeY, width: badgeW, height: badgeH,
+            fill: badgeBg, rx: 6, ry: 6,
+          });
+
+          layoutTree.nodes.push({
+            type: "text",
+            x: cx + badgeW / 2, y: badgeY + 18,
+            text: textStr,
+            fontSize: 11, fontFace: "Calibri", fontWeight: "bold",
+            fill: badgeText, textAnchor: "middle",
+          });
+        } else {
+          const fit = TextLayoutEngine.fitText(textStr, colW - 30, rowH - 10, 13 - fontScaleReduction, 10, "Calibri", colIdx === 0 ? "bold" : "normal", 1);
+          layoutTree.nodes.push({
+            type: "textBlock",
+            x: cx, y: ry + Math.max(6, Math.floor((rowH - fit.height) / 2)),
+            lines: fit.lines,
+            fontSize: fit.fontSize, fontFace: "Calibri",
+            fontWeight: colIdx === 0 ? "bold" : "normal",
+            fill: colIdx === 0 ? palette.primary : palette.text,
+            lineHeight: fit.lineHeight, height: fit.height,
+          });
+        }
       });
     });
   }

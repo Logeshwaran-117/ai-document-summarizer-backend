@@ -8,13 +8,30 @@ class SVGBuilder {
   static buildSvgFromLayout(layoutTree) {
     const canvas = layoutTree.canvas || { width: 1280, height: 720, background: "#0F1B38" };
     const palette = layoutTree.theme || {};
+    const isLight = palette.isLight !== false;
 
     let xml = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${canvas.width} ${canvas.height}" width="${canvas.width}" height="${canvas.height}">\n`;
     xml += `  <rect width="${canvas.width}" height="${canvas.height}" fill="${canvas.background}"/>\n`;
 
-    // Background Top Banner Accent
-    xml += `  <rect x="0" y="0" width="${canvas.width}" height="120" fill="${canvas.background}"/>\n`;
-    xml += `  <rect x="0" y="120" width="${canvas.width}" height="4" fill="${palette.primary || '#F5A623'}"/>\n`;
+    // Render architectural grid pattern mesh for institutional report aesthetic
+    if (isLight) {
+      xml += `  <!-- Institutional Mesh Grid Overlay -->\n`;
+      const gridColor = palette.border || "#DDE4F5";
+      for (let gx = 40; gx < 1280; gx += 40) {
+        xml += `  <line x1="${gx}" y1="0" x2="${gx}" y2="720" stroke="${gridColor}" stroke-width="0.5" opacity="0.35"/>\n`;
+      }
+      for (let gy = 40; gy < 720; gy += 40) {
+        xml += `  <line x1="0" y1="${gy}" x2="1280" y2="${gy}" stroke="${gridColor}" stroke-width="0.5" opacity="0.35"/>\n`;
+      }
+    }
+
+    // Top-left accent chip
+    xml += `  <rect x="60" y="40" width="36" height="36" fill="${palette.primary || '#0F1B38'}"/>\n`;
+
+    // Top-right institutional metadata tag
+    if (isLight) {
+      xml += `  <text x="1220" y="55" font-family="Calibri" font-size="10" font-weight="bold" fill="${palette.textMuted || '#4A5A7A'}" text-anchor="end" letter-spacing="1.5">SURVEILLANCE REPORT | EXECUTIVE SUMMARY / 2026</text>\n`;
+    }
 
     const nodes = layoutTree.nodes || [];
     for (const node of nodes) {

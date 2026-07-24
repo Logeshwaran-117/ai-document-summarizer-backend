@@ -72,7 +72,7 @@ async function exportToPptx(presentationModel, outputPath) {
       } else if (slideData.quote) {
         QuoteComponent.render(slide, slideData.quote, theme, startY, availH);
       } else if (slideData.bullets && slideData.bullets.length > 0) {
-        this.renderBullets(slide, slideData.bullets, theme, startY, availH);
+        renderBullets(slide, slideData.bullets, theme, startY, availH);
       }
 
       // 3. Render Slide Footer
