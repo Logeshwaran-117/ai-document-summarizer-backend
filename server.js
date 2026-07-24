@@ -177,6 +177,14 @@ app.listen(PORT, () => {
 });
 
 app.use((err, req, res, next) => {
+    if (err && (err.type === "entity.parse.failed" || (err instanceof SyntaxError && err.status === 400 && "body" in err))) {
+        console.warn(`⚠️  Bad JSON payload received: ${err.message}`);
+        return res.status(400).json({
+            success: false,
+            message: "Invalid JSON payload format in request body.",
+        });
+    }
+
     console.error("Unhandled error:", err);
 
     if (err && err.name === "MulterError") {

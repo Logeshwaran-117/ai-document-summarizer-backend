@@ -25,9 +25,9 @@ SUPPORTED SLIDE TYPES:
 - section (Section divider between main topics)
 - closing (Final conclusion & thank you slide)
 
-Return ONLY a JSON array of slide objects. Do not include markdown formatting outside JSON.
+CRITICAL REQUIREMENT: Return a JSON array containing EXACTLY ${context.slideCount} slide objects numbered 1 to ${context.slideCount}.
 
-JSON SCHEMA REQUIRED:
+EXAMPLE SCHEMA FORMAT:
 [
   {
     "slideNumber": 1,
@@ -43,6 +43,5 @@ JSON SCHEMA REQUIRED:
     "contentFocus": "${storyStrategy.executiveSummary}",
     "purpose": "Deliver core message immediately"
   }
-  ... (up to ${context.slideCount} slides, ensuring recommendations slide appears near the end before closing)
 ]`;
 };
