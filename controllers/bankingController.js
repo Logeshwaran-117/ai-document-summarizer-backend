@@ -108,26 +108,38 @@ async function analyseBankingDocument(req, res) {
     console.log(`[banking] documentType=${documentType}, currency=${currency}, isScanned=${isScanned}`);
 
     // ── Stage 3: Extract transactions ─────────────────────────────────────────
-    let transactions = [];
-
+    let visionTx = [];
     if (isScanned && isPdf) {
-      // SCANNED PDF: send raw buffer directly to Gemini Vision — skip text re-parsing
-      console.log('[banking] Scanned PDF → using Gemini Vision direct extraction...');
-      const fileBuffer = req.file.buffer || require('fs').readFileSync(req.file.path);
-      const visionTx = await extractTransactionsFromPdfVision(fileBuffer, trackUsage);
-      transactions = sanitiseTransactions(visionTx);
-      console.log(`[banking] Vision extraction: ${transactions.length} transactions`);
+      console.log('[banking] Scanned PDF → trying Gemini Vision direct extraction...');
+      try {
+        const fileBuffer = req.file.buffer || require('fs').readFileSync(req.file.path);
+        const rawVision = await extractTransactionsFromPdfVision(fileBuffer, trackUsage);
+        visionTx = sanitiseTransactions(rawVision);
+        console.log(`[banking] Vision extraction found ${visionTx.length} transactions`);
+      } catch (vErr) {
+        console.warn('[banking] Vision extraction failed:', vErr.message);
+      }
     }
 
-    // Fallback / digital PDF: use text-based AI extraction
-    if (transactions.length < 3 && rawText.trim().length > 100) {
-      console.log('[banking] Trying text-based AI extraction...');
-      const rawTx = await extractTransactions(rawText, trackUsage);
-      const sanitised = sanitiseTransactions(rawTx);
-      if (sanitised.length > transactions.length) {
-        transactions = sanitised;
-        console.log(`[banking] Text-based extraction: ${transactions.length} transactions`);
+    let textTx = [];
+    if (rawText.trim().length > 100) {
+      console.log('[banking] Running text-based AI/Regex extraction...');
+      try {
+        const rawTextTx = await extractTransactions(rawText, trackUsage);
+        textTx = sanitiseTransactions(rawTextTx);
+        console.log(`[banking] Text extraction found ${textTx.length} transactions`);
+      } catch (tErr) {
+        console.warn('[banking] Text extraction failed:', tErr.message);
       }
+    }
+
+    // Pick whichever engine extracted MORE transactions!
+    if (textTx.length >= visionTx.length) {
+      transactions = textTx;
+      console.log(`[banking] Selected text-based extraction result (${transactions.length} transactions)`);
+    } else {
+      transactions = visionTx;
+      console.log(`[banking] Selected vision extraction result (${transactions.length} transactions)`);
     }
 
     // ── Stage 4: Categorise + anomaly detection ───────────────────────────────

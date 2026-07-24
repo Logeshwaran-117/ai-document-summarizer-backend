@@ -238,38 +238,44 @@ function parseTransactionJson(raw) {
 
 async function extractTransactions(text, onUsage) {
   const cleanedText = cleanTableText(text);
-  const CHUNK_SIZE = 7000;
-  const OVERLAP    = 500;
+
+  // 1. Run regex-based extractor across full text to get local baseline
+  const regexTx = regexExtractIndianBankTransactions(cleanedText);
+  console.log(`[banking] Regex baseline extracted: ${regexTx.length} transactions`);
+
+  // 2. Run AI chunked extraction with smaller chunk size (1800 chars) to prevent Gemini output truncation
+  const CHUNK_SIZE = 1800;
+  const OVERLAP    = 200;
   const chunks = [];
   for (let i = 0; i < cleanedText.length; i += CHUNK_SIZE) {
     const start = i === 0 ? 0 : i - OVERLAP;
     chunks.push(cleanedText.slice(start, i + CHUNK_SIZE));
   }
 
-  const allTransactions = [];
+  const aiTransactions = [];
 
   for (let ci = 0; ci < chunks.length; ci++) {
     const chunk = chunks[ci];
 
-    const prompt = `You are a financial data extractor. Extract ALL transactions from this Indian bank statement text.
+    const prompt = `You are an expert bank statement extractor. Extract EVERY SINGLE transaction row from this text chunk into a JSON array.
 
-CRITICAL RULES:
-1. You MUST extract EVERY SINGLE transaction present in this text.
-2. Never stop after the first few rows.
-3. Never summarize.
-4. Return ONLY a JSON array.
+CRITICAL INSTRUCTIONS:
+1. Extract ALL transactions in this chunk. Do not skip any row.
+2. Return ONLY a JSON array.
 
-Each object MUST have:
-{
-  "date": "27 Jun 2026",
-  "description": "UPI/Mr MOHANRAJ S/61020...",
-  "debit": 50.00 or null,
-  "credit": 2779.00 or null,
-  "balance": 2779.00 or null,
-  "reference": "UPI/12345" or null,
-  "counterparty": "Mr MOHANRAJ S" or null,
-  "paymentMethod": "UPI" or "NEFT" or "IMPS" or "ATM" or "OTHER"
-}
+Object format:
+[
+  {
+    "date": "27 Jun 2026",
+    "description": "IDIB000C126/Mrs Revathi Velmurugan...",
+    "debit": 50.00 or null,
+    "credit": null,
+    "balance": 50.00,
+    "reference": "UPI/617824011043" or null,
+    "counterparty": "Mrs Revathi Velmurugan" or null,
+    "paymentMethod": "UPI"
+  }
+]
 
 Text chunk ${ci + 1}/${chunks.length}:
 ${chunk}
@@ -282,13 +288,26 @@ Return JSON array only:`;
       if (Array.isArray(parsed) && parsed.length > 0) {
         console.log(`[banking] AI chunk ${ci + 1}/${chunks.length}: ${parsed.length} transactions`);
         parsed.forEach(t => {
-          if (!t.counterparty || !t.paymentMethod) {
-            const enriched = extractCounterpartyAndMode(t.description);
-            t.counterparty = t.counterparty || enriched.counterparty;
-            t.paymentMethod = t.paymentMethod || enriched.paymentMethod;
+          // Normalize key names if model used shortcuts
+          const normalized = {
+            date:          t.date || t.d || "",
+            description:   t.description || t.desc || t.details || "",
+            debit:         t.debit ?? t.deb ?? null,
+            credit:        t.credit ?? t.cred ?? null,
+            balance:       t.balance ?? t.bal ?? null,
+            reference:     t.reference || t.ref || null,
+            counterparty:  t.counterparty || t.party || null,
+            paymentMethod: t.paymentMethod || t.mode || "OTHER",
+          };
+          if (!normalized.counterparty || !normalized.paymentMethod || normalized.paymentMethod === "OTHER") {
+            const enriched = extractCounterpartyAndMode(normalized.description);
+            normalized.counterparty  = normalized.counterparty || enriched.counterparty;
+            normalized.paymentMethod = enriched.paymentMethod || normalized.paymentMethod;
+          }
+          if (normalized.date && (normalized.debit != null || normalized.credit != null || normalized.balance != null)) {
+            aiTransactions.push(normalized);
           }
         });
-        allTransactions.push(...parsed);
       } else {
         console.log(`[banking] AI chunk ${ci + 1}/${chunks.length}: 0 transactions`);
       }
@@ -297,25 +316,36 @@ Return JSON array only:`;
     }
   }
 
-  if (allTransactions.length < 3) {
-    console.log('[banking] AI extraction insufficient, trying regex fallback...');
-    const regexResult = regexExtractIndianBankTransactions(cleanedText);
-    if (regexResult.length > allTransactions.length) {
-      console.log(`[banking] Using regex result: ${regexResult.length} transactions`);
-      return regexResult;
+  // 3. Hybrid Union: Combine AI transactions and Regex baseline transactions
+  const combinedList = [...aiTransactions];
+
+  for (const rTx of regexTx) {
+    // Check if AI already extracted this transaction
+    const exists = aiTransactions.some(aiTx => {
+      const dateMatch = aiTx.date && rTx.date && (aiTx.date.toLowerCase() === rTx.date.toLowerCase());
+      const amtMatch  = (aiTx.debit === rTx.debit && rTx.debit != null) ||
+                        (aiTx.credit === rTx.credit && rTx.credit != null) ||
+                        (aiTx.balance === rTx.balance && rTx.balance != null);
+      return dateMatch && amtMatch;
+    });
+
+    if (!exists) {
+      combinedList.push(rTx);
     }
   }
 
-  // Dedup
+  // 4. Deduplicate final list
   const seen = new Set();
-  const deduped = allTransactions.filter(t => {
-    const key = `${t.date}|${t.description}|${t.debit}|${t.credit}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
+  const deduped = [];
+  for (const t of combinedList) {
+    const key = `${t.date}|${t.debit ?? ''}|${t.credit ?? ''}|${t.balance ?? ''}|${(t.description || '').slice(0, 30)}`;
+    if (!seen.has(key)) {
+      seen.add(key);
+      deduped.push(t);
+    }
+  }
 
-  console.log(`[banking] extractTransactions: ${allTransactions.length} total, ${deduped.length} after dedup`);
+  console.log(`[banking] extractTransactions: AI=${aiTransactions.length}, Regex=${regexTx.length} → Final Union=${deduped.length}`);
   return deduped;
 }
 
