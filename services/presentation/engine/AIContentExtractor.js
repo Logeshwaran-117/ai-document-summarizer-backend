@@ -11,19 +11,25 @@ class AIContentExtractor {
   static async extractPresentationContent(documentText, wizardOptions = {}) {
     const slideCount = Math.max(3, Math.min(20, parseInt(wizardOptions.slideCount) || 10));
     const preferredTheme = wizardOptions.theme || "Professional";
+    const chartTypePref = wizardOptions.chartType || "auto";
 
     const prompt = `You are an expert executive presentation planner. Analyze this document and generate a structured slide-by-slide JSON outline.
 
 DOCUMENT TEXT:
 """
-${(documentText || "").slice(0, 8000)}
+${(documentText || "").slice(0, 10000)}
 """
 
-REQUIREMENTS:
+CRITICAL PRESENTATION REQUIREMENTS:
 - Target total slides: ${slideCount}
 - Theme: ${preferredTheme}
-- Focus on extracting REAL factual insights, metrics, quotes, recommendations, steps, and chart data points from the document.
-- DO NOT generate SVG, HTML, XML tags, or layout coordinates (x, y, width, height). Output ONLY pure semantic data JSON.
+- User Chart Preferences: ${chartTypePref}
+- VARY THE SLIDE TYPES ACROSS THE DECK! Use a mix of: "cover", "executiveSummary", "kpi", "twoColumn", "chart", "process", "swot", "recommendations", "scorecard", "closing".
+- FOR CHART SLIDES: Use diverse chart types across different slides: "pie", "donut", "line", "bar", "column", "radar". Extract REAL numeric categories and percentage/count values from the document.
+- FOR RECOMMENDATIONS SLIDES: Include at least 3 actionable cards with non-empty "title" and "detail".
+- FOR SWOT SLIDES: Extract document-specific strengths, weaknesses, opportunities, and threats. DO NOT use generic banking/financial placeholders if the document is health, legal, education, etc.
+- Focus on extracting REAL factual insights, metrics, totals, block names, and action items.
+- Output ONLY pure valid JSON.
 
 RETURN ONLY VALID JSON MATCHING THIS EXACT SCHEMA:
 {
@@ -45,25 +51,27 @@ RETURN ONLY VALID JSON MATCHING THIS EXACT SCHEMA:
       "subtitle": "<Section Focus / Takeaway>",
       "bullets": ["<Insight 1>", "<Insight 2>", "<Insight 3>"],
       "metrics": [
-        { "label": "<Metric Label>", "value": "<Metric Value e.g. $4.2M or 85%>", "detail": "<Brief explanation>" }
+        { "label": "<Metric Label>", "value": "<Metric Value e.g. 1,142 or 99.2%>", "detail": "<Brief explanation>" }
       ],
       "cards": [
-        { "title": "<Card Title>", "value": "<Value/Badge>", "detail": "<Summary>", "bullets": ["<Detail bullet 1>", "<Detail bullet 2>"] }
+        { "title": "<Action Title 1>", "value": "01", "detail": "<Detailed recommendation summary>", "bullets": ["<Sub-detail 1>"] },
+        { "title": "<Action Title 2>", "value": "02", "detail": "<Detailed recommendation summary>", "bullets": ["<Sub-detail 2>"] },
+        { "title": "<Action Title 3>", "value": "03", "detail": "<Detailed recommendation summary>", "bullets": ["<Sub-detail 3>"] }
       ],
       "steps": [
         { "stepNumber": "01", "title": "<Step Title>", "description": "<Action item details>" }
       ],
       "quadrants": {
-        "strengths": ["<Strength 1>", "<Strength 2>"],
-        "weaknesses": ["<Weakness 1>", "<Weakness 2>"],
-        "opportunities": ["<Opportunity 1>", "<Opportunity 2>"],
-        "threats": ["<Threat 1>", "<Threat 2>"]
+        "strengths": ["<Document Specific Strength 1>", "<Document Specific Strength 2>"],
+        "weaknesses": ["<Document Specific Weakness 1>", "<Document Specific Weakness 2>"],
+        "opportunities": ["<Document Specific Opportunity 1>", "<Document Specific Opportunity 2>"],
+        "threats": ["<Document Specific Threat 1>", "<Document Specific Threat 2>"]
       },
       "chart": {
-        "type": "bar",
-        "categories": ["Cat A", "Cat B", "Cat C", "Cat D"],
+        "type": "pie|donut|line|bar|column|radar",
+        "categories": ["Category A", "Category B", "Category C", "Category D"],
         "series": [
-          { "name": "Actual", "values": [85, 72, 90, 64] }
+          { "name": "Metric", "values": [85, 72, 90, 64] }
         ]
       }
     },
@@ -103,31 +111,34 @@ RETURN ONLY VALID JSON MATCHING THIS EXACT SCHEMA:
       .map(l => l.trim())
       .filter(l => l.length > 12);
 
-    const mainTitle = wizardOptions.title || (lines[0] ? lines[0].slice(0, 55) : "Executive Strategy Document");
-    const slideTypes = ["cover", "executiveSummary", "kpi", "twoColumn", "process", "scorecard", "chart", "swot", "recommendations", "closing"];
+    const mainTitle = wizardOptions.title || (lines[0] ? lines[0].slice(0, 55) : "Executive Presentation Report");
+    const slideTypes = ["cover", "executiveSummary", "kpi", "twoColumn", "process", "chart", "swot", "recommendations", "chart", "closing"];
+    const chartTypes = ["pie", "donut", "bar", "line", "radar", "column"];
 
     const slides = [];
     for (let i = 0; i < slideCount; i++) {
       const sType = i === 0 ? "cover" : i === slideCount - 1 ? "closing" : slideTypes[i % slideTypes.length];
-      const snippet = lines[i % lines.length] || `Strategic Insight ${i + 1}`;
-      const lineB = lines[(i + 1) % lines.length] || "Operational performance baseline validated across core business sectors.";
-      const lineC = lines[(i + 2) % lines.length] || "Governance structures aligned with corporate growth targets.";
+      const snippet = lines[i % lines.length] || `Key Operational Insight ${i + 1}`;
+      const lineB = lines[(i + 1) % lines.length] || "Performance baseline evaluated across active operational sectors.";
+      const lineC = lines[(i + 2) % lines.length] || "Strategic measures established to enhance reporting accuracy.";
+
+      const chartType = chartTypes[i % chartTypes.length];
 
       const slide = {
         slideNumber: i + 1,
         slideType: sType,
         title: sType === "cover" ? mainTitle : sType === "closing" ? "Thank You" : snippet.slice(0, 45),
-        subtitle: sType === "cover" ? "Strategic Overview & Performance Audit" : snippet.slice(0, 80),
+        subtitle: sType === "cover" ? "Strategic Overview & Analytical Report" : snippet.slice(0, 80),
         bullets: [snippet, lineB, lineC],
         metrics: [
-          { label: "Target Growth", value: `${(i + 1) * 12 + 15}%`, detail: "Year-over-year expansion" },
-          { label: "Efficiency Ratio", value: `${90 - i * 3}%`, detail: "Resource utilization score" },
-          { label: "Capital Allocation", value: `$${(i + 2) * 1.5}M`, detail: "Approved budget pool" },
+          { label: "Total Volume", value: `${(i + 1) * 120 + 350}`, detail: "Aggregated target cases" },
+          { label: "Completion Rate", value: `${Math.min(99, 88 + i * 2)}%`, detail: "Operational efficiency" },
+          { label: "Action Index", value: `${(i + 2) * 15}`, detail: "Verified implementation" },
         ],
         cards: [
-          { title: "Core Objective", value: "Phase 1", detail: snippet, bullets: [lineB] },
-          { title: "Risk Mitigation", value: "High Priority", detail: lineB, bullets: [lineC] },
-          { title: "Growth Driver", value: "Verified", detail: lineC, bullets: [snippet] },
+          { title: "Primary Recommendation", value: "01", detail: snippet, bullets: [lineB] },
+          { title: "Operational Enhancement", value: "02", detail: lineB, bullets: [lineC] },
+          { title: "Quality & Governance Action", value: "03", detail: lineC, bullets: [snippet] },
         ],
         steps: [
           { stepNumber: "01", title: "Diagnostic Assessment", description: snippet },
@@ -135,16 +146,16 @@ RETURN ONLY VALID JSON MATCHING THIS EXACT SCHEMA:
           { stepNumber: "03", title: "Execution & Monitoring", description: lineC },
         ],
         quadrants: {
-          strengths: [snippet, "Robust capital reserves"],
-          weaknesses: [lineB, "Legacy processing bottlenecks"],
-          opportunities: ["Digital automation rollout", lineC],
-          threats: ["Regulatory policy shifts", "Market yield volatility"],
+          strengths: [snippet.slice(0, 50), "High completion rate for verified target cases"],
+          weaknesses: [lineB.slice(0, 50), "Data entry inconsistencies across reporting blocks"],
+          opportunities: ["Automation of tracking pipelines", lineC.slice(0, 50)],
+          threats: ["Reporting lag during peak volume periods", "Resource allocation bottlenecks"],
         },
         chart: {
-          type: "bar",
-          categories: ["Q1 Baseline", "Q2 Growth", "Q3 Target", "Q4 Forecast"],
+          type: chartType,
+          categories: ["Phase A", "Phase B", "Phase C", "Phase D"],
           series: [
-            { name: "Performance", values: [75, 82, 91, 88] }
+            { name: "Performance", values: [75, 88, 92, 84] }
           ]
         }
       };
@@ -153,7 +164,7 @@ RETURN ONLY VALID JSON MATCHING THIS EXACT SCHEMA:
 
     return {
       presentationTitle: mainTitle,
-      executiveSummary: lines[1] ? lines[1].slice(0, 120) : "Comprehensive analytical audit.",
+      executiveSummary: lines[1] ? lines[1].slice(0, 120) : "Comprehensive analytical report.",
       theme: wizardOptions.theme || "Professional",
       slides,
     };

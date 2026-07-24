@@ -420,223 +420,411 @@ class LayoutPlanner {
 
   static layoutChartSlide(layoutTree, slideContent, palette, fontScaleReduction = 0) {
     const chartData = slideContent.chart || {
-      categories: ["Operating Revenue", "Portfolio Yield", "Asset Reserve Ratio", "Cost Efficiency"],
+      type: "bar",
+      categories: ["Cat A", "Cat B", "Cat C", "Cat D"],
       series: [{ name: "Performance", values: [85, 72, 90, 64] }]
     };
 
-    const categories = chartData.categories || ["Cat A", "Cat B", "Cat C", "Cat D"];
-    const values = (chartData.series && chartData.series[0] ? chartData.series[0].values : [80, 65, 90, 70]);
+    const cType = (chartData.type || "bar").toLowerCase();
+    const categories = (chartData.categories && chartData.categories.length > 0)
+      ? chartData.categories
+      : ["Category A", "Category B", "Category C", "Category D"];
+    const values = (chartData.series && chartData.series[0] && Array.isArray(chartData.series[0].values))
+      ? chartData.series[0].values
+      : [85, 70, 92, 64];
 
-    const cardW = 1160;
-    const catCount = Math.min(5, categories.length);
-    const dynamicCardH = Math.min(480, Math.max(360, catCount * 75 + 50));
+    const chartColors = [
+      palette.primary || "#F5A623",
+      palette.secondary || "#008080",
+      "#2ECC71",
+      "#E74C3C",
+      "#9B59B6",
+      "#3498DB",
+      "#F1C40F"
+    ];
+
     const startY = 160;
+    const cardW = 1160;
+    const cardH = 480;
 
+    // Main Card Container
     layoutTree.nodes.push({
       type: "rect",
-      x: 60, y: startY, width: cardW, height: dynamicCardH,
+      x: 60, y: startY, width: cardW, height: cardH,
       fill: palette.cardBg, stroke: palette.cardBorder, strokeWidth: 1, rx: 10, ry: 10,
     });
 
-    const maxVal = Math.max(...values, 100);
-    const labelX = 80;
-    const barStartX = 300;
-    const maxBarW = 720;
-    let barY = startY + 40;
+    if (cType === "pie" || cType === "donut") {
+      // ── Donut / Pie Chart Layout ──────────────────────────────────────────
+      const cx = 330;
+      const cy = startY + 240;
+      const outerR = 155;
+      const innerR = cType === "donut" ? 75 : 0;
 
-    categories.slice(0, catCount).forEach((cat, idx) => {
-      const val = values[idx] || 50;
-      const barW = Math.round((val / maxVal) * maxBarW);
+      const totalVal = values.reduce((a, b) => a + (Number(b) || 0), 0) || 1;
+      let startAngle = -Math.PI / 2;
 
-      const catFit = TextLayoutEngine.fitText(cat, 200, 30, 14 - fontScaleReduction, 11, "Calibri", "bold", 1);
-      layoutTree.nodes.push({
-        type: "textBlock",
-        x: labelX, y: barY + 6,
-        lines: catFit.lines,
-        fontSize: catFit.fontSize, fontFace: "Calibri", fontWeight: "bold", fill: palette.text, lineHeight: catFit.lineHeight, height: catFit.height,
+      values.slice(0, 6).forEach((val, i) => {
+        const slicePct = (Number(val) || 0) / totalVal;
+        const angleSize = slicePct * 2 * Math.PI;
+        const endAngle = startAngle + angleSize;
+
+        const x1Out = cx + outerR * Math.cos(startAngle);
+        const y1Out = cy + outerR * Math.sin(startAngle);
+        const x2Out = cx + outerR * Math.cos(endAngle);
+        const y2Out = cy + outerR * Math.sin(endAngle);
+
+        const x2In = cx + innerR * Math.cos(endAngle);
+        const y2In = cy + innerR * Math.sin(endAngle);
+        const x1In = cx + innerR * Math.cos(startAngle);
+        const y1In = cy + innerR * Math.sin(startAngle);
+
+        const largeArc = angleSize > Math.PI ? 1 : 0;
+        const pathColor = chartColors[i % chartColors.length];
+
+        let pathD = "";
+        if (innerR > 0) {
+          pathD = `M ${x1Out.toFixed(1)} ${y1Out.toFixed(1)} A ${outerR} ${outerR} 0 ${largeArc} 1 ${x2Out.toFixed(1)} ${y2Out.toFixed(1)} L ${x2In.toFixed(1)} ${y2In.toFixed(1)} A ${innerR} ${innerR} 0 ${largeArc} 0 ${x1In.toFixed(1)} ${y1In.toFixed(1)} Z`;
+        } else {
+          pathD = `M ${cx} ${cy} L ${x1Out.toFixed(1)} ${y1Out.toFixed(1)} A ${outerR} ${outerR} 0 ${largeArc} 1 ${x2Out.toFixed(1)} ${y2Out.toFixed(1)} Z`;
+        }
+
+        layoutTree.nodes.push({ type: "path", d: pathD, fill: pathColor, stroke: palette.cardBg, strokeWidth: 2 });
+        startAngle = endAngle;
       });
 
-      layoutTree.nodes.push({
-        type: "rect",
-        x: barStartX, y: barY, width: barW, height: 32,
-        fill: palette.primary, rx: 6, ry: 6,
+      if (innerR > 0) {
+        // Center Total Circle Badge
+        layoutTree.nodes.push({ type: "circle", cx, cy, r: innerR - 2, fill: palette.cardBg });
+        layoutTree.nodes.push({
+          type: "text", x: cx, y: cy - 8,
+          text: "TOTAL", fontSize: 11, fontFace: "Calibri", fontWeight: "bold", fill: palette.muted, textAnchor: "middle",
+        });
+        const formattedTotal = totalVal >= 1000 ? `${(totalVal/1000).toFixed(1)}K` : String(totalVal);
+        layoutTree.nodes.push({
+          type: "text", x: cx, y: cy + 16,
+          text: formattedTotal, fontSize: 20, fontFace: "Cambria", fontWeight: "bold", fill: palette.primary, textAnchor: "middle",
+        });
+      }
+
+      // Right Legend & Percentage Breakdown Cards
+      const legX = 580;
+      const legW = 600;
+      let legY = startY + 40;
+      const count = Math.min(6, categories.length);
+      const rowH = Math.min(65, Math.floor(380 / count));
+
+      categories.slice(0, count).forEach((cat, i) => {
+        const val = values[i] || 0;
+        const pct = Math.round((val / totalVal) * 100);
+        const color = chartColors[i % chartColors.length];
+
+        layoutTree.nodes.push({
+          type: "rect", x: legX, y: legY, width: legW - 40, height: rowH - 10,
+          fill: palette.background, stroke: palette.cardBorder, strokeWidth: 1, rx: 6, ry: 6,
+        });
+        layoutTree.nodes.push({
+          type: "rect", x: legX + 15, y: legY + 15, width: 16, height: 16,
+          fill: color, rx: 4, ry: 4,
+        });
+
+        const catFit = TextLayoutEngine.fitText(cat, legW - 200, 24, 14 - fontScaleReduction, 11, "Calibri", "bold", 1);
+        layoutTree.nodes.push({
+          type: "textBlock", x: legX + 45, y: legY + 13,
+          lines: catFit.lines, fontSize: catFit.fontSize, fontFace: "Calibri", fontWeight: "bold", fill: palette.text,
+          lineHeight: catFit.lineHeight, height: catFit.height,
+        });
+
+        layoutTree.nodes.push({
+          type: "text", x: legX + legW - 65, y: legY + 28,
+          text: `${val} (${pct}%)`, fontSize: 15 - fontScaleReduction, fontFace: "Cambria", fontWeight: "bold", fill: color, textAnchor: "end",
+        });
+
+        legY += rowH;
       });
 
-      layoutTree.nodes.push({
-        type: "text",
-        x: barStartX + barW + 15, y: barY + 22,
-        text: `${val}%`,
-        fontSize: 14 - fontScaleReduction, fontFace: "Calibri", fontWeight: "bold", fill: palette.text,
+    } else if (cType === "line" || cType === "area") {
+      // ── Line / Trend Chart Layout ─────────────────────────────────────────
+      const chartX = 100;
+      const chartY = startY + 60;
+      const chartW = 700;
+      const chartH = 340;
+
+      const count = Math.min(8, categories.length);
+      const maxVal = Math.max(...values, 10);
+      const points = [];
+
+      // Grid Lines
+      for (let g = 0; g <= 4; g++) {
+        const gy = chartY + chartH - (g / 4) * chartH;
+        const gVal = Math.round((g / 4) * maxVal);
+        layoutTree.nodes.push({ type: "line", x1: chartX, y1: gy, x2: chartX + chartW, y2: gy, stroke: palette.cardBorder, strokeWidth: 1 });
+        layoutTree.nodes.push({ type: "text", x: chartX - 10, y: gy + 4, text: String(gVal), fontSize: 11, fontFace: "Calibri", fill: palette.muted, textAnchor: "end" });
+      }
+
+      // X Axis Points
+      const xStep = chartW / Math.max(1, count - 1);
+      categories.slice(0, count).forEach((cat, i) => {
+        const px = chartX + i * xStep;
+        const val = values[i] || 0;
+        const py = chartY + chartH - (val / maxVal) * chartH;
+        points.push({ x: px, y: py, val, cat });
+
+        layoutTree.nodes.push({
+          type: "text", x: px, y: chartY + chartH + 25,
+          text: cat.length > 12 ? cat.slice(0, 10) + "…" : cat,
+          fontSize: 11, fontFace: "Calibri", fontWeight: "bold", fill: palette.text, textAnchor: "middle",
+        });
       });
 
-      barY += 75;
-    });
+      // SVG Line Path
+      if (points.length > 1) {
+        const pathD = points.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(" ");
+        layoutTree.nodes.push({ type: "path", d: pathD, stroke: palette.primary, strokeWidth: 4, fill: "none" });
+      }
+
+      // Plot Circular Data Nodes
+      points.forEach(p => {
+        layoutTree.nodes.push({ type: "circle", cx: p.x, cy: p.y, r: 6, fill: palette.primary, stroke: palette.cardBg, strokeWidth: 2 });
+        layoutTree.nodes.push({
+          type: "text", x: p.x, y: p.y - 12,
+          text: String(p.val), fontSize: 12, fontFace: "Calibri", fontWeight: "bold", fill: palette.text, textAnchor: "middle",
+        });
+      });
+
+      // Right Insight Card
+      const rightX = 850;
+      layoutTree.nodes.push({
+        type: "rect", x: rightX, y: startY + 40, width: 330, height: 380,
+        fill: palette.background, stroke: palette.cardBorder, strokeWidth: 1, rx: 8, ry: 8,
+      });
+      layoutTree.nodes.push({
+        type: "text", x: rightX + 20, y: startY + 75,
+        text: "TREND ANALYSIS", fontSize: 12, fontFace: "Calibri", fontWeight: "bold", fill: palette.muted,
+      });
+      const peak = points.reduce((m, p) => p.val > m.val ? p : m, points[0] || { val: 0, cat: "N/A" });
+      layoutTree.nodes.push({
+        type: "text", x: rightX + 20, y: startY + 115,
+        text: "Peak Milestone", fontSize: 13, fontFace: "Calibri", fill: palette.muted,
+      });
+      layoutTree.nodes.push({
+        type: "text", x: rightX + 20, y: startY + 145,
+        text: `${peak.cat}: ${peak.val}`, fontSize: 18, fontFace: "Cambria", fontWeight: "bold", fill: palette.primary,
+      });
+
+    } else if (cType === "radar") {
+      // ── Radar Mesh Chart Layout ───────────────────────────────────────────
+      const cx = 330;
+      const cy = startY + 240;
+      const maxR = 150;
+      const count = Math.min(6, categories.length);
+      const angleStep = (2 * Math.PI) / Math.max(3, count);
+
+      // Web Rings
+      [0.33, 0.66, 1.0].forEach(rRatio => {
+        const ringPoints = [];
+        for (let i = 0; i < count; i++) {
+          const a = -Math.PI / 2 + i * angleStep;
+          const rx = cx + maxR * rRatio * Math.cos(a);
+          const ry = cy + maxR * rRatio * Math.sin(a);
+          ringPoints.push(`${rx.toFixed(1)},${ry.toFixed(1)}`);
+        }
+        layoutTree.nodes.push({ type: "polygon", points: ringPoints.join(" "), stroke: palette.cardBorder, strokeWidth: 1, fill: "none" });
+      });
+
+      // Axis Lines & Radar Value Polygon
+      const maxVal = Math.max(...values, 100);
+      const radarPoints = [];
+
+      for (let i = 0; i < count; i++) {
+        const a = -Math.PI / 2 + i * angleStep;
+        const ax = cx + maxR * Math.cos(a);
+        const ay = cy + maxR * Math.sin(a);
+        layoutTree.nodes.push({ type: "line", x1: cx, y1: cy, x2: ax, y2: ay, stroke: palette.cardBorder, strokeWidth: 1 });
+
+        const labelDist = maxR + 25;
+        const lx = cx + labelDist * Math.cos(a);
+        const ly = cy + labelDist * Math.sin(a);
+        layoutTree.nodes.push({
+          type: "text", x: lx, y: ly + 4,
+          text: categories[i] || `Point ${i + 1}`, fontSize: 11, fontFace: "Calibri", fontWeight: "bold", fill: palette.text, textAnchor: "middle",
+        });
+
+        const val = values[i] || 50;
+        const valR = maxR * (val / maxVal);
+        const vx = cx + valR * Math.cos(a);
+        const vy = cy + valR * Math.sin(a);
+        radarPoints.push(`${vx.toFixed(1)},${vy.toFixed(1)}`);
+      }
+
+      layoutTree.nodes.push({ type: "polygon", points: radarPoints.join(" "), fill: palette.primary, opacity: 0.35, stroke: palette.primary, strokeWidth: 2 });
+
+      // Right Side Breakdown
+      const legX = 580;
+      const legW = 600;
+      let legY = startY + 40;
+      const rowH = Math.min(65, Math.floor(380 / count));
+      categories.slice(0, count).forEach((cat, i) => {
+        const val = values[i] || 0;
+        layoutTree.nodes.push({
+          type: "rect", x: legX, y: legY, width: legW - 40, height: rowH - 10,
+          fill: palette.background, stroke: palette.cardBorder, strokeWidth: 1, rx: 6, ry: 6,
+        });
+        layoutTree.nodes.push({
+          type: "text", x: legX + 20, y: legY + 28,
+          text: cat, fontSize: 13, fontFace: "Calibri", fontWeight: "bold", fill: palette.text,
+        });
+        layoutTree.nodes.push({
+          type: "text", x: legX + legW - 65, y: legY + 28,
+          text: `${val}`, fontSize: 15, fontFace: "Cambria", fontWeight: "bold", fill: palette.primary, textAnchor: "end",
+        });
+        legY += rowH;
+      });
+
+    } else {
+      // ── Bar / Column Multi-Color Layout ────────────────────────────────────
+      const maxVal = Math.max(...values, 100);
+      const labelX = 80;
+      const barStartX = 300;
+      const maxBarW = 720;
+      const count = Math.min(5, categories.length);
+      let barY = startY + 40;
+
+      categories.slice(0, count).forEach((cat, idx) => {
+        const val = values[idx] || 50;
+        const barW = Math.round((val / maxVal) * maxBarW);
+        const color = chartColors[idx % chartColors.length];
+
+        const catFit = TextLayoutEngine.fitText(cat, 200, 30, 14 - fontScaleReduction, 11, "Calibri", "bold", 1);
+        layoutTree.nodes.push({
+          type: "textBlock", x: labelX, y: barY + 6,
+          lines: catFit.lines, fontSize: catFit.fontSize, fontFace: "Calibri", fontWeight: "bold", fill: palette.text,
+          lineHeight: catFit.lineHeight, height: catFit.height,
+        });
+
+        layoutTree.nodes.push({
+          type: "rect", x: barStartX, y: barY, width: Math.max(10, barW), height: 32,
+          fill: color, rx: 6, ry: 6,
+        });
+
+        layoutTree.nodes.push({
+          type: "text", x: barStartX + Math.max(10, barW) + 15, y: barY + 22,
+          text: `${val}`, fontSize: 14 - fontScaleReduction, fontFace: "Calibri", fontWeight: "bold", fill: palette.text,
+        });
+
+        barY += 75;
+      });
+    }
   }
 
   static layoutSwotSlide(layoutTree, slideContent, palette, fontScaleReduction = 0) {
     const quads = slideContent.quadrants || {};
+    const bullets = slideContent.bullets || [];
+
+    const fallbackS = bullets[0] ? [bullets[0], "Verified high completion rate for target cases"] : ["High surgical completion rate for identified cases", "Effective screening across primary blocks"];
+    const fallbackW = bullets[1] ? [bullets[1], "Reporting discrepancies in specific regional blocks"] : ["Data entry errors (0% reported for completed cases)", "Pending follow-ups for unresolved conditions"];
+    const fallbackO = bullets[2] ? [bullets[2], "Automation of tracking pipelines"] : ["Digital data validation to eliminate reporting errors", "Expanded referral network for specialized care"];
+    const fallbackT = ["Reporting lag during peak volume periods", "Incomplete documentation from partner facilities"];
+
     const items = [
-      { title: "STRENGTHS", color: "#27AE60", list: quads.strengths || ["Strong balance sheet reserves", "Robust risk management framework"] },
-      { title: "WEAKNESSES", color: "#E74C3C", list: quads.weaknesses || ["Legacy core processing overhead", "Manual reconciliation bottlenecks"] },
-      { title: "OPPORTUNITIES", color: "#2980B9", list: quads.opportunities || ["Automation of credit risk scoring", "Digital account onboarding integration"] },
-      { title: "THREATS", color: "#E67E22", list: quads.threats || ["Regulatory compliance cost inflation", "Market liquidity rate fluctuations"] },
+      { title: "STRENGTHS", color: "#27AE60", list: (quads.strengths && quads.strengths.length > 0) ? quads.strengths : fallbackS },
+      { title: "WEAKNESSES", color: "#E74C3C", list: (quads.weaknesses && quads.weaknesses.length > 0) ? quads.weaknesses : fallbackW },
+      { title: "OPPORTUNITIES", color: "#2980B9", list: (quads.opportunities && quads.opportunities.length > 0) ? quads.opportunities : fallbackO },
+      { title: "THREATS", color: "#E67E22", list: (quads.threats && quads.threats.length > 0) ? quads.threats : fallbackT },
     ];
 
     const cardW = 560;
-    const cardH = 220;
+    const cardH = 210;
 
     const positions = [
       { x: 60, y: 160 },
       { x: 660, y: 160 },
-      { x: 60, y: 410 },
-      { x: 660, y: 410 },
+      { x: 60, y: 400 },
+      { x: 660, y: 400 },
     ];
 
     items.forEach((item, idx) => {
       const pos = positions[idx];
       layoutTree.nodes.push({
-        type: "rect",
-        x: pos.x, y: pos.y, width: cardW, height: cardH,
+        type: "rect", x: pos.x, y: pos.y, width: cardW, height: cardH,
         fill: palette.cardBg, stroke: item.color, strokeWidth: 2, rx: 8, ry: 8,
       });
 
       layoutTree.nodes.push({
-        type: "text",
-        x: pos.x + 25, y: pos.y + 35,
-        text: item.title,
-        fontSize: 16 - fontScaleReduction, fontFace: "Cambria", fontWeight: "bold", fill: item.color,
+        type: "text", x: pos.x + 25, y: pos.y + 35,
+        text: item.title, fontSize: 16 - fontScaleReduction, fontFace: "Cambria", fontWeight: "bold", fill: item.color,
       });
 
       let lineY = pos.y + 70;
       item.list.slice(0, 3).forEach(b => {
         const fit = TextLayoutEngine.fitText(`• ${b}`, cardW - 50, 45, 14 - fontScaleReduction, 11, "Calibri", "normal", 2);
         layoutTree.nodes.push({
-          type: "textBlock",
-          x: pos.x + 25, y: lineY,
-          lines: fit.lines,
-          fontSize: fit.fontSize, fontFace: "Calibri", fill: palette.text, lineHeight: fit.lineHeight, height: fit.height,
+          type: "textBlock", x: pos.x + 25, y: lineY,
+          lines: fit.lines, fontSize: fit.fontSize, fontFace: "Calibri", fill: palette.text,
+          lineHeight: fit.lineHeight, height: fit.height,
         });
         lineY += fit.height + 10;
       });
     });
   }
 
-  static layoutProcessSlide(layoutTree, slideContent, palette, fontScaleReduction = 0) {
-    const rawSteps = slideContent.steps && slideContent.steps.length > 0
-      ? slideContent.steps
-      : [
-          { stepNumber: "01", title: "Diagnostic Assessment", description: "Audit core ledger records and identify operational bottlenecks." },
-          { stepNumber: "02", title: "Strategy Formulation", description: "Design automated workflow pipelines to streamline processing." },
-          { stepNumber: "03", title: "Implementation", description: "Deploy risk scoring models and integrate compliance tracking." },
-          { stepNumber: "04", title: "Continuous Review", description: "Monitor quarterly velocity and evaluate liquidity reserves." },
-        ];
-
-    const count = Math.min(4, rawSteps.length);
-    const cardW = 260;
-    const cardH = 440;
-    const gap = 40;
-    const startY = 180;
-
-    rawSteps.slice(0, count).forEach((step, idx) => {
-      const cx = 60 + idx * (cardW + gap);
-
-      layoutTree.nodes.push({
-        type: "rect",
-        x: cx, y: startY, width: cardW, height: cardH,
-        fill: palette.cardBg, stroke: palette.cardBorder, strokeWidth: 1, rx: 10, ry: 10,
-      });
-
-      layoutTree.nodes.push({
-        type: "rect",
-        x: cx + 20, y: startY + 20, width: 45, height: 45,
-        fill: palette.primary, rx: 6, ry: 6,
-      });
-      layoutTree.nodes.push({
-        type: "text",
-        x: cx + 42, y: startY + 48,
-        text: step.stepNumber || `0${idx + 1}`,
-        fontSize: 18 - fontScaleReduction, fontFace: "Cambria", fontWeight: "bold", fill: palette.textDark, textAnchor: "middle",
-      });
-
-      const tFit = TextLayoutEngine.fitText(step.title, cardW - 40, 50, 16 - fontScaleReduction, 12, "Cambria", "bold", 2);
-      layoutTree.nodes.push({
-        type: "textBlock",
-        x: cx + 20, y: startY + 85,
-        lines: tFit.lines,
-        fontSize: tFit.fontSize, fontFace: "Cambria", fontWeight: "bold", fill: palette.primary, lineHeight: tFit.lineHeight, height: tFit.height,
-      });
-
-      const dFit = TextLayoutEngine.fitText(step.description, cardW - 40, 240, 14 - fontScaleReduction, 11, "Calibri", "normal", 8);
-      layoutTree.nodes.push({
-        type: "textBlock",
-        x: cx + 20, y: startY + 150,
-        lines: dFit.lines,
-        fontSize: dFit.fontSize, fontFace: "Calibri", fill: palette.text, lineHeight: dFit.lineHeight, height: dFit.height,
-      });
-
-      if (idx < count - 1) {
-        layoutTree.nodes.push({
-          type: "line",
-          x1: cx + cardW + 5, y1: startY + 220, x2: cx + cardW + gap - 5, y2: startY + 220,
-          stroke: palette.primary, strokeWidth: 3,
-        });
-      }
-    });
-  }
-
-  /**
-   * Recommendations Layout with Dynamic Row Height Sizing derived from text length.
-   */
   static layoutRecommendationsSlide(layoutTree, slideContent, palette, fontScaleReduction = 0) {
-    const rawRecs = slideContent.cards || [
-      { title: "Immediate Liquidity Optimization", value: "01", detail: "Reallocate short-term reserve capital to high-yield interest accounts to maximize float efficiency." },
-      { title: "Automated Reconciliation Pipeline", value: "02", detail: "Deploy structured parser for daily bank ledger entries to eliminate manual audit lag." },
-      { title: "Governance & Risk Policy Review", value: "03", detail: "Update internal credit authorization thresholds based on quarterly stress test models." },
-    ];
+    const cards = Array.isArray(slideContent.cards) ? slideContent.cards.filter(c => c && (c.title || c.detail)) : [];
+    const bullets = Array.isArray(slideContent.bullets) ? slideContent.bullets.filter(Boolean) : [];
+    const steps = Array.isArray(slideContent.steps) ? slideContent.steps.filter(Boolean) : [];
+
+    let rawRecs = [];
+    if (cards.length > 0) {
+      rawRecs = cards;
+    } else if (bullets.length > 0) {
+      rawRecs = bullets.map((b, i) => ({ title: `Strategic Recommendation 0${i + 1}`, value: `0${i + 1}`, detail: b }));
+    } else if (steps.length > 0) {
+      rawRecs = steps.map((s, i) => ({ title: s.title || `Action Step 0${i + 1}`, value: `0${i + 1}`, detail: s.description || s.title }));
+    } else {
+      rawRecs = [
+        { title: "Operational Tracking & Quality Audit", value: "01", detail: slideContent.title || "Implement continuous review mechanisms to ensure data integrity." },
+        { title: "Resource & Program Expansion", value: "02", detail: slideContent.subtitle || "Prioritize high-impact target areas and optimize intervention delivery." },
+        { title: "Governance & Reporting Integration", value: "03", detail: "Streamline reporting pipelines across administrative blocks to eliminate data gaps." },
+      ];
+    }
 
     let rowY = 160;
     const rowW = 1160;
 
     rawRecs.slice(0, 3).forEach((r, idx) => {
-      const tFit = TextLayoutEngine.fitText(r.title, rowW - 180, 35, 18 - fontScaleReduction, 13, "Cambria", "bold", 1);
-      const dFit = TextLayoutEngine.fitText(r.detail || r.title, rowW - 180, 50, 14 - fontScaleReduction, 11, "Calibri", "normal", 2);
+      const tFit = TextLayoutEngine.fitText(r.title || `Recommendation 0${idx + 1}`, rowW - 180, 35, 18 - fontScaleReduction, 13, "Cambria", "bold", 1);
+      const dFit = TextLayoutEngine.fitText(r.detail || r.title || "Action item recommendation detail.", rowW - 180, 50, 14 - fontScaleReduction, 11, "Calibri", "normal", 2);
 
-      // Dynamic Row Height Calculation
-      const dynamicRowH = Math.max(115, Math.min(150, 55 + dFit.height));
+      const dynamicRowH = Math.max(115, Math.min(145, 55 + dFit.height));
 
       layoutTree.nodes.push({
-        type: "rect",
-        x: 60, y: rowY, width: rowW, height: dynamicRowH,
+        type: "rect", x: 60, y: rowY, width: rowW, height: dynamicRowH,
         fill: palette.cardBg, stroke: palette.cardBorder, strokeWidth: 1, rx: 8, ry: 8,
       });
 
       layoutTree.nodes.push({
-        type: "rect",
-        x: 80, y: rowY + 20, width: 45, height: 45,
+        type: "rect", x: 80, y: rowY + 20, width: 45, height: 45,
         fill: palette.primary, rx: 6, ry: 6,
       });
       layoutTree.nodes.push({
-        type: "text",
-        x: 102, y: rowY + 48,
+        type: "text", x: 102, y: rowY + 48,
         text: r.value || `0${idx + 1}`,
         fontSize: 18 - fontScaleReduction, fontFace: "Cambria", fontWeight: "bold", fill: palette.textDark, textAnchor: "middle",
       });
 
       layoutTree.nodes.push({
-        type: "textBlock",
-        x: 145, y: rowY + 35,
-        lines: tFit.lines,
-        fontSize: tFit.fontSize, fontFace: "Cambria", fontWeight: "bold", fill: palette.primary, lineHeight: tFit.lineHeight, height: tFit.height,
+        type: "textBlock", x: 145, y: rowY + 35,
+        lines: tFit.lines, fontSize: tFit.fontSize, fontFace: "Cambria", fontWeight: "bold", fill: palette.primary,
+        lineHeight: tFit.lineHeight, height: tFit.height,
       });
 
       layoutTree.nodes.push({
-        type: "textBlock",
-        x: 145, y: rowY + 68,
-        lines: dFit.lines,
-        fontSize: dFit.fontSize, fontFace: "Calibri", fill: palette.text, lineHeight: dFit.lineHeight, height: dFit.height,
+        type: "textBlock", x: 145, y: rowY + 68,
+        lines: dFit.lines, fontSize: dFit.fontSize, fontFace: "Calibri", fill: palette.text,
+        lineHeight: dFit.lineHeight, height: dFit.height,
       });
 
-      rowY += dynamicRowH + 20;
+      rowY += dynamicRowH + 18;
     });
   }
 

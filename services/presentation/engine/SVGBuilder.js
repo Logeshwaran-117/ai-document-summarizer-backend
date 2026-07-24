@@ -39,7 +39,21 @@ class SVGBuilder {
       }
 
       case "circle": {
-        return `  <circle cx="${node.cx}" cy="${node.cy}" r="${node.r}" fill="${node.fill}"/>\n`;
+        const stroke = node.stroke ? ` stroke="${node.stroke}" stroke-width="${node.strokeWidth || 1}"` : "";
+        return `  <circle cx="${node.cx}" cy="${node.cy}" r="${node.r}" fill="${node.fill}"${stroke}/>\n`;
+      }
+
+      case "path": {
+        const fill = node.fill ? ` fill="${node.fill}"` : ' fill="none"';
+        const stroke = node.stroke ? ` stroke="${node.stroke}" stroke-width="${node.strokeWidth || 1}"` : "";
+        return `  <path d="${node.d}"${fill}${stroke}/>\n`;
+      }
+
+      case "polygon": {
+        const fill = node.fill ? ` fill="${node.fill}"` : ' fill="none"';
+        const stroke = node.stroke ? ` stroke="${node.stroke}" stroke-width="${node.strokeWidth || 1}"` : "";
+        const opacity = node.opacity !== undefined ? ` opacity="${node.opacity}"` : "";
+        return `  <polygon points="${node.points}"${fill}${stroke}${opacity}/>\n`;
       }
 
       case "text": {

@@ -1212,8 +1212,12 @@ function buildDeck({ summary, docTitle, heroTitle, theme, detail, chartDensityCo
 
 // ── POST /generate-ppt-ai ────────────────────────────────────────────────────
 router.post("/generate-ppt-ai", async (req, res) => {
+  console.log(`🚀 [pptRoutes] POST /generate-ppt-ai received! User: ${req.user?._id || 'ANONYMOUS'}, DocumentId: ${req.body?.documentId}`);
   try {
-    if (!req.user) return res.status(401).json({ message: "Not authenticated" });
+    if (!req.user) {
+      console.warn("⚠️ [pptRoutes] /generate-ppt-ai request unauthorized");
+      return res.status(401).json({ message: "Not authenticated" });
+    }
 
     const {
       documentId,
@@ -2133,20 +2137,28 @@ function addAISlideHeader(s, pres, COLORS, title, icon, subtitle) {
 }
 
 router.post("/generate-ppt-svg", async (req, res) => {
+  console.log(`🚀 [pptRoutes] POST /generate-ppt-svg received! User: ${req.user?._id || 'ANONYMOUS'}, DocumentId: ${req.body?.documentId}, DocTextLen: ${req.body?.documentText?.length}`);
   try {
-    if (!req.user) return res.status(401).json({ message: "Not authenticated" });
+    if (!req.user) {
+      console.warn("⚠️ [pptRoutes] /generate-ppt-svg request unauthorized");
+      return res.status(401).json({ message: "Not authenticated" });
+    }
 
     const { documentText, filename = "Document", documentId, wizardOptions = {} } = req.body;
     if (!documentText || documentText.trim().length < 30) {
+      console.warn("⚠️ [pptRoutes] /generate-ppt-svg text missing or too short");
       return res.status(400).json({ message: "Document text is required for SVG presentation generation." });
     }
 
     const docTitle = (wizardOptions.title || filename).replace(/\.[^/.]+$/, "");
+    console.log(`⚡ [pptRoutes] Calling generatePresentationViaSVG for title "${docTitle}"...`);
 
     const { buffer, slideCount, title } = await generatePresentationViaSVG(documentText, {
       ...wizardOptions,
       title: docTitle,
     });
+
+    console.log(`✅ [pptRoutes] PPTX generation completed! Slides: ${slideCount}, Buffer: ${buffer.length} bytes`);
 
     const saved = await Presentation.create({
       userId: req.user._id,
@@ -2169,14 +2181,18 @@ router.post("/generate-ppt-svg", async (req, res) => {
     res.send(buffer);
 
   } catch (err) {
-    console.error("SVG pipeline route error:", err);
+    console.error("❌ [pptRoutes] SVG pipeline route error:", err);
     res.status(500).json({ message: err.message || "Failed to generate presentation via SVG pipeline" });
   }
 });
 
 router.post("/generate-ppt-svg/preview", async (req, res) => {
+  console.log(`👁️ [pptRoutes] POST /generate-ppt-svg/preview received! User: ${req.user?._id || 'ANONYMOUS'}`);
   try {
-    if (!req.user) return res.status(401).json({ message: "Not authenticated" });
+    if (!req.user) {
+      console.warn("⚠️ [pptRoutes] /generate-ppt-svg/preview request unauthorized");
+      return res.status(401).json({ message: "Not authenticated" });
+    }
 
     const { documentText, wizardOptions = {} } = req.body;
     if (!documentText || documentText.trim().length < 30) {
